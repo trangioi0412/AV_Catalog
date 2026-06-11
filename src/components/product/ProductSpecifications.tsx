@@ -9,7 +9,7 @@ interface SpecItem {
 }
 
 interface ProductSpecificationsProps {
-  technicalSpecifications?: string;
+  technicalSpecifications?: string | any[] | Record<string, any>;
 }
 
 export function ProductSpecifications({ technicalSpecifications }: ProductSpecificationsProps) {
@@ -19,14 +19,40 @@ export function ProductSpecifications({ technicalSpecifications }: ProductSpecif
   const specsList = React.useMemo((): SpecItem[] => {
     if (!technicalSpecifications) return [];
 
+    // Scenario A: Already a parsed Array of specifications
+    if (Array.isArray(technicalSpecifications)) {
+      return technicalSpecifications
+        .map((item: any) => {
+          const label = item.label || item.key || item.name || "";
+          const value = item.value || item.desc || "";
+          return {
+            label: String(label).trim(),
+            value: String(value).trim(),
+          };
+        })
+        .filter((item) => item.label && item.value);
+    }
+
+    // Scenario B: Already a flat Key-Value Object
+    if (typeof technicalSpecifications === "object" && technicalSpecifications !== null) {
+      return Object.entries(technicalSpecifications)
+        .map(([key, val]) => ({
+          label: String(key).trim(),
+          value: String(val).trim(),
+        }))
+        .filter((item) => item.label && item.value);
+    }
+
+    // Scenario C: String containing JSON or newline-separated text
+    if (typeof technicalSpecifications !== "string") return [];
+
     const raw = technicalSpecifications.trim();
     if (!raw) return [];
 
-    // 1. Attempt to parse as JSON
+    // Attempt to parse as JSON string
     try {
       const parsed = JSON.parse(raw);
 
-      // Scenario A: Array of { label, value } or { key, value }
       if (Array.isArray(parsed)) {
         return parsed
           .map((item: any) => {
@@ -40,7 +66,6 @@ export function ProductSpecifications({ technicalSpecifications }: ProductSpecif
           .filter((item) => item.label && item.value);
       }
 
-      // Scenario B: Flat Key-Value Object { "Weight": "1.5kg", "Color": "Black" }
       if (typeof parsed === "object" && parsed !== null) {
         return Object.entries(parsed)
           .map(([key, val]) => ({
@@ -50,10 +75,10 @@ export function ProductSpecifications({ technicalSpecifications }: ProductSpecif
           .filter((item) => item.label && item.value);
       }
     } catch {
-      // JSON parsing failed, move on to text parsing
+      // JSON parsing failed, fallback to text parsing below
     }
 
-    // 2. Fallback: Parse as a string split by newlines or list items
+    // Fallback: Parse as a string split by newlines or list items
     // (e.g. "Weight: 1.5kg\nDimensions: 100x200mm")
     const lines = raw
       .replace(/<[^>]*>/g, "\n") // strip simple HTML

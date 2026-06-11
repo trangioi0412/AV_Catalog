@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { AppState, SheetData, ProductRow, Specification, ParsingError } from "@/types";
 import { v4 as uuidv4 } from "uuid";
+import { parseSpecifications } from "@/lib/parser/parser";
 
 interface DataActions {
   setFileData: (fileName: string, fileType: "xlsx" | "csv", sheets: SheetData[]) => void;
@@ -17,6 +18,7 @@ interface DataActions {
   calculateStats: () => void;
   setBrandMapping: (mapping: Record<string, string>) => void;
   applyBrandMapping: () => void;
+  convertSpecs: () => void;
 }
 
 function validateSpecifications(specs: Specification[]): ParsingError[] {
@@ -349,5 +351,53 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
 
       return { sheets: newSheets };
     });
+  },
+
+  convertSpecs: () => {
+    set((state) => {
+      const newSheets = state.sheets.map((sheet) => {
+        const techSpecsKey = sheet.columns.find(col => 
+          col.toLowerCase() === "technical specifications" || col.toLowerCase() === "thông số kỹ thuật"
+        ) || "Technical Specifications";
+
+        return {
+          ...sheet,
+          rows: sheet.rows.map((row) => {
+            const rawRow = row.originalRawRow || row;
+            const techSpecs = rawRow[techSpecsKey] || "";
+            const { specifications, errors } = parseSpecifications(techSpecs);
+
+            // Re-run warning verification for CẦN VERIFY
+            Object.entries(rawRow).forEach(([key, val]) => {
+              if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified", "originalRawRow"].includes(key)) return;
+              if (String(val || "").toUpperCase().includes("CẦN VERIFY")) {
+                errors.push({
+                  field: key,
+                  message: `Cột "${key}" chứa thông tin cần kiểm chứng: "${val}"`,
+                  severity: "warning"
+                });
+              }
+            });
+
+            const updatedRow = { ...row };
+            updatedRow[techSpecsKey] = JSON.stringify(specifications, null, 2);
+
+            return {
+              ...row,
+              ...updatedRow,
+              parsedSpecifications: specifications,
+              transformedSpecifications: JSON.parse(JSON.stringify(specifications)),
+              validationState: (errors.some(e => e.severity === "error") ? "error" : (errors.length > 0 ? "warning" : "valid")) as "valid" | "warning" | "error",
+              parsingErrors: errors,
+              isEdited: true,
+              lastModified: Date.now()
+            };
+          })
+        };
+      });
+
+      return { sheets: newSheets };
+    });
+    get().calculateStats();
   }
 }));

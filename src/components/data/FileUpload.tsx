@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export function FileUpload() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [shouldParseSpecs, setShouldParseSpecs] = useState(true);
   const { setFileData, isLoading, setLoading } = useDataStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,7 +33,7 @@ export function FileUpload() {
         setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
       }, 200);
 
-      const sheets = await parseFile(file);
+      const sheets = await parseFile(file, shouldParseSpecs);
       
       clearInterval(interval);
       setUploadProgress(100);
@@ -50,7 +51,7 @@ export function FileUpload() {
       toast.error("Failed to parse file. Please ensure it's a valid catalog.");
       console.error(error);
     }
-  }, [setFileData, setLoading]);
+  }, [setFileData, setLoading, shouldParseSpecs]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -115,6 +116,25 @@ export function FileUpload() {
           <div className="text-xs text-muted-foreground">
             Supports: .xlsx, .xls, .csv
           </div>
+        </div>
+
+        {/* Toggle options */}
+        <div className="flex items-center gap-2 mt-6 relative z-20 p-2.5 bg-card/60 backdrop-blur border border-primary/5 hover:border-primary/10 rounded-xl transition-all duration-300">
+          <input
+            type="checkbox"
+            id="parse-specs-toggle"
+            checked={shouldParseSpecs}
+            onChange={(e) => setShouldParseSpecs(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+            onClick={(e) => e.stopPropagation()} // Prevent triggering file browser input click on click label
+          />
+          <label 
+            htmlFor="parse-specs-toggle" 
+            className="text-xs text-muted-foreground select-none cursor-pointer font-medium"
+            onClick={(e) => e.stopPropagation()} // Prevent triggering file browser input click on click label
+          >
+            Tự động phân tích thông số kỹ thuật (Auto-parse specs)
+          </label>
         </div>
 
         <AnimatePresence>

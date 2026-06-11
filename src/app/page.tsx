@@ -18,7 +18,9 @@ import {
   FileCode,
   AlertTriangle,
   CloudUpload,
-  Loader2
+  Loader2,
+  Search,
+  Sparkles
 } from "lucide-react";
 import { uploadCatalogToWixAction } from "@/app/actions/discovery";
 import { 
@@ -44,6 +46,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 
 export default function DashboardPage() {
@@ -52,34 +63,56 @@ export default function DashboardPage() {
     sheets, 
     activeSheetIndex, 
     resetChanges, 
-    setFileData 
+    setFileData,
+    convertSpecs
   } = useDataStore();
 
+  const handleConvertSpecs = () => {
+    convertSpecs();
+    toast.success("Đã chuyển đổi thành công tất cả thông số kỹ thuật thô sang dạng cấu trúc mảng!");
+  };
+
   const [isUploadingToWix, setIsUploadingToWix] = React.useState(false);
+  const [uploadReport, setUploadReport] = React.useState<{
+    successCount: number;
+    failedCount: number;
+    errors: string[];
+    totalCount: number;
+  } | null>(null);
+  const [isReportOpen, setIsReportOpen] = React.useState(false);
+  const [errorSearchQuery, setErrorSearchQuery] = React.useState("");
 
   const handleUploadToWix = async () => {
-    if (!sheets || sheets.length === 0 || !sheets[activeSheetIndex]) {
+    if (!sheets || sheets.length === 0) {
       toast.error("No product data loaded to upload.");
       return;
     }
 
-    const activeSheet = sheets[activeSheetIndex];
-    if (activeSheet.rows.length === 0) {
-      toast.error("The active sheet has no products.");
+    const allProducts = sheets.flatMap((sheet) => sheet.rows);
+    if (allProducts.length === 0) {
+      toast.error("No products found across any sheet.");
       return;
     }
 
     setIsUploadingToWix(true);
-    const uploadToastId = toast.loading(`Uploading ${activeSheet.rows.length} products to Wix Studio Import2...`);
+    const uploadToastId = toast.loading(`Uploading all ${allProducts.length} products to Wix Studio Import2...`);
 
     try {
-      const result = await uploadCatalogToWixAction(activeSheet.rows);
+      const result = await uploadCatalogToWixAction(allProducts);
       toast.dismiss(uploadToastId);
       if (result.success) {
+        setUploadReport({
+          successCount: result.successCount || 0,
+          failedCount: result.failedCount || 0,
+          errors: result.errors || [],
+          totalCount: allProducts.length,
+        });
+        setIsReportOpen(true);
+
         if (result.failedCount === 0) {
           toast.success(`Successfully uploaded all ${result.successCount} products to Wix Studio!`);
         } else {
-          toast.warning(`Uploaded ${result.successCount} products successfully, but ${result.failedCount} failed. Check console for details.`);
+          toast.warning(`Uploaded ${result.successCount} products successfully, but ${result.failedCount} failed.`);
           console.warn("Wix upload errors:", result.errors);
         }
       } else {
@@ -168,6 +201,15 @@ export default function DashboardPage() {
 
             {fileName && (
               <div className="flex items-center gap-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 text-indigo-500 border-indigo-500/20 hover:bg-indigo-500/10" 
+                  onClick={handleConvertSpecs}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Convert Specs (AI)
+                </Button>
                 <Button variant="outline" size="sm" className="gap-2" onClick={handleReset}>
                   <RefreshCcw className="w-4 h-4" />
                   Reset Changes
@@ -334,6 +376,133 @@ export default function DashboardPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Upload Report Dialog */}
+        <Dialog open={isReportOpen} onOpenChange={setIsReportOpen}>
+          <DialogContent className="max-w-2xl bg-card/95 border-primary/10 backdrop-blur-xl max-h-[85vh] overflow-y-auto custom-scrollbar">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                <CloudUpload className="w-6 h-6 text-indigo-500" />
+                Kết quả tải lên Wix Studio
+              </DialogTitle>
+              <DialogDescription>
+                Báo cáo chi tiết quá trình đồng bộ sản phẩm vào hệ thống Wix Studio CMS.
+              </DialogDescription>
+            </DialogHeader>
+
+            {uploadReport && (
+              <div className="space-y-6 mt-4">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 text-center">
+                    <span className="text-xs text-indigo-400 font-medium block mb-1">Tổng sản phẩm</span>
+                    <strong className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">
+                      {uploadReport.totalCount}
+                    </strong>
+                  </div>
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
+                    <span className="text-xs text-green-400 font-medium block mb-1">Thành công</span>
+                    <strong className="text-2xl font-extrabold text-green-600 dark:text-green-400">
+                      {uploadReport.successCount}
+                    </strong>
+                  </div>
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
+                    <span className="text-xs text-red-400 font-medium block mb-1">Thất bại</span>
+                    <strong className="text-2xl font-extrabold text-red-600 dark:text-red-400">
+                      {uploadReport.failedCount}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Success Alert */}
+                {uploadReport.failedCount === 0 && (
+                  <div className="bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-300 rounded-xl p-4 flex items-center gap-3">
+                    <FileCheck className="w-5 h-5 text-green-500 flex-shrink-0" />
+                    <span className="text-sm font-medium">
+                      Tất cả sản phẩm đã được tải lên Wix Studio CMS thành công và không gặp lỗi nào!
+                    </span>
+                  </div>
+                )}
+
+                {/* Errors List Section */}
+                {uploadReport.failedCount > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        Chi tiết sản phẩm bị lỗi ({uploadReport.failedCount})
+                      </h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(uploadReport.errors.join("\n"));
+                          toast.success("Đã sao chép tất cả lỗi vào bộ nhớ tạm!");
+                        }}
+                        className="text-xs py-1 h-7"
+                      >
+                        Sao chép tất cả lỗi
+                      </Button>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Tìm kiếm theo tên sản phẩm hoặc nội dung lỗi..."
+                        value={errorSearchQuery}
+                        onChange={(e) => setErrorSearchQuery(e.target.value)}
+                        className="pl-10 bg-background/50 focus-visible:ring-primary/20 text-sm"
+                      />
+                    </div>
+
+                    <div className="max-h-[280px] overflow-y-auto custom-scrollbar border border-red-500/10 rounded-xl bg-card text-xs divide-y divide-border">
+                      {uploadReport.errors
+                        .filter((err) =>
+                          err.toLowerCase().includes(errorSearchQuery.toLowerCase())
+                        )
+                        .map((err, i) => {
+                          const parts = err.split(" - ");
+                          const productInfo = parts[0] || "Sản phẩm không xác định";
+                          const errorMsg = parts.slice(1).join(" - ") || err;
+
+                          return (
+                            <div key={i} className="p-3 hover:bg-muted/10 transition-colors flex gap-3 items-start">
+                              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                              <div className="space-y-1">
+                                <span className="font-bold text-foreground block">
+                                  {productInfo}
+                                </span>
+                                <span className="text-muted-foreground leading-relaxed">
+                                  {errorMsg}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {uploadReport.errors.filter((err) =>
+                        err.toLowerCase().includes(errorSearchQuery.toLowerCase())
+                      ).length === 0 && (
+                        <div className="p-4 text-center text-muted-foreground italic">
+                          Không tìm thấy lỗi nào khớp với tìm kiếm.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter className="mt-6 border-t pt-4">
+              <Button
+                variant="default"
+                onClick={() => setIsReportOpen(false)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white w-full sm:w-auto"
+              >
+                Đóng báo cáo
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
   );
 }

@@ -7,19 +7,19 @@ import { v4 as uuidv4 } from "uuid";
 /**
  * Parses an Excel or CSV file and transforms it into the application structure.
  */
-export async function parseFile(file: File): Promise<SheetData[]> {
+export async function parseFile(file: File, shouldParseSpecs: boolean = true): Promise<SheetData[]> {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
   if (extension === "csv") {
-    return parseCSV(file);
+    return parseCSV(file, shouldParseSpecs);
   } else if (extension === "xlsx" || extension === "xls") {
-    return parseExcel(file);
+    return parseExcel(file, shouldParseSpecs);
   } else {
     throw new Error("Unsupported file type. Please upload .xlsx, .xls, or .csv");
   }
 }
 
-async function parseExcel(file: File): Promise<SheetData[]> {
+async function parseExcel(file: File, shouldParseSpecs: boolean = true): Promise<SheetData[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -34,7 +34,7 @@ async function parseExcel(file: File): Promise<SheetData[]> {
           
           if (jsonData.length > 0) {
             const columns = Object.keys(jsonData[0] as object);
-            const rows = (jsonData as any[]).map((row) => transformRow(row));
+            const rows = (jsonData as any[]).map((row) => transformRow(row, shouldParseSpecs));
             
             sheets.push({
               sheetName,
@@ -55,14 +55,14 @@ async function parseExcel(file: File): Promise<SheetData[]> {
   });
 }
 
-async function parseCSV(file: File): Promise<SheetData[]> {
+async function parseCSV(file: File, shouldParseSpecs: boolean = true): Promise<SheetData[]> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         const columns = results.meta.fields || [];
-        const rows = results.data.map((row: any) => transformRow(row));
+        const rows = results.data.map((row: any) => transformRow(row, shouldParseSpecs));
         
         resolve([{
           sheetName: file.name.replace(".csv", ""),
@@ -76,10 +76,18 @@ async function parseCSV(file: File): Promise<SheetData[]> {
   });
 }
 
-function transformRow(row: any): ProductRow {
-  const techSpecsKey = Object.keys(row).find(key => key.toLowerCase() === "technical specifications") || "Technical Specifications";
+function transformRow(row: any, shouldParseSpecs: boolean = true): ProductRow {
+  const techSpecsKey = Object.keys(row).find(key => key.toLowerCase() === "technical specifications" || key.toLowerCase() === "thông số kỹ thuật") || "Technical Specifications";
   const techSpecs = row[techSpecsKey] || "";
-  const { specifications, errors } = parseSpecifications(techSpecs);
+  
+  let specifications: any[] = [];
+  let errors: any[] = [];
+
+  if (shouldParseSpecs) {
+    const parsed = parseSpecifications(techSpecs);
+    specifications = parsed.specifications;
+    errors = parsed.errors;
+  }
 
   // Check for "CẦN VERIFY" (case-insensitive) in all columns of the parsed row
   Object.entries(row).forEach(([key, val]) => {
@@ -94,7 +102,9 @@ function transformRow(row: any): ProductRow {
   
   // Create an updated row where the original field is replaced by JSON
   const updatedRow = { ...row };
-  updatedRow[techSpecsKey] = JSON.stringify(specifications, null, 2);
+  if (shouldParseSpecs) {
+    updatedRow[techSpecsKey] = JSON.stringify(specifications, null, 2);
+  }
   
   return {
     id: uuidv4(),

@@ -18,7 +18,7 @@ export interface WixProduct {
   Series?: string;
   MainFeature?: string;
   ProductOverview?: string;
-  TechnicalSpecifications?: string; // Stored as stringified JSON or text
+  TechnicalSpecifications?: string | any[] | Record<string, any>; // Stored as array, object, or stringified JSON/text
   image?: string;
   Brand: string; // Wix Brand CMS ID
   Datasheet?: string;
@@ -230,74 +230,220 @@ export async function getAllProducts(): Promise<WixProduct[]> {
   return allProducts;
 }
 
+let knownCollectionKeys: Set<string> | null = null;
+
+async function getCollectionKeys(): Promise<Set<string>> {
+  if (knownCollectionKeys) return knownCollectionKeys;
+  
+  try {
+    const headers = getWixHeaders();
+    if (!headers) return new Set();
+    const url = "https://www.wixapis.com/wix-data/v2/items/query";
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        dataCollectionId: "Import2",
+        query: { paging: { limit: 1 } }
+      })
+    });
+    
+    if (response.ok) {
+      const json = await response.json();
+      const items = json.items || json.dataItems || [];
+      if (items.length > 0) {
+        const item = items[0];
+        const rawData = item.data || item.dataItem?.data || item;
+        knownCollectionKeys = new Set(Object.keys(rawData));
+        console.log("[Wix CMS] Detected existing collection keys:", Array.from(knownCollectionKeys));
+        return knownCollectionKeys;
+      }
+    }
+  } catch (err) {
+    console.warn("[Wix CMS] Failed to query collection keys for normalization:", err);
+  }
+  return new Set();
+}
+
 /**
- * Inserts a new product into the Wix "Products" collection.
+ * Query Wix CMS for a product with a matching model name.
+ */
+export async function findExistingProductByModel(modelName: string): Promise<any | null> {
+  const headers = getWixHeaders();
+  if (!headers) return null;
+  const url = "https://www.wixapis.com/wix-data/v2/items/query";
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        dataCollectionId: "Import2",
+        query: {
+          filter: {
+            $or: [
+              { Product: { $eq: modelName } },
+              { product: { $eq: modelName } },
+            ],
+          },
+          paging: { limit: 1 },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const json = await response.json();
+    const items = json.items || json.dataItems || [];
+    return items[0] || null;
+  } catch (err) {
+    console.error("[Wix CMS] findExistingProductByModel error:", err);
+    return null;
+  }
+}
+
+async function buildCmsData(product: WixProduct, existingItemData?: any): Promise<Record<string, any>> {
+  const data: Record<string, any> = {};
+  
+  // Use keys from existing item if provided, otherwise detect from collection
+  const dbKeys = existingItemData 
+    ? new Set(Object.keys(existingItemData)) 
+    : await getCollectionKeys();
+
+  const cmsKeysMap: Record<string, string> = {
+    Category: "category",
+    Product: "product",
+    Title: "title",
+    productItem: "productItem",
+    Series: "series",
+    MainFeature: "mainFeature",
+    ProductOverview: "productOverview",
+    TechnicalSpecifications: "technicalSpecifications",
+    image: "image",
+    Brand: "brand",
+    Datasheet: "datasheet",
+    slug: "slug",
+    galleryImages: "galleryImages",
+    Manual: "manual",
+    Brochure: "brochure",
+    Firmware: "firmware",
+    Videos: "videos",
+    CompatibleProducts: "compatibleProducts",
+    CompatibleRooms: "compatibleRooms",
+    CompatibleSolutions: "compatibleSolutions"
+  };
+
+  Object.entries(cmsKeysMap).forEach(([prop, standardKey]) => {
+    let val = product[prop as keyof WixProduct];
+    if (val !== undefined && val !== null) {
+      // Find which key is in dbKeys
+      let targetKey = standardKey;
+      if (dbKeys.has(prop)) {
+        targetKey = prop; // existing item uses the uppercase version
+      } else if (dbKeys.has(standardKey)) {
+        targetKey = standardKey; // existing item uses the lowercase version
+      } else {
+        // Fallback: If neither exists in the database yet, use the standard key (lowercase/camelCase)
+        targetKey = standardKey;
+      }
+
+      // If it is the TechnicalSpecifications field and it is a JSON string, parse it to store it as a real Array/Object in Wix CMS.
+      if (prop === "TechnicalSpecifications" && typeof val === "string") {
+        const trimmed = val.trim();
+        if (
+          (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+          (trimmed.startsWith("{") && trimmed.endsWith("}"))
+        ) {
+          try {
+            val = JSON.parse(trimmed);
+          } catch (err) {
+            console.warn("[Wix CMS] Failed to parse TechnicalSpecifications JSON string:", err);
+          }
+        }
+      }
+
+      data[targetKey] = val;
+    }
+  });
+
+  return data;
+}
+
+/**
+ * Inserts or updates (upserts) a product into the Wix "Products" collection (Import2).
  */
 export async function insertProduct(product: WixProduct): Promise<WixProduct> {
   const headers = getWixHeaders();
   if (!headers) {
     throw new Error("Wix credentials not configured. Cannot insert product.");
   }
-  const url = "https://www.wixapis.com/wix-data/v2/items";
 
-  // Build the data object dynamically based on valid CMS keys
-  const data: Record<string, any> = {};
-  const cmsKeys: (keyof WixProduct)[] = [
-    "Category",
-    "Product",
-    "Title",
-    "productItem",
-    "Series",
-    "MainFeature",
-    "ProductOverview",
-    "TechnicalSpecifications",
-    "image",
-    "Brand",
-    "Datasheet",
-    "slug",
-    "galleryImages",
-    "Manual",
-    "Brochure",
-    "Firmware",
-    "Videos",
-    "CompatibleProducts",
-    "CompatibleRooms",
-    "CompatibleSolutions"
-  ];
+  // 1. Search for existing product by model name (Product field)
+  const existingItem = await findExistingProductByModel(product.Product);
+  const itemId = existingItem 
+    ? (existingItem._id || existingItem.id || existingItem.dataItem?._id || existingItem.dataItem?.id) 
+    : null;
+  const existingData = existingItem 
+    ? (existingItem.data || existingItem.dataItem?.data || existingItem) 
+    : null;
 
-  cmsKeys.forEach((key) => {
-    if (product[key] !== undefined) {
-      data[key] = product[key];
-    } else {
-      if (key === "galleryImages") {
-        data[key] = [];
-      } else {
-        data[key] = "";
-      }
+  // 2. Build the data payload matching the casing of existing columns
+  const data = await buildCmsData(product, existingData);
+
+  if (itemId) {
+    // 3a. Update existing item (PUT)
+    const url = `https://www.wixapis.com/wix-data/v2/items/${itemId}`;
+    const body = {
+      dataCollectionId: "Import2",
+      dataItem: {
+        id: itemId,
+        data,
+      },
+    };
+
+    const response = await fetch(url, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Failed to update Wix Product (${product.Product}): ${response.statusText} (${text})`);
     }
-  });
 
-  const body = {
-    dataItem: {
-      collectionId: "Import2",
-      data,
-    },
-  };
+    const json = await response.json();
+    const updatedItem = json.dataItem || json;
+    console.log(`[Wix CMS] Successfully updated product: ${product.Product}`);
+    return normalizeCmsItem<WixProduct>(updatedItem);
+  } else {
+    // 3b. Insert new item (POST)
+    const url = "https://www.wixapis.com/wix-data/v2/items";
+    const body = {
+      dataCollectionId: "Import2",
+      dataItem: {
+        data,
+      },
+    };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to insert Wix Product: ${response.statusText} (${text})`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Failed to insert Wix Product: ${response.statusText} (${text})`);
+    }
+
+    const json = await response.json();
+    const insertedItem = json.dataItem || json;
+    console.log(`[Wix CMS] Successfully inserted product: ${product.Product}`);
+    return normalizeCmsItem<WixProduct>(insertedItem);
   }
-
-  const json = await response.json();
-  const insertedItem = json.dataItem || json;
-  return normalizeCmsItem<WixProduct>(insertedItem);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

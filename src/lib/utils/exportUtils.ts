@@ -2,38 +2,61 @@ import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { SheetData, ProductRow } from "@/types";
 
+/**
+ * Helper to clean row data before export, excluding metadata fields case-insensitively.
+ * Kept columns: Category, Product, Title, productItem, Series, MainFeature, ProductOverview, TechnicalSpecifications, image, Brand.
+ * Excluded columns: datasheet, Confidence, Datasheet_Type, Wix_Slug, originalRawRow, and internal tracking fields.
+ */
+function cleanRowForExport(row: ProductRow, isWarnings?: boolean): Record<string, any> {
+  const { 
+    id, 
+    parsedSpecifications, 
+    transformedSpecifications, 
+    validationState, 
+    parsingErrors, 
+    isEdited, 
+    originalValues,
+    lastModified,
+    originalRawRow,
+    ...originalData 
+  } = row;
+
+  const finalData: Record<string, any> = {};
+  
+  // Define keys to exclude (case-insensitive)
+  const excludedKeys = new Set([
+    "datasheet",
+    "confidence",
+    "datasheet_type",
+    "wix_slug",
+    "originalrawrow"
+  ]);
+
+  // Copy over keys, skipping the excluded ones
+  Object.keys(originalData).forEach((key) => {
+    const lowerKey = key.toLowerCase();
+    if (!excludedKeys.has(lowerKey)) {
+      finalData[key] = originalData[key];
+    }
+  });
+
+  const techSpecsKey = Object.keys(finalData).find(key => key.toLowerCase() === "technical specifications") || "Technical Specifications";
+  
+  if (isWarnings && originalRawRow && techSpecsKey in originalRawRow) {
+    const originalSpecs = originalRawRow[techSpecsKey];
+    finalData[techSpecsKey] = originalSpecs !== undefined ? originalSpecs : JSON.stringify(transformedSpecifications, null, 2);
+  } else {
+    finalData[techSpecsKey] = JSON.stringify(transformedSpecifications, null, 2);
+  }
+
+  return finalData;
+}
+
 export function exportToExcel(sheets: SheetData[], fileName: string) {
   const workbook = XLSX.utils.book_new();
 
   sheets.forEach((sheet) => {
-    // Prepare data for export
-    const exportData = sheet.rows.map((row) => {
-      // Create a copy of the row excluding our internal tracking fields
-      const { 
-        id, 
-        parsedSpecifications, 
-        transformedSpecifications, 
-        validationState, 
-        parsingErrors, 
-        isEdited, 
-        originalValues,
-        lastModified,
-        ...originalData 
-      } = row;
-
-      // Replace the original Technical Specifications column with the transformed JSON
-      const updatedSpecs = JSON.stringify(transformedSpecifications, null, 2);
-
-      // Handle both casing possibilities
-      const finalData = { ...originalData };
-      if ("Technical Specifications" in finalData || !("technical specifications" in finalData)) {
-        finalData["Technical Specifications"] = updatedSpecs;
-      } else {
-        finalData["technical specifications"] = updatedSpecs;
-      }
-
-      return finalData;
-    });
+    const exportData = sheet.rows.map((row) => cleanRowForExport(row));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     
@@ -56,30 +79,7 @@ export function exportToExcel(sheets: SheetData[], fileName: string) {
 }
 
 export function exportToCSV(sheet: SheetData, fileName: string) {
-  const exportData = sheet.rows.map((row) => {
-    const { 
-      id, 
-      parsedSpecifications, 
-      transformedSpecifications, 
-      validationState, 
-      parsingErrors, 
-      isEdited, 
-      originalValues,
-      lastModified,
-      ...originalData 
-    } = row;
-
-    const updatedSpecs = JSON.stringify(transformedSpecifications, null, 2);
-
-    const finalData = { ...originalData };
-    if ("Technical Specifications" in finalData || !("technical specifications" in finalData)) {
-      finalData["Technical Specifications"] = updatedSpecs;
-    } else {
-      finalData["technical specifications"] = updatedSpecs;
-    }
-
-    return finalData;
-  });
+  const exportData = sheet.rows.map((row) => cleanRowForExport(row));
 
   const csv = Papa.unparse(exportData);
   const safeFileName = (fileName || "catalog").split(".")[0];
@@ -110,32 +110,7 @@ export function exportToJSON(sheets: SheetData[], fileName: string) {
 export function exportSelectedToExcel(rows: ProductRow[], brandName: string, fileName: string, isWarnings?: boolean) {
   const workbook = XLSX.utils.book_new();
   
-  const exportData = rows.map((row) => {
-    const { 
-      id, 
-      parsedSpecifications, 
-      transformedSpecifications, 
-      validationState, 
-      parsingErrors, 
-      isEdited, 
-      originalValues,
-      lastModified,
-      originalRawRow,
-      ...originalData 
-    } = row;
-
-    const finalData = { ...originalData };
-    const techSpecsKey = Object.keys(finalData).find(key => key.toLowerCase() === "technical specifications") || "Technical Specifications";
-    
-    if (isWarnings && originalRawRow && techSpecsKey in originalRawRow) {
-      finalData[techSpecsKey] = originalRawRow[techSpecsKey];
-    } else {
-      const updatedSpecs = JSON.stringify(transformedSpecifications, null, 2);
-      finalData[techSpecsKey] = updatedSpecs;
-    }
-
-    return finalData;
-  });
+  const exportData = rows.map((row) => cleanRowForExport(row, isWarnings));
 
   const worksheet = XLSX.utils.json_to_sheet(exportData);
   XLSX.utils.book_append_sheet(workbook, worksheet, brandName);
@@ -154,32 +129,7 @@ export function exportWarningsToExcel(sheets: SheetData[], fileName: string): bo
 
     hasWarnings = true;
     
-    const exportData = warningRows.map((row) => {
-      const { 
-        id, 
-        parsedSpecifications, 
-        transformedSpecifications, 
-        validationState, 
-        parsingErrors, 
-        isEdited, 
-        originalValues,
-        lastModified,
-        originalRawRow,
-        ...originalData 
-      } = row;
-
-      const finalData = { ...originalData };
-      const techSpecsKey = Object.keys(finalData).find(key => key.toLowerCase() === "technical specifications") || "Technical Specifications";
-      
-      if (originalRawRow && techSpecsKey in originalRawRow) {
-        finalData[techSpecsKey] = originalRawRow[techSpecsKey];
-      } else {
-        const updatedSpecs = JSON.stringify(transformedSpecifications, null, 2);
-        finalData[techSpecsKey] = updatedSpecs;
-      }
-
-      return finalData;
-    });
+    const exportData = warningRows.map((row) => cleanRowForExport(row, true));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     
@@ -216,28 +166,7 @@ export function exportValidToExcel(sheets: SheetData[], fileName: string): boole
 
     hasValid = true;
     
-    const exportData = validRows.map((row) => {
-      const { 
-        id, 
-        parsedSpecifications, 
-        transformedSpecifications, 
-        validationState, 
-        parsingErrors, 
-        isEdited, 
-        originalValues,
-        lastModified,
-        originalRawRow,
-        ...originalData 
-      } = row;
-
-      const updatedSpecs = JSON.stringify(transformedSpecifications, null, 2);
-      const finalData = { ...originalData };
-      
-      const techSpecsKey = Object.keys(finalData).find(key => key.toLowerCase() === "technical specifications") || "Technical Specifications";
-      finalData[techSpecsKey] = updatedSpecs;
-
-      return finalData;
-    });
+    const exportData = validRows.map((row) => cleanRowForExport(row, false));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     
