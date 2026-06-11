@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { revalidatePath } from "next/cache";
 import { getAllProducts, getActiveBrands } from "@/lib/services/wixCms";
 import { CmsProductsPopupTrigger } from "@/components/data/CmsProductsPopupTrigger";
+import { ImageSearchToggle } from "@/components/data/ImageSearchToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,9 @@ export default async function AdminDashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* AI Image Search Toggle */}
+        <ImageSearchToggle initialEnabled={!!stats.isImageSearchEnabled} />
 
         {/* CMS Stats Section */}
         <div>

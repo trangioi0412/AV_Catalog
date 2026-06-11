@@ -16,8 +16,11 @@ import {
   FileSpreadsheet,
   FileJson,
   FileCode,
-  AlertTriangle
+  AlertTriangle,
+  CloudUpload,
+  Loader2
 } from "lucide-react";
+import { uploadCatalogToWixAction } from "@/app/actions/discovery";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -51,6 +54,44 @@ export default function DashboardPage() {
     resetChanges, 
     setFileData 
   } = useDataStore();
+
+  const [isUploadingToWix, setIsUploadingToWix] = React.useState(false);
+
+  const handleUploadToWix = async () => {
+    if (!sheets || sheets.length === 0 || !sheets[activeSheetIndex]) {
+      toast.error("No product data loaded to upload.");
+      return;
+    }
+
+    const activeSheet = sheets[activeSheetIndex];
+    if (activeSheet.rows.length === 0) {
+      toast.error("The active sheet has no products.");
+      return;
+    }
+
+    setIsUploadingToWix(true);
+    const uploadToastId = toast.loading(`Uploading ${activeSheet.rows.length} products to Wix Studio Import2...`);
+
+    try {
+      const result = await uploadCatalogToWixAction(activeSheet.rows);
+      toast.dismiss(uploadToastId);
+      if (result.success) {
+        if (result.failedCount === 0) {
+          toast.success(`Successfully uploaded all ${result.successCount} products to Wix Studio!`);
+        } else {
+          toast.warning(`Uploaded ${result.successCount} products successfully, but ${result.failedCount} failed. Check console for details.`);
+          console.warn("Wix upload errors:", result.errors);
+        }
+      } else {
+        toast.error(`Wix upload failed: ${result.error}`);
+      }
+    } catch (err: any) {
+      toast.dismiss(uploadToastId);
+      toast.error(`Error uploading to Wix: ${err.message || err}`);
+    } finally {
+      setIsUploadingToWix(false);
+    }
+  };
 
   // Log loaded product catalog and device data for admin inspection
   React.useEffect(() => {
@@ -136,6 +177,21 @@ export default function DashboardPage() {
                   Clear Data
                 </Button>
                 
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="gap-2 shadow-lg shadow-indigo-500/20 bg-indigo-600 hover:bg-indigo-700 text-white" 
+                  onClick={handleUploadToWix}
+                  disabled={isUploadingToWix}
+                >
+                  {isUploadingToWix ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CloudUpload className="w-4 h-4" />
+                  )}
+                  Upload to Wix
+                </Button>
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="default" size="sm" className="gap-2 shadow-lg shadow-primary/20">

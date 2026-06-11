@@ -118,6 +118,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   Manual Scanner
                 </Link>
                 <Link
+                  href="/admin/image-discovery"
+                  className={cn(
+                    "flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    pathname === "/admin/image-discovery"
+                      ? "bg-secondary text-secondary-foreground"
+                      : "hover:bg-accent hover:text-accent-foreground text-foreground/70"
+                  )}
+                >
+                  <ImageIcon className="w-4 h-4 text-primary" />
+                  AI Image Discovery
+                </Link>
+                <Link
                   href="/admin/image-sync"
                   className={cn(
                     "flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors",

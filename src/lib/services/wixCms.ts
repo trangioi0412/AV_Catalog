@@ -86,12 +86,14 @@ function normalizeCmsItem<T>(item: any): T {
   // Defensively align field casing for crucial properties
   const Title = rawData.Title || rawData.title || "";
   const Product = rawData.Product || rawData.product || "";
+  const Brand = rawData.Brand || rawData.brand || "";
 
   return {
     _id: id,
     ...rawData,
     Title,
     Product,
+    Brand,
   } as T;
 }
 
@@ -238,23 +240,47 @@ export async function insertProduct(product: WixProduct): Promise<WixProduct> {
   }
   const url = "https://www.wixapis.com/wix-data/v2/items";
 
-  // Construct request body according to the Wix API v2 specs
+  // Build the data object dynamically based on valid CMS keys
+  const data: Record<string, any> = {};
+  const cmsKeys: (keyof WixProduct)[] = [
+    "Category",
+    "Product",
+    "Title",
+    "productItem",
+    "Series",
+    "MainFeature",
+    "ProductOverview",
+    "TechnicalSpecifications",
+    "image",
+    "Brand",
+    "Datasheet",
+    "slug",
+    "galleryImages",
+    "Manual",
+    "Brochure",
+    "Firmware",
+    "Videos",
+    "CompatibleProducts",
+    "CompatibleRooms",
+    "CompatibleSolutions"
+  ];
+
+  cmsKeys.forEach((key) => {
+    if (product[key] !== undefined) {
+      data[key] = product[key];
+    } else {
+      if (key === "galleryImages") {
+        data[key] = [];
+      } else {
+        data[key] = "";
+      }
+    }
+  });
+
   const body = {
     dataItem: {
       collectionId: "Import2",
-      data: {
-        Category: product.Category,
-        Product: product.Product,
-        Title: product.Title,
-        productItem: product.productItem || "",
-        Series: product.Series || "",
-        MainFeature: product.MainFeature || "",
-        ProductOverview: product.ProductOverview || "",
-        TechnicalSpecifications: product.TechnicalSpecifications || "",
-        image: product.image || "",
-        Brand: product.Brand,
-        Datasheet: product.Datasheet || "",
-      },
+      data,
     },
   };
 

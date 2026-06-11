@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { runProductDiscovery } from "@/lib/services/discoveryEngine";
-import { readSheet, getSystemConfig } from "@/lib/services/googleSheets";
-import { getActiveBrands, getAllProducts } from "@/lib/services/wixCms";
+import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
+import { getActiveBrands, getAllProducts, insertProduct } from "@/lib/services/wixCms";
 
 export interface DashboardStats {
   totalBrands: number;
@@ -15,6 +15,7 @@ export interface DashboardStats {
   rejectedCount: number;
   lastScan: string;
   lastSync: string;
+  isImageSearchEnabled?: boolean;
 }
 
 export interface PendingProduct {
@@ -102,6 +103,8 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     const approvedCount = parseInt(config.ApprovedCount || "0", 10);
     const rejectedCount = parseInt(config.RejectedCount || "0", 10);
 
+    const isImageSearchEnabled = config.ImageSearchEnabled !== "false";
+
     return {
       totalBrands: brands.length,
       totalProducts: products.length,
@@ -112,6 +115,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
       rejectedCount,
       lastScan: config.LastScan || "",
       lastSync: config.LastSync || "",
+      isImageSearchEnabled,
     };
   } catch (err) {
     console.error("Failed to fetch dashboard stats:", err);
@@ -125,6 +129,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
       rejectedCount: 0,
       lastScan: "",
       lastSync: "",
+      isImageSearchEnabled: true,
     };
   }
 }
@@ -201,6 +206,149 @@ export async function getActiveBrandsAction() {
   } catch (err) {
     console.error("Failed to fetch active brands:", err);
     return [];
+  }
+}
+
+/**
+ * Updates the ImageSearchEnabled config key in System_Config.
+ */
+export async function updateImageSearchConfigAction(enabled: boolean) {
+  try {
+    await updateSystemConfig("ImageSearchEnabled", String(enabled));
+    revalidatePath("/admin/dashboard");
+    return { success: true };
+  } catch (err) {
+    console.error("Failed to update ImageSearchEnabled config:", err);
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Uploads catalog product rows directly to Wix CMS collection Import2.
+ */
+export async function uploadCatalogToWixAction(products: any[]) {
+  try {
+    const brands = await getActiveBrands();
+    const brandMap = new Map(brands.map((b) => [b.name.toLowerCase().trim(), b._id]));
+    const brandIdMap = new Set(brands.map((b) => b._id));
+
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    for (const prod of products) {
+      try {
+        // Resolve Brand ID
+        let brandId = "";
+        const rawBrand = prod.Brand || prod.brand || prod.BrandName || prod.brandName || "";
+        if (typeof rawBrand === "object" && rawBrand !== null) {
+          brandId = rawBrand._id || rawBrand.id || "";
+        } else if (typeof rawBrand === "string" && rawBrand.trim() !== "") {
+          const trimmed = rawBrand.trim();
+          if (brandIdMap.has(trimmed)) {
+            brandId = trimmed;
+          } else {
+            const lowerBrand = trimmed.toLowerCase();
+            brandId = brandMap.get(lowerBrand) || "";
+            if (!brandId) {
+              // Try finding case-insensitive match among names
+              for (const b of brands) {
+                if (b.name.toLowerCase().trim() === lowerBrand) {
+                  brandId = b._id;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Map row fields to WixProduct schema case-insensitively
+        const getFieldVal = (keys: string[]) => {
+          for (const key of keys) {
+            const exactKey = Object.keys(prod).find(k => k.toLowerCase() === key.toLowerCase());
+            if (exactKey && prod[exactKey] !== undefined) {
+              return prod[exactKey];
+            }
+          }
+          return undefined;
+        };
+
+        const category = getFieldVal(["Category", "thể loại", "nhóm"]) || "";
+        const product = getFieldVal(["Product", "sản phẩm", "Model", "Model Number"]) || "";
+        const title = getFieldVal(["Title", "tiêu đề", "tên sản phẩm", "Name"]) || "";
+        const productItem = getFieldVal(["productItem", "product (item)", "item"]) || "";
+        const series = getFieldVal(["Series", "dòng sản phẩm"]) || "";
+        const mainFeature = getFieldVal(["MainFeature", "Main Feature", "tính năng chính"]) || "";
+        const productOverview = getFieldVal(["ProductOverview", "Product Overview", "tổng quan"]) || "";
+        const datasheet = getFieldVal(["Datasheet", "Data Sheet"]) || "";
+        const slug = getFieldVal(["slug", "đường dẫn"]) || "";
+        const image = getFieldVal(["image", "hình ảnh", "ảnh"]) || "";
+        const galleryImages = getFieldVal(["galleryImages", "gallery"]) || [];
+        const manual = getFieldVal(["Manual", "hướng dẫn"]) || "";
+        const brochure = getFieldVal(["Brochure"]) || "";
+        const firmware = getFieldVal(["Firmware"]) || "";
+        const videos = getFieldVal(["Videos"]) || "";
+        const compatibleProducts = getFieldVal(["CompatibleProducts", "Compatible Products"]) || "";
+        const compatibleRooms = getFieldVal(["CompatibleRooms", "Compatible Rooms"]) || "";
+        const compatibleSolutions = getFieldVal(["CompatibleSolutions", "Compatible Solutions"]) || "";
+
+        // Build TechnicalSpecifications string from transformedSpecifications if available
+        let technicalSpecifications = "";
+        const specs = prod.transformedSpecifications || prod.parsedSpecifications || [];
+        if (Array.isArray(specs) && specs.length > 0) {
+          technicalSpecifications = JSON.stringify(specs);
+        } else {
+          const rawSpecs = getFieldVal(["TechnicalSpecifications", "Technical Specifications", "thông số kỹ thuật"]);
+          if (rawSpecs) {
+            technicalSpecifications = typeof rawSpecs === "string" ? rawSpecs : JSON.stringify(rawSpecs);
+          }
+        }
+
+        await insertProduct({
+          Category: String(category),
+          Product: String(product),
+          Title: String(title),
+          productItem: productItem ? String(productItem) : "",
+          Series: series ? String(series) : "",
+          MainFeature: mainFeature ? String(mainFeature) : "",
+          ProductOverview: productOverview ? String(productOverview) : "",
+          TechnicalSpecifications: technicalSpecifications,
+          image: image ? String(image) : "",
+          Brand: brandId,
+          Datasheet: datasheet ? String(datasheet) : "",
+          slug: slug ? String(slug) : "",
+          galleryImages: Array.isArray(galleryImages) ? galleryImages : [],
+          Manual: manual ? String(manual) : "",
+          Brochure: brochure ? String(brochure) : "",
+          Firmware: firmware ? String(firmware) : "",
+          Videos: videos ? String(videos) : "",
+          CompatibleProducts: compatibleProducts ? String(compatibleProducts) : "",
+          CompatibleRooms: compatibleRooms ? String(compatibleRooms) : "",
+          CompatibleSolutions: compatibleSolutions ? String(compatibleSolutions) : "",
+        });
+
+        successCount++;
+      } catch (err: any) {
+        failedCount++;
+        errors.push(`Product: ${prod.Product || prod.Title || "Unknown"} - ${err.message}`);
+      }
+    }
+
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/discovery");
+
+    return {
+      success: true,
+      successCount,
+      failedCount,
+      errors
+    };
+  } catch (error: any) {
+    console.error("[Wix Catalog Upload] Failed:", error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
