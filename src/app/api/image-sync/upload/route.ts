@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   try {
     // ── Parse multipart form data ─────────────────────────────────────────────
     const formData = await req.formData();
-    const collectionId = (formData.get("collectionId") as string) ?? "Import2";
+    const collectionId = (formData.get("collectionId") as string) ?? "Import1";
     const jobId = (formData.get("jobId") as string) ?? crypto.randomUUID();
     const matchedJsonRaw = formData.get("matchedJson") as string;
 

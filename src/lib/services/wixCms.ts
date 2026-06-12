@@ -108,12 +108,12 @@ export async function getActiveBrands(): Promise<WixBrand[]> {
   }
   const url = "https://www.wixapis.com/wix-data/v2/items/query";
 
-  // Fetch all brands from Import1. We query without filters so it won't fail if fields are missing in CMS schema
+  // Fetch all brands from brand. We query without filters so it won't fail if fields are missing in CMS schema
   const response = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
-      dataCollectionId: "Import1",
+      dataCollectionId: "brand",
       query: {
         paging: {
           limit: 100,
@@ -196,7 +196,7 @@ export async function getAllProducts(): Promise<WixProduct[]> {
       method: "POST",
       headers,
       body: JSON.stringify({
-        dataCollectionId: "Import2",
+        dataCollectionId: "Import1",
         query: {
           paging: {
             limit,
@@ -243,7 +243,7 @@ async function getCollectionKeys(): Promise<Set<string>> {
       method: "POST",
       headers,
       body: JSON.stringify({
-        dataCollectionId: "Import2",
+        dataCollectionId: "Import1",
         query: { paging: { limit: 1 } }
       })
     });
@@ -278,7 +278,7 @@ export async function findExistingProductByModel(modelName: string): Promise<any
       method: "POST",
       headers,
       body: JSON.stringify({
-        dataCollectionId: "Import2",
+        dataCollectionId: "Import1",
         query: {
           filter: {
             $or: [
@@ -372,7 +372,7 @@ async function buildCmsData(product: WixProduct, existingItemData?: any): Promis
 }
 
 /**
- * Inserts or updates (upserts) a product into the Wix "Products" collection (Import2).
+ * Inserts or updates (upserts) a product into the Wix "Products" collection (Import1).
  */
 export async function insertProduct(product: WixProduct): Promise<WixProduct> {
   const headers = getWixHeaders();
@@ -396,7 +396,7 @@ export async function insertProduct(product: WixProduct): Promise<WixProduct> {
     // 3a. Update existing item (PUT)
     const url = `https://www.wixapis.com/wix-data/v2/items/${itemId}`;
     const body = {
-      dataCollectionId: "Import2",
+      dataCollectionId: "Import1",
       dataItem: {
         id: itemId,
         data,
@@ -422,7 +422,7 @@ export async function insertProduct(product: WixProduct): Promise<WixProduct> {
     // 3b. Insert new item (POST)
     const url = "https://www.wixapis.com/wix-data/v2/items";
     const body = {
-      dataCollectionId: "Import2",
+      dataCollectionId: "Import1",
       dataItem: {
         data,
       },
@@ -456,7 +456,7 @@ export async function insertProduct(product: WixProduct): Promise<WixProduct> {
  * Returns a Map<normalizedProductName, ProductImageItem> for O(1) lookup.
  */
 export async function getAllProductsForImageSync(
-  collectionId = "Import2"
+  collectionId = "Import1"
 ): Promise<Map<string, ProductImageItem>> {
   const headers = getWixHeaders();
   if (!headers) {
@@ -899,7 +899,7 @@ export const getBrandById = cache(async (brandId: string): Promise<WixBrand | nu
   const headers = getWixHeaders();
   if (!headers) return null;
 
-  const url = `https://www.wixapis.com/wix-data/v2/items/${brandId}?dataCollectionId=Import1`;
+  const url = `https://www.wixapis.com/wix-data/v2/items/${brandId}?dataCollectionId=brand`;
 
   try {
     const response = await fetch(url, {
@@ -923,7 +923,7 @@ export const getBrandById = cache(async (brandId: string): Promise<WixBrand | nu
 });
 
 /**
- * Fetch a product by its slug from the Products collection (Import2).
+ * Fetch a product by its slug from the Products collection (Import1).
  * Searches by both the 'slug' field and falls back to normalized 'Product' field match.
  * Memoized per request using React cache.
  */
@@ -940,7 +940,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<WixProduct |
       method: "POST",
       headers,
       body: JSON.stringify({
-        dataCollectionId: "Import2",
+        dataCollectionId: "Import1",
         query: {
           filter: {
             $or: [

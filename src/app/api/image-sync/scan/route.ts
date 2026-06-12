@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const fileNames: string[] = body.fileNames ?? [];
-    const collectionId: string = body.collectionId ?? "Import2";
+    const collectionId: string = body.collectionId ?? "Import1";
 
     if (!Array.isArray(fileNames) || fileNames.length === 0) {
       return NextResponse.json(

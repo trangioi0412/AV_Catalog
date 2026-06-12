@@ -63,17 +63,19 @@ export function FileUpload() {
   return (
     <div className="w-full">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         className={cn(
-          "relative border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center transition-all duration-300",
-          isDragging ? "border-primary bg-primary/5 scale-[1.02]" : "border-border hover:border-primary/50 hover:bg-muted/30",
+          "relative border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center transition-all duration-300 overflow-hidden",
+          isDragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-border hover:border-primary/40 hover:bg-muted/20",
           isLoading && "pointer-events-none opacity-60"
         )}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={onDrop}
       >
+        {/* Subtle radial glow */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,oklch(0.51_0.22_263/6%)_0%,transparent_70%)] pointer-events-none" />
         <input
           type="file"
           id="file-upload"
@@ -86,11 +88,11 @@ export function FileUpload() {
           accept=".xlsx,.xls,.csv"
         />
 
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+        <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-6 shadow-inner">
           {isLoading ? (
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <Loader2 className="w-9 h-9 text-primary animate-spin" />
           ) : (
-            <Upload className="w-8 h-8 text-primary" />
+            <Upload className="w-9 h-9 text-primary" />
           )}
         </div>
 
@@ -155,17 +157,19 @@ export function FileUpload() {
         </AnimatePresence>
       </motion.div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
         {[
-          { icon: <CheckCircle2 className="w-5 h-5 text-green-500" />, title: "Auto-Detection", desc: "Labels & values extracted using AI-powered regex." },
-          { icon: <CheckCircle2 className="w-5 h-5 text-green-500" />, title: "Multi-Sheet", desc: "Preserve original brand structures automatically." },
-          { icon: <AlertCircle className="w-5 h-5 text-blue-500" />, title: "Validation", desc: "Instant feedback on formatting and missing data." },
+          { icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />, title: "Auto-Detection", desc: "Labels & values extracted using AI-powered regex.", color: "border-l-emerald-400 bg-emerald-500/5" },
+          { icon: <CheckCircle2 className="w-4 h-4 text-blue-500" />, title: "Multi-Sheet", desc: "Preserve original brand structures automatically.", color: "border-l-blue-400 bg-blue-500/5" },
+          { icon: <AlertCircle className="w-4 h-4 text-primary" />, title: "Validation", desc: "Instant feedback on formatting and missing data.", color: "border-l-primary bg-primary/5" },
         ].map((feature, i) => (
-          <div key={i} className="p-4 rounded-xl border bg-card/50 flex gap-4">
-            <div className="mt-1">{feature.icon}</div>
+          <div key={i} className={cn("p-4 rounded-xl border border-l-2 border-border/60 flex gap-3", feature.color)}>
+            <div className="w-8 h-8 rounded-lg bg-background/80 border border-border/60 flex items-center justify-center shrink-0">
+              {feature.icon}
+            </div>
             <div>
-              <h4 className="font-medium text-sm">{feature.title}</h4>
-              <p className="text-xs text-muted-foreground mt-1">{feature.desc}</p>
+              <h4 className="font-semibold text-sm">{feature.title}</h4>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{feature.desc}</p>
             </div>
           </div>
         ))}

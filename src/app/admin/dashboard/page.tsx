@@ -59,14 +59,14 @@ export default async function AdminDashboardPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold tracking-tight text-gradient-brand">
               Discovery Dashboard
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               Overview of product discovery queues, Wix CMS status, and automated runs.
             </p>
           </div>
-          
+
           <form action={handleRefresh}>
             <Button type="submit" variant="outline" className="gap-2 shadow-sm">
               <RefreshCw className="w-4 h-4" />
@@ -77,30 +77,30 @@ export default async function AdminDashboardPage() {
 
         {/* Timestamps */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="border-primary/10 bg-card/40 backdrop-blur-md shadow-sm">
+          <Card className="border-border/60 bg-card card-hover">
             <CardContent className="flex items-center gap-4 p-5">
-              <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500">
-                <Clock className="w-6 h-6" />
+              <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 shrink-0">
+                <Clock className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">
+                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
                   Last Automated Scan
                 </p>
-                <p className="text-lg font-bold mt-0.5">{formatDate(stats.lastScan)}</p>
+                <p className="text-base font-bold mt-0.5">{formatDate(stats.lastScan)}</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-primary/10 bg-card/40 backdrop-blur-md shadow-sm">
+          <Card className="border-border/60 bg-card card-hover">
             <CardContent className="flex items-center gap-4 p-5">
-              <div className="p-3 bg-green-500/10 rounded-xl text-green-500">
-                <RefreshCw className="w-6 h-6" />
+              <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-500 shrink-0">
+                <RefreshCw className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">
+                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
                   Last CMS Sync (Approval)
                 </p>
-                <p className="text-lg font-bold mt-0.5">{formatDate(stats.lastSync)}</p>
+                <p className="text-base font-bold mt-0.5">{formatDate(stats.lastSync)}</p>
               </div>
             </CardContent>
           </Card>
@@ -111,35 +111,35 @@ export default async function AdminDashboardPage() {
 
         {/* CMS Stats Section */}
         <div>
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-primary" />
+          <h2 className="text-base font-bold mb-4 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-primary" />
             Wix Studio CMS Master Data
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="bg-gradient-to-br from-card to-card/75 border-primary/5 hover:border-primary/20 transition-all duration-300 shadow-md">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   Total Active Brands
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-extrabold">{stats.totalBrands}</span>
+                  <span className="text-4xl font-extrabold">{stats.totalBrands.toLocaleString()}</span>
                   <span className="text-sm text-muted-foreground">registered in Wix CMS</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-card to-card/75 border-primary/5 hover:border-primary/20 transition-all duration-300 shadow-md flex flex-col justify-between">
+            <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary flex flex-col justify-between">
               <div>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                     Total Synced Products
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-extrabold">{stats.totalProducts}</span>
+                    <span className="text-4xl font-extrabold">{stats.totalProducts.toLocaleString()}</span>
                     <span className="text-sm text-muted-foreground">stored in Wix Products</span>
                   </div>
                 </CardContent>
@@ -153,22 +153,22 @@ export default async function AdminDashboardPage() {
 
         {/* Discovery & Queue Stats Section */}
         <div>
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-blue-500" />
+          <h2 className="text-base font-bold mb-4 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-primary" />
             Discovery & Approval Queue
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
             {/* Pending Approval */}
-            <Card className="border-blue-500/10 hover:border-blue-500/30 bg-blue-500/5 transition-all shadow-sm">
+            <Card className="border-border/60 border-l-4 border-l-blue-500 card-hover">
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs font-semibold text-blue-500 uppercase tracking-wider">
+                <CardDescription className="text-xs font-bold text-blue-500 uppercase tracking-wider">
                   Pending Approval
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">
-                  {stats.pendingCount}
+                  {stats.pendingCount.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Products in Product_New sheet
@@ -177,15 +177,15 @@ export default async function AdminDashboardPage() {
             </Card>
 
             {/* Approved */}
-            <Card className="border-green-500/10 hover:border-green-500/30 bg-green-500/5 transition-all shadow-sm">
+            <Card className="border-border/60 border-l-4 border-l-emerald-500 card-hover">
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs font-semibold text-green-500 uppercase tracking-wider">
+                <CardDescription className="text-xs font-bold text-emerald-500 uppercase tracking-wider">
                   Approved Count
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-extrabold text-green-600 dark:text-green-400">
-                  {stats.approvedCount}
+                <div className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                  {stats.approvedCount.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Successfully synced to Wix CMS
@@ -194,15 +194,15 @@ export default async function AdminDashboardPage() {
             </Card>
 
             {/* Rejected */}
-            <Card className="border-red-500/10 hover:border-red-500/30 bg-red-500/5 transition-all shadow-sm">
+            <Card className="border-border/60 border-l-4 border-l-red-500 card-hover">
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs font-semibold text-red-500 uppercase tracking-wider">
+                <CardDescription className="text-xs font-bold text-red-500 uppercase tracking-wider">
                   Rejected Count
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-extrabold text-red-600 dark:text-red-400">
-                  {stats.rejectedCount}
+                  {stats.rejectedCount.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Moved to Product_Delete list
@@ -211,15 +211,15 @@ export default async function AdminDashboardPage() {
             </Card>
 
             {/* Blacklist Total */}
-            <Card className="border-slate-500/10 hover:border-slate-500/30 bg-slate-500/5 transition-all shadow-sm">
+            <Card className="border-border/60 border-l-4 border-l-slate-400 card-hover">
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <CardDescription className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                   Blacklisted Total
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-extrabold text-slate-600 dark:text-slate-400">
-                  {stats.deletedProductCount}
+                  {stats.deletedProductCount.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Total rows in Product_Delete sheet

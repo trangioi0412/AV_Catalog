@@ -61,37 +61,37 @@ export function StatisticsDashboard() {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
       {items.map((item, i) => (
         <motion.div
           key={i}
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.1 }}
-          className="h-full"
+          transition={{ delay: i * 0.08 }}
+          className="h-full card-hover"
         >
-          <Card className="relative overflow-hidden border-none shadow-sm bg-card h-full flex flex-col">
-            <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-50`} />
+          <Card className="relative overflow-hidden border border-border/60 shadow-sm bg-card h-full flex flex-col">
+            <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-60`} />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 {item.title}
               </CardTitle>
-              <div className="p-2 bg-background/50 backdrop-blur-sm rounded-lg">
+              <div className="p-1.5 bg-background/60 backdrop-blur-sm rounded-lg border border-border/40">
                 {item.icon}
               </div>
             </CardHeader>
-            <CardContent className="relative z-10 flex-grow flex flex-col justify-between pb-6">
-              <div className="text-3xl font-bold tracking-tight">{item.value}</div>
-              <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  {item.value > 0 && <TrendingUp className="w-3 h-3 text-green-500" />}
+            <CardContent className="relative z-10 flex-grow flex flex-col justify-between pb-5">
+              <div className="text-3xl font-bold tracking-tight">{item.value.toLocaleString()}</div>
+              <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  {item.value > 0 && <TrendingUp className="w-3 h-3 text-emerald-500" />}
                   {item.trend}
                 </div>
                 {item.title === "Valid Products" && item.value > 0 && (
                   <Button
                     size="xs"
                     variant="outline"
-                    className="h-6 text-[10px] px-2 py-0 border-green-500/20 text-green-600 hover:bg-green-500/5 dark:text-green-500 dark:hover:bg-green-500/10 cursor-pointer gap-1 flex items-center"
+                    className="h-6 text-[10px] px-2 py-0 border-emerald-500/25 text-emerald-700 hover:bg-emerald-500/5 dark:text-emerald-400 cursor-pointer gap-1 flex items-center"
                     onClick={(e) => {
                       e.stopPropagation();
                       const success = exportValidToExcel(sheets, fileName || "catalog");
@@ -107,11 +107,11 @@ export function StatisticsDashboard() {
                   </Button>
                 )}
                 {item.title === "Validation Issues" && item.value > 0 && (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <Button
                       size="xs"
                       variant="outline"
-                      className="h-6 text-[10px] px-2 py-0 border-amber-500/20 text-amber-600 hover:bg-amber-500/5 dark:text-amber-500 dark:hover:bg-amber-500/10 cursor-pointer gap-1 flex items-center"
+                      className="h-6 text-[10px] px-2 py-0 border-amber-500/25 text-amber-700 hover:bg-amber-500/5 dark:text-amber-400 cursor-pointer gap-1 flex items-center"
                       onClick={(e) => {
                         e.stopPropagation();
                         const success = exportWarningsToExcel(sheets, fileName || "catalog");
@@ -123,7 +123,7 @@ export function StatisticsDashboard() {
                       }}
                     >
                       <Download className="w-2.5 h-2.5" />
-                      Download Warnings
+                      Warnings
                     </Button>
                     <Button
                       size="xs"

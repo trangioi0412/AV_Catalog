@@ -113,6 +113,8 @@ function getColumnValue(row: any, col: string): any {
   return row[col];
 }
 
+const PAGE_SIZE = 25;
+
 export function DataTable() {
   const { sheets, activeSheetIndex, deleteProductRows, deleteRowsWithIssues } = useDataStore();
   const activeSheet = sheets[activeSheetIndex];
@@ -125,6 +127,7 @@ export function DataTable() {
   const [statusFilter, setStatusFilter] = useState<"all" | "valid" | "warning" | "error" | "issues">("all");
   const [filterColumn, setFilterColumn] = useState<string>("all");
   const [dataTypeFilter, setDataTypeFilter] = useState<"all" | "number" | "text" | "empty">("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const hasValidationIssues = useMemo(() => {
     if (!activeSheet) return false;
@@ -225,6 +228,17 @@ export function DataTable() {
 
     return filtered;
   }, [activeSheet, searchTerm, statusFilter, filterColumn, dataTypeFilter, sortConfig]);
+
+  // Reset to page 1 whenever filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, filterColumn, dataTypeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(processedData.length / PAGE_SIZE));
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return processedData.slice(start, start + PAGE_SIZE);
+  }, [processedData, currentPage]);
 
   const toggleExpand = (id: string) => {
     const newExpanded = new Set(expandedRows);
@@ -460,7 +474,7 @@ export function DataTable() {
           </TableHeader>
           <TableBody>
             <AnimatePresence>
-              {processedData.map((row, index) => (
+              {paginatedData.map((row, index) => (
                 <React.Fragment key={row.id}>
                   <TableRow 
                     className={cn(
@@ -516,20 +530,20 @@ export function DataTable() {
                     })}
 
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge 
-                          variant={row.validationState === "valid" ? "secondary" : "outline"}
+                      <div className="flex items-center gap-1.5">
+                        <Badge
+                          variant="outline"
                           className={cn(
-                            "text-[10px] px-1.5 py-0 capitalize",
-                            row.validationState === "error" && "border-destructive text-destructive bg-destructive/5",
-                            row.validationState === "warning" && "border-amber-500 text-amber-500 bg-amber-500/5",
-                            row.validationState === "valid" && "bg-green-500/10 text-green-600 border-green-500/20"
+                            "text-[10px] px-1.5 py-0 h-5 capitalize font-medium",
+                            row.validationState === "valid" && "status-valid",
+                            row.validationState === "warning" && "status-warning",
+                            row.validationState === "error" && "status-error"
                           )}
                         >
                           {row.validationState}
                         </Badge>
                         {row.isEdited && (
-                          <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none text-[10px]">
+                          <Badge variant="outline" className="status-edited text-[10px] px-1.5 py-0 h-5">
                             Edited
                           </Badge>
                         )}
@@ -675,25 +689,71 @@ export function DataTable() {
         </Table>
         
         {processedData.length === 0 && (
-          <div className="py-20 flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-            <Search className="w-12 h-12 mb-4 opacity-10" />
-            <p className="text-lg font-medium">No results found</p>
-            <p className="text-sm">Try adjusting your search or filters.</p>
+          <div className="py-20 flex flex-col items-center justify-center text-muted-foreground border-t border-dashed border-border">
+            <div className="w-16 h-16 rounded-2xl bg-muted/50 border border-border/60 flex items-center justify-center mb-4">
+              <Search className="w-7 h-7 opacity-30" />
+            </div>
+            <p className="text-base font-semibold">No results found</p>
+            <p className="text-sm mt-1">Try adjusting your search or filters.</p>
           </div>
         )}
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between px-2">
-        <p className="text-xs text-muted-foreground">
-          Showing <strong>{processedData.length}</strong> of <strong>{activeSheet.rows.length}</strong> products
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1">
+        <p className="text-xs text-muted-foreground order-2 sm:order-1">
+          Showing{" "}
+          <strong>{Math.min((currentPage - 1) * PAGE_SIZE + 1, processedData.length)}–{Math.min(currentPage * PAGE_SIZE, processedData.length)}</strong>{" "}
+          of <strong>{processedData.length}</strong> products
+          {processedData.length !== activeSheet.rows.length && (
+            <span className="ml-1 text-primary">(filtered from {activeSheet.rows.length})</span>
+          )}
         </p>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled>Previous</Button>
+        <div className="flex items-center gap-2 order-1 sm:order-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+          >
+            Previous
+          </Button>
           <div className="flex items-center gap-1">
-            <Button variant="secondary" size="sm" className="h-8 w-8 p-0">1</Button>
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              // Show pages around current page
+              let page: number;
+              if (totalPages <= 7) {
+                page = i + 1;
+              } else if (currentPage <= 4) {
+                page = i + 1;
+                if (i === 6) page = totalPages;
+              } else if (currentPage >= totalPages - 3) {
+                page = totalPages - 6 + i;
+              } else {
+                const offsets = [-3, -2, -1, 0, 1, 2, 3];
+                page = currentPage + offsets[i];
+              }
+              return (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 w-8 p-0 text-xs"
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </Button>
+              );
+            })}
           </div>
-          <Button variant="outline" size="sm" disabled>Next</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+          >
+            Next
+          </Button>
         </div>
       </div>
 

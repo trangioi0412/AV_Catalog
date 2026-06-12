@@ -206,7 +206,7 @@ export default function ImageSyncPage() {
   const [phase, setPhase] = useState<Phase>("select");
   const [isDragging, setIsDragging] = useState(false);
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [collectionId, setCollectionId] = useState("Import2");
+  const [collectionId, setCollectionId] = useState("Import1");
 
   // Collections picker state
   const [collections, setCollections] = useState<Array<{ id: string; displayName: string }>>([]);

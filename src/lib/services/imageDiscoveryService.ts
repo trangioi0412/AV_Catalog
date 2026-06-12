@@ -84,7 +84,7 @@ export async function discoverAndSyncProductImage(
   productId: string,
   productName: string,
   brandName: string,
-  collectionId = "Import2"
+  collectionId = "Import1"
 ): Promise<DiscoveryResult> {
   const result: DiscoveryResult = {
     success: false,
@@ -231,7 +231,7 @@ export async function processMissingImages(options?: {
   failedCount: number;
   outcomes: DiscoveryResult[];
 }> {
-  const collectionId = options?.collectionId ?? "Import2";
+  const collectionId = options?.collectionId ?? "Import1";
   const concurrencyLimit = Math.min(options?.concurrencyLimit ?? 2, 3);
 
   const config = await getSystemConfig();
