@@ -2,7 +2,7 @@
 
 import React from "react";
 import { WixBrand } from "@/lib/services/wixCms";
-import { SyncLogEntry, runDiscoveryAction, getDiscoveryLogsAction } from "@/app/actions/discovery";
+import { SyncLogEntry, runDiscoveryAction, getDiscoveryLogsAction, stopDiscoveryAction } from "@/app/actions/discovery";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   Info,
   CheckCircle,
-  FileText
+  FileText,
+  StopCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
@@ -41,6 +42,7 @@ interface ScannerConsoleProps {
 export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
   const [selectedBrandId, setSelectedBrandId] = React.useState<string>("all");
   const [isScanning, setIsScanning] = React.useState(false);
+  const [isStopping, setIsStopping] = React.useState(false);
   const [scanLogs, setScanLogs] = React.useState<string[]>([]);
   const [historicalLogs, setHistoricalLogs] = React.useState<SyncLogEntry[]>(initialLogs);
   const [activeTab, setActiveTab] = React.useState<string>("console");
@@ -116,9 +118,27 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
         clearInterval(pollInterval);
       }
       setIsScanning(false);
+      setIsStopping(false);
       // Reload historical logs
       const updatedLogs = await getDiscoveryLogsAction();
       setHistoricalLogs(updatedLogs);
+    }
+  };
+
+  const handleStopScan = async () => {
+    setIsStopping(true);
+    toast.loading("Đang yêu cầu dừng quét...", { id: "scan-toast" });
+    try {
+      const res = await stopDiscoveryAction();
+      if (res.success) {
+        toast.success("Đã gửi yêu cầu dừng quét. Hệ thống đang dừng...", { id: "scan-toast" });
+      } else {
+        toast.error(`Không thể dừng quét: ${res.error}`, { id: "scan-toast" });
+        setIsStopping(false);
+      }
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`, { id: "scan-toast" });
+      setIsStopping(false);
     }
   };
 
@@ -296,7 +316,12 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
 
       {/* Live Scan Status Dialog Popup */}
       <Dialog open={isScanning}>
-        <DialogContent className="max-w-md bg-card/95 border-primary/10 backdrop-blur-xl pointer-events-none select-none [&>button]:hidden">
+        <DialogContent 
+          className="max-w-md bg-card/95 border-primary/10 backdrop-blur-xl"
+          showCloseButton={false}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader className="flex flex-col items-center text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center relative">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -351,6 +376,27 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
                 })
               )}
             </div>
+          </div>
+
+          <div className="mt-4 flex justify-end">
+            <Button
+              variant="destructive"
+              className="w-full h-10 gap-2 font-semibold shadow-lg shadow-destructive/20 transition-all pointer-events-auto"
+              onClick={handleStopScan}
+              disabled={isStopping}
+            >
+              {isStopping ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Đang dừng...
+                </>
+              ) : (
+                <>
+                  <StopCircle className="w-4 h-4" />
+                  Dừng Quét
+                </>
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

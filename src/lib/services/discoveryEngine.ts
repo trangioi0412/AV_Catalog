@@ -13,6 +13,13 @@ function getDedupKey(brandId: string, product: string, title: string): string {
 export let activeScanLogs: string[] = [];
 export let isScanInProgress = false;
 
+export function stopProductDiscovery() {
+  if (isScanInProgress) {
+    isScanInProgress = false;
+    activeScanLogs.push("[SYSTEM] [STOP] Yêu cầu dừng quét từ Admin đã được ghi nhận. Đang dừng ở checkpoint tiếp theo...");
+  }
+}
+
 interface ScanResult {
   totalScanned: number;
   totalNew: number;
@@ -115,6 +122,10 @@ export async function runProductDiscovery(targetBrandId?: string): Promise<ScanR
     const rowsToAppend: any[][] = [];
 
     for (const brand of brands) {
+      if (!isScanInProgress) {
+        result.logs.push("[SYSTEM] [STOP] Tiến trình quét đã bị dừng theo yêu cầu của Admin.");
+        break;
+      }
       result.logs.push(`Scanning brand: ${brand.name}...`);
       let candidates: DiscoveredProduct[] = [];
 
@@ -180,6 +191,10 @@ export async function runProductDiscovery(targetBrandId?: string): Promise<ScanR
 
       let brandNewCount = 0;
       for (const cand of candidates) {
+        if (!isScanInProgress) {
+          result.logs.push("[SYSTEM] [STOP] Tiến trình quét đã bị dừng theo yêu cầu của Admin.");
+          break;
+        }
         const key = getDedupKey(brand._id, cand.Product, cand.Title);
 
         if (!existingKeys.has(key)) {

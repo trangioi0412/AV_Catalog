@@ -51,3 +51,17 @@ export async function resetImageDiscoveryAction() {
   revalidatePath("/admin/image-discovery");
   return { success: true };
 }
+
+/**
+ * Stops the active image discovery process.
+ */
+export async function stopImageDiscoveryAction() {
+  try {
+    resetImageDiscoveryStatus();
+    revalidatePath("/admin/image-discovery");
+    return { success: true, error: undefined };
+  } catch (err: any) {
+    console.error("Failed to stop image discovery:", err);
+    return { success: false, error: err.message || String(err) };
+  }
+}

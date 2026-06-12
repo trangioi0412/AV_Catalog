@@ -5,7 +5,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { 
   startImageDiscoveryAction, 
   getImageDiscoveryStatusAction, 
-  resetImageDiscoveryAction 
+  resetImageDiscoveryAction,
+  stopImageDiscoveryAction 
 } from "@/app/actions/imageDiscovery";
 import { getDashboardStatsAction } from "@/app/actions/discovery";
 import { ImageSearchToggle } from "@/components/data/ImageSearchToggle";
@@ -17,7 +18,8 @@ import {
   FileText, 
   ImageIcon, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  StopCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +27,7 @@ import { toast } from "sonner";
 
 export default function ImageDiscoveryPage() {
   const [inProgress, setInProgress] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [isImageSearchEnabled, setIsImageSearchEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -61,6 +64,7 @@ export default function ImageDiscoveryPage() {
 
           if (!status.inProgress) {
             toast.success("AI Image Discovery job finished!");
+            setIsStopping(false);
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           }
         } catch (err) {
@@ -72,6 +76,7 @@ export default function ImageDiscoveryPage() {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+      setIsStopping(false);
     }
 
     return () => {
@@ -107,11 +112,29 @@ export default function ImageDiscoveryPage() {
     }
   };
 
+  const handleStop = async () => {
+    setIsStopping(true);
+    toast.loading("Đang yêu cầu dừng tìm kiếm...", { id: "stop-image-toast" });
+    try {
+      const result = await stopImageDiscoveryAction();
+      if (result.success) {
+        toast.success("Đã yêu cầu dừng tìm kiếm hình ảnh. Hệ thống đang dừng...", { id: "stop-image-toast" });
+      } else {
+        toast.error(result.error || "Không thể dừng tìm kiếm.", { id: "stop-image-toast" });
+        setIsStopping(false);
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi: ${err.message || err}`, { id: "stop-image-toast" });
+      setIsStopping(false);
+    }
+  };
+
   const handleReset = async () => {
     if (confirm("Are you sure you want to force reset the scanner status? Use this only if the scanner gets stuck.")) {
       try {
         await resetImageDiscoveryAction();
         setInProgress(false);
+        setIsStopping(false);
         toast.success("Scanner status has been reset.");
       } catch (err: any) {
         toast.error(`Failed to reset: ${err.message}`);
@@ -174,14 +197,36 @@ export default function ImageDiscoveryPage() {
                 </Button>
 
                 {inProgress && (
-                  <Button
-                    variant="outline"
-                    onClick={handleReset}
-                    className="w-full gap-2 text-destructive border-destructive/20 hover:bg-destructive/10"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Force Reset Status
-                  </Button>
+                  <div className="flex flex-col gap-2 w-full">
+                    <Button
+                      variant="destructive"
+                      onClick={handleStop}
+                      disabled={isStopping || loading}
+                      className="w-full gap-2 h-10 font-semibold shadow-lg shadow-destructive/20 transition-all"
+                    >
+                      {isStopping ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Đang dừng...
+                        </>
+                      ) : (
+                        <>
+                          <StopCircle className="w-4 h-4" />
+                          Dừng tìm kiếm ảnh
+                        </>
+                      )}
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={handleReset}
+                      disabled={isStopping || loading}
+                      className="w-full gap-2 text-muted-foreground border-muted-foreground/20 hover:bg-muted/10"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Khôi phục trạng thái (Reset)
+                    </Button>
+                  </div>
                 )}
 
                 <div className="p-3.5 bg-muted/40 rounded-xl border border-primary/5 text-xs text-muted-foreground space-y-2">

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { runProductDiscovery } from "@/lib/services/discoveryEngine";
+import { runProductDiscovery, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
 import { getActiveBrands, getAllProducts, insertProduct, WixProduct } from "@/lib/services/wixCms";
 
@@ -347,4 +347,18 @@ export async function uploadCatalogToWixAction(products: any[]) {
     };
   }
 }
+
+/**
+ * Stops the active product discovery scanner.
+ */
+export async function stopDiscoveryAction() {
+  try {
+    stopProductDiscovery();
+    return { success: true };
+  } catch (err) {
+    console.error("Failed to stop discovery scan:", err);
+    return { success: false, error: (err as Error).message };
+  }
+}
+
 

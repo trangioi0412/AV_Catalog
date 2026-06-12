@@ -269,10 +269,15 @@ export async function processMissingImages(options?: {
     let failedCount = 0;
 
     for (let i = 0; i < candidates.length; i += concurrencyLimit) {
+      if (!isImageDiscoveryInProgress) {
+        logToConsole("Dừng tiến trình tìm kiếm hình ảnh AI do yêu cầu từ Admin.");
+        break;
+      }
       const chunk = candidates.slice(i, i + concurrencyLimit);
       logToConsole(`Đang xử lý nhóm ${Math.floor(i / concurrencyLimit) + 1}/${Math.ceil(candidates.length / concurrencyLimit)} (${chunk.length} sản phẩm)...`);
       
       const promises = chunk.map(async (prod) => {
+        if (!isImageDiscoveryInProgress) return;
         const id = prod._id;
         const productName = prod.Product || prod.Title || "Unknown Product";
         const brandName = resolveBrandName(prod.Brand, brandMap);
