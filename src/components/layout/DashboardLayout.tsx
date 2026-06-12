@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BrandMappingUpload } from "@/components/data/BrandMappingUpload";
 import { useNavLoading } from "@/components/layout/NavigationLoadingProvider";
+import { logoutAction } from "@/app/actions/auth";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -375,9 +376,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
+              onClick={async () => {
                 setShowSignOutDialog(false);
-                toast.success("Signed out successfully");
+                await logoutAction();
               }}
             >
               Sign Out
