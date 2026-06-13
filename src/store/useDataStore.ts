@@ -16,8 +16,6 @@ interface DataActions {
   setLoading: (loading: boolean) => void;
   resetChanges: () => void;
   calculateStats: () => void;
-  setBrandMapping: (mapping: Record<string, string>) => void;
-  applyBrandMapping: () => void;
   convertSpecs: () => void;
 }
 
@@ -92,7 +90,6 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
   sheets: [],
   originalSheets: [],
   activeSheetIndex: 0,
-  brandMapping: null,
   isLoading: false,
   history: [],
   stats: {
@@ -313,43 +310,6 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
         validationErrors,
         validProducts,
       }
-    });
-  },
-
-  setBrandMapping: (mapping) => set({ brandMapping: mapping }),
-
-  applyBrandMapping: () => {
-    set((state) => {
-      if (!state.brandMapping) return state;
-      
-      const newSheets = state.sheets.map(sheet => {
-        // Find which column represents the Brand
-        const brandColumn = sheet.columns.find(col => 
-          ["brand", "thương hiệu", "hang", "manufacturer", "vendor"].includes(col.toLowerCase())
-        );
-
-        if (!brandColumn) return sheet;
-
-        return {
-          ...sheet,
-          rows: sheet.rows.map(row => {
-            const currentBrandName = String(row[brandColumn] || "").trim().toLowerCase();
-            const mappedId = state.brandMapping![currentBrandName] || row[brandColumn];
- 
-            if (mappedId !== row[brandColumn]) {
-              return {
-                ...row,
-                [brandColumn]: mappedId,
-                isEdited: true,
-                lastModified: Date.now()
-              };
-            }
-            return row;
-          })
-        };
-      });
-
-      return { sheets: newSheets };
     });
   },
 

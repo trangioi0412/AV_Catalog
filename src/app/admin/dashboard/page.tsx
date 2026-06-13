@@ -115,7 +115,7 @@ export default async function AdminDashboardPage() {
             <Building2 className="w-4 h-4 text-primary" />
             Wix Studio CMS Master Data
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
@@ -146,6 +146,42 @@ export default async function AdminDashboardPage() {
               </div>
               <CardContent className="pt-0 pb-4 flex justify-end">
                 <CmsProductsPopupTrigger products={products} brands={brands} />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary flex flex-col justify-between">
+              <div>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Products with Images
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                      {stats.productsWithImagesCount.toLocaleString()}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      / {stats.totalProducts.toLocaleString()} items
+                    </span>
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 ml-2">
+                      {stats.totalProducts > 0 
+                        ? Math.round((stats.productsWithImagesCount / stats.totalProducts) * 100) 
+                        : 0}%
+                    </span>
+                  </div>
+                </CardContent>
+              </div>
+              <CardContent className="pt-0 pb-4 flex justify-between items-center">
+                <span className="text-xs text-muted-foreground font-medium">
+                  Chưa có ảnh: <span className="font-bold text-amber-600 dark:text-amber-400">{(stats.totalProducts - stats.productsWithImagesCount).toLocaleString()}</span>
+                </span>
+                <CmsProductsPopupTrigger 
+                  products={products} 
+                  brands={brands} 
+                  showOnlyNoImages={true} 
+                  triggerLabel="Xem sản phẩm thiếu ảnh" 
+                />
               </CardContent>
             </Card>
           </div>

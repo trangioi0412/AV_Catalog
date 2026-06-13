@@ -40,15 +40,19 @@ export async function GET() {
 
     const json = await res.json();
 
-    // Wix returns { collections: [{ id, displayName, ... }] }
-    const collections: Array<{ id: string; displayName?: string }> =
-      json.collections ?? [];
+    // Wix returns { collections: [{ id, displayName, fields: [...] }] }
+    const collections: any[] = json.collections ?? [];
 
     return NextResponse.json({
       ok: true,
       collections: collections.map((c) => ({
         id: c.id,
         displayName: c.displayName ?? c.id,
+        fields: c.fields ? c.fields.map((f: any) => ({
+          key: f.key,
+          displayName: f.displayName ?? f.key,
+          type: f.type
+        })) : []
       })),
     });
   } catch (err: any) {

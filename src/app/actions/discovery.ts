@@ -8,6 +8,7 @@ import { getActiveBrands, getAllProducts, insertProduct, WixProduct } from "@/li
 export interface DashboardStats {
   totalBrands: number;
   totalProducts: number;
+  productsWithImagesCount: number;
   newProductCount: number;
   deletedProductCount: number;
   pendingCount: number;
@@ -105,9 +106,13 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
 
     const isImageSearchEnabled = config.ImageSearchEnabled !== "false";
 
+    // Count products with image
+    const productsWithImagesCount = products.filter((p) => p.image && p.image.trim() !== "").length;
+
     return {
       totalBrands: brands.length,
       totalProducts: products.length,
+      productsWithImagesCount,
       newProductCount,
       deletedProductCount,
       pendingCount: newProductCount,
@@ -122,6 +127,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     return {
       totalBrands: 0,
       totalProducts: 0,
+      productsWithImagesCount: 0,
       newProductCount: 0,
       deletedProductCount: 0,
       pendingCount: 0,

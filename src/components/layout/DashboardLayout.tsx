@@ -22,7 +22,6 @@ import { Separator } from "@/components/ui/separator";
 import { useDataStore } from "@/store/useDataStore";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { BrandMappingUpload } from "@/components/data/BrandMappingUpload";
 import { useNavLoading } from "@/components/layout/NavigationLoadingProvider";
 import { logoutAction } from "@/app/actions/auth";
 import {
@@ -213,15 +212,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <Separator className="opacity-50" />
-
-          {/* Brand Mapping */}
-          <div>
-            <p className="px-3 mb-2 text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase">
-              Brand Tools
-            </p>
-            <BrandMappingUpload />
-          </div>
 
           <Separator className="opacity-50" />
 

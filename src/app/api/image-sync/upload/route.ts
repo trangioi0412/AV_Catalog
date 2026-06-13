@@ -57,6 +57,10 @@ export async function POST(req: NextRequest) {
     // ── Parse multipart form data ─────────────────────────────────────────────
     const formData = await req.formData();
     const collectionId = (formData.get("collectionId") as string) ?? "Import1";
+    const matchField = (formData.get("matchField") as string) ?? "Product";
+    const imageField = (formData.get("imageField") as string) ?? "image";
+    const galleryField = (formData.get("galleryField") as string) ?? "galleryImages";
+    const mediaFolder = (formData.get("mediaFolder") as string) ?? "product_image";
     const jobId = (formData.get("jobId") as string) ?? crypto.randomUUID();
     const matchedJsonRaw = formData.get("matchedJson") as string;
 
@@ -114,7 +118,7 @@ export async function POST(req: NextRequest) {
         // ── Upload main image ─────────────────────────────────────────────
         const mainBuffer = Buffer.from(await mainFile.arrayBuffer());
         const { wixUrl: mainWixUrl } = await withRetry(() =>
-          uploadToWixMedia(mainBuffer, mainFile.name, mimeFromName(mainFile.name))
+          uploadToWixMedia(mainBuffer, mainFile.name, mimeFromName(mainFile.name), mediaFolder)
         );
 
         // ── Upload gallery images ─────────────────────────────────────────
@@ -127,7 +131,8 @@ export async function POST(req: NextRequest) {
             uploadToWixMedia(
               galleryBuffer,
               galleryFile.name,
-              mimeFromName(galleryFile.name)
+              mimeFromName(galleryFile.name),
+              mediaFolder
             )
           );
           galleryWixUrls.push(wixUrl);
@@ -139,7 +144,9 @@ export async function POST(req: NextRequest) {
           item.cmsId,
           collectionId,
           mainWixUrl,
-          [mainWixUrl, ...galleryWixUrls]
+          [mainWixUrl, ...galleryWixUrls],
+          imageField,
+          galleryField
         );
 
         // Update job store progress

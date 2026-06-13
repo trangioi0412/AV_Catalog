@@ -25,13 +25,23 @@ import {
   Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { Download } from "lucide-react";
 
 interface CmsProductsPopupTriggerProps {
   products: WixProduct[];
   brands: WixBrand[];
+  showOnlyNoImages?: boolean;
+  triggerLabel?: string;
 }
 
-export function CmsProductsPopupTrigger({ products, brands }: CmsProductsPopupTriggerProps) {
+export function CmsProductsPopupTrigger({ 
+  products, 
+  brands, 
+  showOnlyNoImages = false, 
+  triggerLabel 
+}: CmsProductsPopupTriggerProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -52,8 +62,69 @@ export function CmsProductsPopupTrigger({ products, brands }: CmsProductsPopupTr
   const [isRawMetaExpanded, setIsRawMetaExpanded] = useState(false);
   const [rawSearchQuery, setRawSearchQuery] = useState("");
 
+  const handleExportToExcel = () => {
+    try {
+      const dataToExport = filteredProducts.map((p) => {
+        const brandName = brandMap.get(p.Brand) || "AV Brand";
+        
+        let specsStr = "";
+        if (p.TechnicalSpecifications) {
+          if (typeof p.TechnicalSpecifications === "string") {
+            specsStr = p.TechnicalSpecifications;
+          } else {
+            specsStr = JSON.stringify(p.TechnicalSpecifications, null, 2);
+          }
+        }
+
+        return {
+          "Thương Hiệu": brandName,
+          "Mẫu Mã (Model)": p.Product || "",
+          "Tiêu Đề": p.Title || "",
+          "Danh Mục": p.Category || "",
+          "Dòng Sản Phẩm (Series)": p.Series || "",
+          "Mô Tả Tổng Quan": p.ProductOverview || "",
+          "Đặc Điểm Chính": p.MainFeature || "",
+          "Thông Số Kỹ Thuật": specsStr,
+          "Datasheet Link": p.Datasheet || "",
+          "Slug": p.slug || "",
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "SanPhamChuaCoAnh");
+
+      const maxWidths = dataToExport.reduce((acc: any, row: any) => {
+        Object.keys(row).forEach((key, i) => {
+          const val = row[key as keyof typeof row] ? row[key as keyof typeof row].toString() : "";
+          acc[i] = Math.max(acc[i] || 0, val.length, key.length);
+        });
+        return acc;
+      }, []);
+      worksheet["!cols"] = maxWidths.map((w: number) => ({ w: Math.min(w, 50) }));
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const fileName = showOnlyNoImages 
+        ? `wix_products_missing_images_${dateStr}.xlsx` 
+        : `wix_products_all_${dateStr}.xlsx`;
+      
+      XLSX.writeFile(workbook, fileName);
+      toast.success("Đã xuất file Excel thành công!");
+    } catch (err) {
+      console.error("Failed to export Excel:", err);
+      toast.error("Gặp lỗi khi xuất file Excel.");
+    }
+  };
+
   const itemsPerPage = 8;
   const brandMap = useMemo(() => new Map((brands || []).map((b) => [b._id, b.name])), [brands]);
+
+  const totalDisplayCount = useMemo(() => {
+    if (showOnlyNoImages) {
+      return products.filter((p) => !p.image || p.image.trim() === "").length;
+    }
+    return products.length;
+  }, [products, showOnlyNoImages]);
 
   // Extract unique categories for filter
   const categories = useMemo(() => {
@@ -78,6 +149,10 @@ export function CmsProductsPopupTrigger({ products, brands }: CmsProductsPopupTr
   // Filtered products list
   const filteredProducts = useMemo(() => {
     let result = products;
+
+    if (showOnlyNoImages) {
+      result = result.filter((p) => !p.image || p.image.trim() === "");
+    }
 
     // Filter by Brand
     if (selectedBrandId !== "all") {
@@ -285,7 +360,7 @@ export function CmsProductsPopupTrigger({ products, brands }: CmsProductsPopupTr
         }}
       >
         <ListFilter className="w-3.5 h-3.5" />
-        Xem chi tiết CMS
+        {triggerLabel || "Xem chi tiết CMS"}
       </Button>
 
       {/* Main Modal Backdrop */}
@@ -298,10 +373,10 @@ export function CmsProductsPopupTrigger({ products, brands }: CmsProductsPopupTr
               <div>
                 <h3 className="text-base font-bold flex items-center gap-2 text-foreground">
                   <Building2 className="w-5 h-5 text-primary" />
-                  Wix CMS Products Directory
+                  {showOnlyNoImages ? "Sản phẩm Wix CMS chưa có ảnh" : "Wix CMS Products Directory"}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Tổng đồng bộ: {products.length} sản phẩm | Kết quả lọc: {filteredProducts.length} mục
+                  {showOnlyNoImages ? "Tổng sản phẩm chưa có ảnh" : "Tổng đồng bộ"}: {totalDisplayCount} sản phẩm | Kết quả lọc: {filteredProducts.length} mục
                 </p>
               </div>
               <button 
@@ -371,6 +446,17 @@ export function CmsProductsPopupTrigger({ products, brands }: CmsProductsPopupTr
                           </option>
                         ))}
                       </select>
+
+                      {/* Export Button */}
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={handleExportToExcel}
+                        className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-xl flex items-center gap-1.5 px-3 cursor-pointer shadow-sm transition-all"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Tải Excel ({filteredProducts.length})
+                      </Button>
                     </div>
                   </div>
 

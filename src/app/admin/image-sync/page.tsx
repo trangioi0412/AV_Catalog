@@ -208,11 +208,50 @@ export default function ImageSyncPage() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [collectionId, setCollectionId] = useState("Import1");
 
+  // Advanced Mapping parameters
+  const [matchField, setMatchField] = useState("Product");
+  const [imageField, setImageField] = useState("image");
+  const [galleryField, setGalleryField] = useState("galleryImages");
+  const [mediaFolder, setMediaFolder] = useState("product_image");
+
   // Collections picker state
-  const [collections, setCollections] = useState<Array<{ id: string; displayName: string }>>([]);
+  const [collections, setCollections] = useState<Array<{ id: string; displayName: string; fields?: Array<{ key: string; displayName: string; type: string }> }>>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
   const [collectionsError, setCollectionsError] = useState<string | null>(null);
   const [collectionsLoaded, setCollectionsLoaded] = useState(false);
+
+  // Auto-detect compatible field mappings when collection changes
+  React.useEffect(() => {
+    const coll = collections.find((c) => c.id === collectionId);
+    if (coll && coll.fields && coll.fields.length > 0) {
+      // Find candidate for matchField: check standard matching keys
+      const matchCandidates = ["Product", "product", "Title", "title", "Name", "name", "slug"];
+      const foundMatch = coll.fields.find((f) => matchCandidates.includes(f.key));
+      if (foundMatch) {
+        setMatchField(foundMatch.key);
+      } else {
+        setMatchField(coll.fields[0].key);
+      }
+
+      // Find candidate for imageField: check standard image fields
+      const imageCandidates = ["image", "Image", "mainImage", "imageUrl", "thumbnail"];
+      const foundImage = coll.fields.find((f) => imageCandidates.includes(f.key));
+      if (foundImage) {
+        setImageField(foundImage.key);
+      } else {
+        setImageField(coll.fields[0].key);
+      }
+
+      // Find candidate for galleryField: check standard gallery fields
+      const galleryCandidates = ["galleryImages", "gallery", "images", "mediaGallery", "additionalImages"];
+      const foundGallery = coll.fields.find((f) => galleryCandidates.includes(f.key));
+      if (foundGallery) {
+        setGalleryField(foundGallery.key);
+      } else {
+        setGalleryField(coll.fields[0].key);
+      }
+    }
+  }, [collectionId, collections]);
 
   const loadCollections = async () => {
     setCollectionsLoading(true);
@@ -255,6 +294,7 @@ export default function ImageSyncPage() {
     collectionId: string;
     totalFiles: number;
     totalProducts: number;
+    productsWithImagesCount?: number;
   } | null>(null);
 
   // Upload state
@@ -329,6 +369,9 @@ export default function ImageSyncPage() {
         body: JSON.stringify({
           fileNames: files.map((f) => f.file.name),
           collectionId,
+          matchField,
+          imageField,
+          galleryField
         }),
       });
       const data = await res.json();
@@ -340,6 +383,7 @@ export default function ImageSyncPage() {
         collectionId: data.collectionId ?? collectionId,
         totalFiles: data.totalFiles ?? files.length,
         totalProducts: data.totalProducts ?? 0,
+        productsWithImagesCount: data.productsWithImagesCount ?? 0,
       });
 
       // Build matched items with selection state
@@ -383,6 +427,10 @@ export default function ImageSyncPage() {
     try {
       const formData = new FormData();
       formData.append("collectionId", collectionId);
+      formData.append("matchField", matchField);
+      formData.append("imageField", imageField);
+      formData.append("galleryField", galleryField);
+      formData.append("mediaFolder", mediaFolder);
       formData.append("jobId", newJobId);
       formData.append("matchedJson", JSON.stringify(
         selected.map(({ normalizedKey, displayName, mainFileName, galleryFileNames, cmsId, productName }) => ({
@@ -473,6 +521,13 @@ export default function ImageSyncPage() {
   const toggleAll = () => {
     const allSelected = matchedItems.every((m) => m.selected);
     setMatchedItems((prev) => prev.map((m) => ({ ...m, selected: !allSelected })));
+  };
+
+  const deselectExistingImages = () => {
+    setMatchedItems((prev) =>
+      prev.map((m) => (m.existingImageUrl ? { ...m, selected: false } : m))
+    );
+    toast.info("Đã bỏ chọn các sản phẩm đã có hình ảnh sẵn trên CMS.");
   };
 
   const selectedCount = matchedItems.filter((m) => m.selected).length;
@@ -618,6 +673,95 @@ export default function ImageSyncPage() {
                     Click "Load Collections" to browse your Wix CMS collections, or type the collection ID directly (e.g. <code className="font-mono bg-muted px-1 rounded">Products</code>).
                   </p>
                 )}
+
+                {/* Advanced Field Mapping Settings */}
+                <div className="border-t border-primary/5 pt-3 mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Match Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">So sánh tên file với trường (Match Field)</label>
+                    {collectionsLoaded && collections.find((c) => c.id === collectionId)?.fields ? (
+                      <select
+                        value={matchField}
+                        onChange={(e) => setMatchField(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-md border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      >
+                        {(collections.find((c) => c.id === collectionId)?.fields ?? []).map((f) => (
+                          <option key={f.key} value={f.key}>
+                            {f.displayName} ({f.key})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={matchField}
+                        onChange={(e) => setMatchField(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-md border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        placeholder="e.g. Product"
+                      />
+                    )}
+                  </div>
+
+                  {/* Main Image Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Trường lưu ảnh chính (Image Field)</label>
+                    {collectionsLoaded && collections.find((c) => c.id === collectionId)?.fields ? (
+                      <select
+                        value={imageField}
+                        onChange={(e) => setImageField(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-md border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      >
+                        {(collections.find((c) => c.id === collectionId)?.fields ?? []).map((f) => (
+                          <option key={f.key} value={f.key}>
+                            {f.displayName} ({f.key})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={imageField}
+                        onChange={(e) => setImageField(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-md border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        placeholder="e.g. image"
+                      />
+                    )}
+                  </div>
+
+                  {/* Gallery Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Trường lưu thư viện ảnh (Gallery Field)</label>
+                    {collectionsLoaded && collections.find((c) => c.id === collectionId)?.fields ? (
+                      <select
+                        value={galleryField}
+                        onChange={(e) => setGalleryField(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-md border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      >
+                        {(collections.find((c) => c.id === collectionId)?.fields ?? []).map((f) => (
+                          <option key={f.key} value={f.key}>
+                            {f.displayName} ({f.key})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={galleryField}
+                        onChange={(e) => setGalleryField(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-md border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        placeholder="e.g. galleryImages"
+                      />
+                    )}
+                  </div>
+
+                  {/* Media Folder */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Thư mục lưu ảnh trên Wix Media</label>
+                    <input
+                      value={mediaFolder}
+                      onChange={(e) => setMediaFolder(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-md border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      placeholder="e.g. product_image"
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -759,9 +903,36 @@ export default function ImageSyncPage() {
                       </code>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shrink-0" />
+                      <span>Match Field:</span>
+                      <code className="font-mono text-foreground bg-muted px-1 rounded">{matchField}</code>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" />
+                      <span>Image Field:</span>
+                      <code className="font-mono text-foreground bg-muted px-1 rounded">{imageField}</code>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-500 inline-block shrink-0" />
+                      <span>Gallery Field:</span>
+                      <code className="font-mono text-foreground bg-muted px-1 rounded">{galleryField}</code>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-pink-500 inline-block shrink-0" />
+                      <span>Media Folder:</span>
+                      <code className="font-mono text-foreground bg-muted px-1 rounded">{mediaFolder}</code>
+                    </div>
+                    <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" />
                       <span>Sản phẩm trong CMS:</span>
-                      <span className="font-bold text-foreground">{scanInfo.totalProducts.toLocaleString()}</span>
+                      <span className="font-bold text-foreground">
+                        {scanInfo.totalProducts.toLocaleString()}
+                        {scanInfo.productsWithImagesCount !== undefined && (
+                          <span className="text-[10px] font-normal text-muted-foreground ml-1">
+                            (Đã có ảnh: {scanInfo.productsWithImagesCount.toLocaleString()})
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-purple-500 inline-block shrink-0" />
@@ -787,13 +958,25 @@ export default function ImageSyncPage() {
             )}
 
             {/* Selection controls */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20 p-3.5 rounded-xl border border-primary/5">
               <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">{selectedCount}</span> of {matchedItems.length} matched products selected for upload
+                Đã chọn <span className="font-semibold text-foreground">{selectedCount}</span> trên tổng số {matchedItems.length} sản phẩm trùng khớp để tải lên
               </p>
-              <Button variant="outline" size="sm" onClick={toggleAll} className="h-8">
-                {matchedItems.every((m) => m.selected) ? "Deselect All" : "Select All"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {matchedItems.some((m) => m.existingImageUrl) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={deselectExistingImages}
+                    className="h-8 text-xs text-amber-500 border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-500"
+                  >
+                    Bỏ chọn sản phẩm đã có ảnh ({matchedItems.filter((m) => m.existingImageUrl).length})
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={toggleAll} className="h-8 text-xs">
+                  {matchedItems.every((m) => m.selected) ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+                </Button>
+              </div>
             </div>
 
             {/* Tabs */}

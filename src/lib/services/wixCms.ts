@@ -456,7 +456,10 @@ export async function insertProduct(product: WixProduct): Promise<WixProduct> {
  * Returns a Map<normalizedProductName, ProductImageItem> for O(1) lookup.
  */
 export async function getAllProductsForImageSync(
-  collectionId = "Import1"
+  collectionId = "Import1",
+  matchField = "Product",
+  imageField = "image",
+  galleryField = "galleryImages"
 ): Promise<Map<string, ProductImageItem>> {
   const headers = getWixHeaders();
   if (!headers) {
@@ -492,11 +495,14 @@ export async function getAllProductsForImageSync(
     for (const item of items) {
       const normalized = normalizeCmsItem<any>(item);
       const id: string = normalized._id || "";
-      // Primary match field is "Product" (exact CMS field name)
+      
+      // Get the value of the configured match field
       const productName: string =
+        normalized[matchField] ||
+        normalized[matchField.toLowerCase()] ||
+        normalized[matchField.charAt(0).toUpperCase() + matchField.slice(1)] ||
         normalized.Product ||
         normalized.product ||
-        normalized.productName ||
         normalized.Title ||
         normalized.title ||
         "";
@@ -504,11 +510,22 @@ export async function getAllProductsForImageSync(
       if (!id || !productName) continue;
 
       const key = normalizeName(productName);
+      
+      // Extract custom image and gallery images fields
+      const imageVal =
+        normalized[imageField] ||
+        normalized[imageField.toLowerCase()] ||
+        normalized[imageField.charAt(0).toUpperCase() + imageField.slice(1)];
+      const galleryVal =
+        normalized[galleryField] ||
+        normalized[galleryField.toLowerCase()] ||
+        normalized[galleryField.charAt(0).toUpperCase() + galleryField.slice(1)];
+
       map.set(key, {
         _id: id,
         productName,
-        image: normalized.Image || normalized.image,
-        galleryImages: normalized.galleryImages,
+        image: imageVal,
+        galleryImages: galleryVal,
       });
     }
 
@@ -545,6 +562,12 @@ export async function getAllProductsForImageSync(
 export function normalizeName(name: string): string {
   return (
     name
+      // Convert Vietnamese d/D with stroke (đ/Đ) to standard d/D
+      .replace(/[đĐ]/g, "d")
+      // Split accented characters into base character + diacritical marks
+      .normalize("NFD")
+      // Remove diacritical marks (e.g. "Parlé" → "Parle")
+      .replace(/[\u0300-\u036f]/g, "")
       // 1. Remove parentheses and their contents if they contain only non-alphanumeric
       //    e.g. "(Gen 2)" → "Gen 2", "(USB-C)" → "USB-C"
       .replace(/[()[\]{}]/g, " ")
@@ -715,11 +738,16 @@ export async function getOrCreateFolder(folderName = "product_image"): Promise<s
   }
 }
 
-export function getProductImageFolderId(): Promise<string | null> {
-  if (!folderPromise) {
-    folderPromise = getOrCreateFolder("product_image");
+const folderIdCache = new Map<string, string | null>();
+
+export async function getProductImageFolderId(folderName = "product_image"): Promise<string | null> {
+  const normalized = folderName.trim().toLowerCase();
+  if (folderIdCache.has(normalized)) {
+    return folderIdCache.get(normalized)!;
   }
-  return folderPromise;
+  const folderId = await getOrCreateFolder(folderName);
+  folderIdCache.set(normalized, folderId);
+  return folderId;
 }
 
 /**
@@ -732,7 +760,8 @@ export function getProductImageFolderId(): Promise<string | null> {
 export async function uploadToWixMedia(
   fileBuffer: Buffer,
   originalFileName: string,
-  mimeType: string
+  mimeType: string,
+  mediaFolder = "product_image"
 ): Promise<WixMediaUploadResult> {
   const apiKey = process.env.WIX_API_KEY;
   const siteId = process.env.WIX_SITE_ID;
@@ -753,7 +782,7 @@ export async function uploadToWixMedia(
     fileName: safeFileName,
   };
 
-  const parentFolderId = await getProductImageFolderId();
+  const parentFolderId = await getProductImageFolderId(mediaFolder);
   if (parentFolderId) {
     requestBody.parentFolderId = parentFolderId;
   }
@@ -829,7 +858,9 @@ export async function updateProductImages(
   itemId: string,
   collectionId: string,
   image: string,
-  galleryImages: string[]
+  galleryImages: string[],
+  imageField = "image",
+  galleryField = "galleryImages"
 ): Promise<WixPatchResult> {
   const headers = getWixHeaders();
   if (!headers) {
@@ -842,7 +873,7 @@ export async function updateProductImages(
   const fieldModifications: Array<{ fieldPath: string; action: "SET_FIELD"; setFieldOptions: { value: any } }> = [];
   if (image) {
     fieldModifications.push({
-      fieldPath: "image",
+      fieldPath: imageField,
       action: "SET_FIELD",
       setFieldOptions: { value: image }
     });
@@ -853,7 +884,7 @@ export async function updateProductImages(
       type: "image"
     }));
     fieldModifications.push({
-      fieldPath: "galleryImages",
+      fieldPath: galleryField,
       action: "SET_FIELD",
       setFieldOptions: { value: formattedGallery }
     });

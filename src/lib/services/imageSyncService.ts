@@ -206,11 +206,63 @@ export function parseImageName(filename: string): { base: string; index: number 
     const base = match[1].trim();
     const indexStr = match[2] || match[3];
     const index = parseInt(indexStr, 10);
-    if (index >= 1 && index <= 99) {
+    // Limit index to <= 9 for general matching to avoid matching model number suffixes (e.g. -16 in CEN-SWPOE-16)
+    if (index >= 1 && index <= 9) {
       return { base, index };
     }
   }
   return { base: nameNoExt, index: 0 };
+}
+
+/**
+ * Intelligent image name parser that references existing CMS keys to distinguish
+ * true gallery index suffixes (e.g., -2 in Model-2) from model numbers (e.g., -16 in Model-16).
+ */
+export function parseImageNameWithKeys(
+  filename: string,
+  existingKeys?: Set<string>
+): { base: string; index: number } {
+  const nameNoExt = stripExtension(filename);
+
+  // 1. Parentheses (almost always a gallery index) e.g., "Model (1)", "Model (2)"
+  const parenMatch = nameNoExt.match(/^(.+?)[-\s_]\((\d{1,2})\)$/);
+  if (parenMatch) {
+    const base = parenMatch[1].trim();
+    const index = parseInt(parenMatch[2], 10);
+    return { base, index };
+  }
+
+  // 2. If existingKeys are loaded, do direct lookups
+  if (existingKeys && existingKeys.size > 0) {
+    const normalizedFull = normalizeName(nameNoExt);
+    if (existingKeys.has(normalizedFull)) {
+      // Exact product key match, this is the main image (index 0)
+      return { base: nameNoExt, index: 0 };
+    }
+
+    // Try splitting at the last separator to check if prefix matches an existing key
+    const lastSepIndex = Math.max(
+      nameNoExt.lastIndexOf("-"),
+      nameNoExt.lastIndexOf("_"),
+      nameNoExt.lastIndexOf(" ")
+    );
+    if (lastSepIndex !== -1) {
+      const basePart = nameNoExt.slice(0, lastSepIndex).trim();
+      const suffixPart = nameNoExt.slice(lastSepIndex + 1).trim();
+
+      if (/^\d{1,2}$/.test(suffixPart)) {
+        const baseNormalized = normalizeName(basePart);
+        if (existingKeys.has(baseNormalized)) {
+          // Found base product key match, the suffix is a gallery index
+          const index = parseInt(suffixPart, 10);
+          return { base: basePart, index };
+        }
+      }
+    }
+  }
+
+  // 3. Fallback to regular parser
+  return parseImageName(filename);
 }
 
 /**
@@ -223,7 +275,10 @@ export function parseImageName(filename: string): { base: string; index: number 
  *   4. Within each group: index 0 or 1 → mainImage; rest → galleryImages.
  *   5. Sort gallery by index ascending.
  */
-export function groupImagesByProduct(files: ImageFile[]): ImageGroup[] {
+export function groupImagesByProduct(
+  files: ImageFile[],
+  existingKeys?: Set<string>
+): ImageGroup[] {
   type Accumulator = {
     displayName: string;
     entries: Array<{ file: ImageFile; index: number }>;
@@ -234,7 +289,7 @@ export function groupImagesByProduct(files: ImageFile[]): ImageGroup[] {
   for (const file of files) {
     if (!isSupportedImageFile(file.name)) continue;
 
-    const { base, index } = parseImageName(file.name);
+    const { base, index } = parseImageNameWithKeys(file.name, existingKeys);
     const key = normalizeName(base);
 
     if (!accMap.has(key)) {
@@ -341,7 +396,8 @@ export function buildScanPreview(
     .filter(isSupportedImageFile)
     .map((name) => ({ name, size: 0, type: "image/jpeg" }));
 
-  const groups = groupImagesByProduct(imageFiles);
+  const existingKeys = new Set(productMap.keys());
+  const groups = groupImagesByProduct(imageFiles, existingKeys);
   const { matched, unmatched, missing } = matchImages(groups, productMap);
 
   // Build candidate maps for suggestion lookups

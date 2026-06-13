@@ -45,7 +45,6 @@ export interface AppState {
   sheets: SheetData[];
   originalSheets: SheetData[];
   activeSheetIndex: number;
-  brandMapping: Record<string, string> | null;
   isLoading: boolean;
   history: any[]; // For undo/redo implementation
   stats: {
