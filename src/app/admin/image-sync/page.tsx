@@ -111,7 +111,7 @@ interface SyncReport {
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SUPPORTED_EXTS = [".jpg", ".jpeg", ".png", ".webp"];
+const SUPPORTED_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".avif"];
 
 function isSupportedImage(name: string) {
   const lower = name.toLowerCase();
@@ -796,7 +796,7 @@ export default function ImageSyncPage() {
                   {isDragging ? "Drop files here" : "Drag & drop product images"}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  or click to browse — supports <span className="font-mono text-xs">.jpg .jpeg .png .webp</span>
+                  or click to browse — supports <span className="font-mono text-xs">.jpg .jpeg .png .webp .avif</span>
                 </p>
               </div>
 
@@ -809,7 +809,7 @@ export default function ImageSyncPage() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".jpg,.jpeg,.png,.webp"
+                accept=".jpg,.jpeg,.png,.webp,.avif"
                 className="sr-only"
                 onChange={handleFileInput}
                 id="image-file-input"

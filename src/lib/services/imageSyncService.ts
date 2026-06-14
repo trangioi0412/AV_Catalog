@@ -131,7 +131,7 @@ export interface MissingReason {
 // SUPPORTED EXTENSIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SUPPORTED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const SUPPORTED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
 
 export function isSupportedImageFile(filename: string): boolean {
   const lower = filename.toLowerCase();

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAllProductsForImageSync } from "@/lib/services/wixCms";
+import { getAllProductsForImageSync, isValidProductImageFormat } from "@/lib/services/wixCms";
 import { buildScanPreview } from "@/lib/services/imageSyncService";
 
 export const runtime = "nodejs";
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     // Count products that already have images on Wix CMS
     let productsWithImagesCount = 0;
     for (const p of productMap.values()) {
-      if (p.image && p.image.trim() !== "") {
+      if (isValidProductImageFormat(p.image)) {
         productsWithImagesCount++;
       }
     }

@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { getActiveBrands, getAllProducts, uploadToWixMedia, updateProductImages } from "./wixCms";
+import { getActiveBrands, getAllProducts, uploadToWixMedia, updateProductImages, isValidProductImageFormat } from "./wixCms";
 import { logImageDiscovery, ImageDiscoveryLogEntry } from "./imageDiscoveryLogger";
 import { getSystemConfig } from "./googleSheets";
 import { discoverProductInfo } from "./productDiscovery";
@@ -126,6 +126,7 @@ export async function discoverAndSyncProductImage(
           ".gif": "image/gif",
           ".jpg": "image/jpeg",
           ".jpeg": "image/jpeg",
+          ".avif": "image/avif",
         };
         const mimeType = mimeMap[ext] || "image/jpeg";
         const fileName = path.basename(localPath);
@@ -256,7 +257,7 @@ export async function processMissingImages(options?: {
       candidates = candidates.filter((p) => p._id && idSet.has(p._id));
       logToConsole(`Được chỉ định ${candidates.length} sản phẩm để quét hình ảnh.`);
     } else {
-      candidates = candidates.filter((p) => !p.image || p.image.trim() === "");
+      candidates = candidates.filter((p) => !isValidProductImageFormat(p.image));
       logToConsole(`Phát hiện ${candidates.length} sản phẩm chưa có ảnh trong Wix CMS.`);
     }
 

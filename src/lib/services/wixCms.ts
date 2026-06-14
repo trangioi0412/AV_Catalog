@@ -1,4 +1,6 @@
 import { cache } from "react";
+import fs from "fs";
+import path from "path";
 
 export interface WixBrand {
   _id: string;
@@ -87,6 +89,7 @@ function normalizeCmsItem<T>(item: any): T {
   const Title = rawData.Title || rawData.title || "";
   const Product = rawData.Product || rawData.product || "";
   const Brand = rawData.Brand || rawData.brand || "";
+  const image = rawData.image || rawData.Image || "";
 
   return {
     _id: id,
@@ -94,7 +97,112 @@ function normalizeCmsItem<T>(item: any): T {
     Title,
     Product,
     Brand,
+    image,
   } as T;
+}
+
+/**
+ * Fetch all active brands from the Wix "Brand" collection.
+ */
+export function getFallbackBrandsList(): WixBrand[] {
+  return [
+    {
+      _id: "crestron",
+      name: "Crestron",
+      websiteUrl: "https://www.crestron.com",
+      sitemapUrl: "https://www.crestron.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "extron",
+      name: "Extron",
+      websiteUrl: "https://www.extron.com",
+      sitemapUrl: "https://www.extron.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "neat",
+      name: "Neat",
+      websiteUrl: "https://neat.no",
+      sitemapUrl: "https://neat.no/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "shure",
+      name: "Shure",
+      websiteUrl: "https://www.shure.com",
+      sitemapUrl: "https://www.shure.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "logitech",
+      name: "Logitech",
+      websiteUrl: "https://www.logitech.com",
+      sitemapUrl: "https://www.logitech.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "qsc",
+      name: "QSC",
+      websiteUrl: "https://www.qsys.com",
+      sitemapUrl: "https://www.qsys.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "biamp",
+      name: "Biamp",
+      websiteUrl: "https://www.biamp.com",
+      sitemapUrl: "https://www.biamp.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "cisco",
+      name: "Cisco",
+      websiteUrl: "https://www.cisco.com",
+      sitemapUrl: "https://www.cisco.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "poly",
+      name: "Poly",
+      websiteUrl: "https://www.hp.com",
+      sitemapUrl: "https://www.hp.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "yamaha",
+      name: "Yamaha",
+      websiteUrl: "https://www.yamaha.com",
+      sitemapUrl: "https://www.yamaha.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "sony",
+      name: "Sony",
+      websiteUrl: "https://www.sony.com",
+      sitemapUrl: "https://www.sony.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+    {
+      _id: "jabra",
+      name: "Jabra",
+      websiteUrl: "https://www.jabra.com",
+      sitemapUrl: "https://www.jabra.com/sitemap.xml",
+      apiUrl: "",
+      isActive: true,
+    },
+  ];
 }
 
 /**
@@ -104,33 +212,46 @@ export async function getActiveBrands(): Promise<WixBrand[]> {
   const headers = getWixHeaders();
   if (!headers) {
     console.warn("Wix credentials not configured — skipping getActiveBrands");
-    return [];
+    return getFallbackBrandsList();
   }
   const url = "https://www.wixapis.com/wix-data/v2/items/query";
 
-  // Fetch all brands from brand. We query without filters so it won't fail if fields are missing in CMS schema
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      dataCollectionId: "brand",
-      query: {
-        paging: {
-          limit: 100,
+  let items: any[] = [];
+  try {
+    // Fetch all brands from brand. We query without filters so it won't fail if fields are missing in CMS schema
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        dataCollectionId: "brand",
+        query: {
+          paging: {
+            limit: 100,
+          },
         },
-      },
-    }),
-  });
+      }),
+    });
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error(`[Wix CMS] getActiveBrands failed. Status: ${response.status}, text: ${text}`);
-    throw new Error(`Failed to query Wix Brands: ${response.statusText} (${text})`);
+    if (!response.ok) {
+      const text = await response.text();
+      
+      // If collection does not exist, use fallback brands gracefully without triggering error logs
+      if (response.status === 404 || text.includes("WDE0025")) {
+        console.warn("[Wix CMS] 'brand' collection does not exist in Wix. Using fallback brand records.");
+        return getFallbackBrandsList();
+      }
+
+      console.error(`[Wix CMS] getActiveBrands failed. Status: ${response.status}, text: ${text}`);
+      throw new Error(`Failed to query Wix Brands: ${response.statusText} (${text})`);
+    }
+
+    const json = await response.json();
+    items = json.items || json.dataItems || [];
+    console.log(`[Wix CMS] getActiveBrands succeeded, returned ${items.length} items`);
+  } catch (err: any) {
+    console.warn(`[Wix CMS] Falling back to default brand records: ${err.message || err}`);
+    return getFallbackBrandsList();
   }
-
-  const json = await response.json();
-  const items = json.items || json.dataItems || [];
-  console.log(`[Wix CMS] getActiveBrands succeeded, returned ${items.length} items`);
 
   // Default URLs fallback for known brands if the user hasn't added these fields to Wix CMS yet
   const fallbackBrandUrls: Record<string, { websiteUrl?: string; sitemapUrl?: string; apiUrl?: string }> = {
@@ -675,12 +796,37 @@ function getWebpDimensions(buffer: Buffer): { width: number; height: number } | 
   return null;
 }
 
+function getAvifDimensions(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 16) return null;
+  // Check if it is HEIF/AVIF container by signature box 'ftyp'
+  if (buffer[4] !== 0x66 || buffer[5] !== 0x74 || buffer[6] !== 0x79 || buffer[7] !== 0x70) {
+    return null;
+  }
+  
+  // Find the 'ispe' box type [0x69, 0x73, 0x70, 0x65]
+  const ispe = Buffer.from([0x69, 0x73, 0x70, 0x65]);
+  const pos = buffer.indexOf(ispe);
+  if (pos === -1 || pos + 16 > buffer.length) return null;
+
+  try {
+    const width = buffer.readUInt32BE(pos + 8);
+    const height = buffer.readUInt32BE(pos + 12);
+    if (width > 0 && width < 65536 && height > 0 && height < 65536) {
+      return { width, height };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export function getImageDimensions(buffer: Buffer): { width: number; height: number } | null {
   try {
     return (
       getPngDimensions(buffer) ||
       getJpgDimensions(buffer) ||
-      getWebpDimensions(buffer)
+      getWebpDimensions(buffer) ||
+      getAvifDimensions(buffer)
     );
   } catch (err) {
     console.warn("[Image Dimension Parser] Failed to parse:", err);
@@ -1013,3 +1159,114 @@ export const getProductBySlug = cache(async (slug: string): Promise<WixProduct |
     return null;
   }
 });
+
+/**
+ * Synchronous check to see if an image field has a valid format and is not empty/placeholder.
+ */
+export function isValidProductImageFormat(imageVal: any): boolean {
+  if (!imageVal || typeof imageVal !== "string") return false;
+  const trimmed = imageVal.trim();
+  if (trimmed === "" || trimmed === "undefined" || trimmed === "null") {
+    return false;
+  }
+  // Check if it is a valid Wix image pattern, or a standard HTTP/S link, or a local path
+  return (
+    trimmed.startsWith("wix:image://v1/") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("/")
+  );
+}
+
+/**
+ * Converts a Wix internal image URI (wix:image://v1/...) to a public web static URL.
+ */
+export function getWixStaticUrl(wixUrl: string): string | null {
+  if (!wixUrl || typeof wixUrl !== "string") return null;
+  if (!wixUrl.startsWith("wix:image://v1/")) return wixUrl; // already standard
+
+  try {
+    const cleanUrl = wixUrl.replace("wix:image://v1/", "");
+    const parts = cleanUrl.split("/");
+    if (parts.length > 0) {
+      const mediaId = parts[0];
+      return `https://static.wixstatic.com/media/${mediaId}`;
+    }
+  } catch (err) {
+    console.error("[Wix CMS] Failed to parse Wix media URL:", err);
+  }
+  return null;
+}
+
+/**
+ * Asynchronously verifies if a product image is reachable and returns an HTTP OK status.
+ * Converts wix:image URIs to web static URLs automatically before checks.
+ */
+export async function isProductImageAccessible(imageVal: string | undefined | null): Promise<boolean> {
+  if (!isValidProductImageFormat(imageVal)) return false;
+
+  let targetUrl = imageVal!.trim();
+  if (targetUrl.startsWith("wix:image://v1/")) {
+    const staticUrl = getWixStaticUrl(targetUrl);
+    if (!staticUrl) return false;
+    targetUrl = staticUrl;
+  }
+
+  // Local assets: verify they exist on disk under public/ directory
+  if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+    try {
+      const cleanPath = targetUrl.startsWith("/") ? targetUrl.substring(1) : targetUrl;
+      const localPath = path.join(process.cwd(), "public", cleanPath);
+      return fs.existsSync(localPath);
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    let res;
+    
+    try {
+      res = await fetch(targetUrl, { 
+        method: "HEAD", 
+        signal: controller.signal,
+        next: { revalidate: 60 } 
+      });
+    } catch (headErr) {
+      res = null;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    // Fall back to GET with range header if HEAD is blocked or fails
+    if (!res || !res.ok || res.status === 403 || res.status === 405) {
+      const getController = new AbortController();
+      const getTimeoutId = setTimeout(() => getController.abort(), 5000);
+      try {
+        res = await fetch(targetUrl, {
+          method: "GET",
+          signal: getController.signal,
+          headers: {
+            Range: "bytes=0-1023",
+          },
+          next: { revalidate: 60 }
+        });
+      } catch (getErr) {
+        return false;
+      } finally {
+        clearTimeout(getTimeoutId);
+      }
+    }
+
+    if (res && (res.ok || res.status === 206)) {
+      const contentType = res.headers.get("content-type");
+      return !!contentType && contentType.startsWith("image/");
+    }
+    return false;
+  } catch (err) {
+    console.warn(`[Wix CMS] Failed to check accessibility for ${targetUrl}:`, err);
+    return false;
+  }
+}

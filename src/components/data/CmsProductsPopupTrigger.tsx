@@ -134,8 +134,18 @@ export function CmsProductsPopupTrigger({
 
   // Sort brands for filter dropdown
   const sortedBrands = useMemo(() => {
-    return [...(brands || [])].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  }, [brands]);
+    let filteredBrands = brands || [];
+    if (showOnlyNoImages) {
+      const brandsWithMissingImages = new Set(
+        products
+          .filter((p) => !p.image || p.image.trim() === "")
+          .map((p) => p.Brand)
+          .filter(Boolean)
+      );
+      filteredBrands = filteredBrands.filter((b) => brandsWithMissingImages.has(b._id));
+    }
+    return [...filteredBrands].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }, [brands, products, showOnlyNoImages]);
 
   // Reset detailed view states when selected product changes
   const handleSelectProduct = (prod: WixProduct | null) => {

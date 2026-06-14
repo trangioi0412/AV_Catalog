@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { runProductDiscovery, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
-import { getActiveBrands, getAllProducts, insertProduct, WixProduct } from "@/lib/services/wixCms";
+import { getActiveBrands, getAllProducts, insertProduct, WixProduct, isValidProductImageFormat, isProductImageAccessible } from "@/lib/services/wixCms";
 
 export interface DashboardStats {
   totalBrands: number;
@@ -107,7 +107,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     const isImageSearchEnabled = config.ImageSearchEnabled !== "false";
 
     // Count products with image
-    const productsWithImagesCount = products.filter((p) => p.image && p.image.trim() !== "").length;
+    const productsWithImagesCount = products.filter((p) => isValidProductImageFormat(p.image)).length;
 
     return {
       totalBrands: brands.length,
@@ -364,6 +364,18 @@ export async function stopDiscoveryAction() {
   } catch (err) {
     console.error("Failed to stop discovery scan:", err);
     return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Checks if a product image URL is accessible and returns a valid image resource.
+ */
+export async function checkProductImageAccessibilityAction(imageVal: string): Promise<boolean> {
+  try {
+    return await isProductImageAccessible(imageVal);
+  } catch (err) {
+    console.error("Error in checkProductImageAccessibilityAction:", err);
+    return false;
   }
 }
 

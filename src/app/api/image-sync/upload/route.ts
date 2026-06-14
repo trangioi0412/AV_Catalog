@@ -46,6 +46,7 @@ function mimeFromName(name: string): string {
   const lower = name.toLowerCase();
   if (lower.endsWith(".png")) return "image/png";
   if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".avif")) return "image/avif";
   if (lower.endsWith(".gif")) return "image/gif";
   return "image/jpeg"; // default for .jpg / .jpeg
 }
