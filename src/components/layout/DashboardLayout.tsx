@@ -15,6 +15,7 @@ import {
   ImageIcon,
   LogOut,
   Zap,
+  Languages,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,12 @@ const navDiscovery = [
   { href: "/admin/scanner",         icon: Activity,        label: "Manual Scanner" },
   { href: "/admin/image-discovery", icon: ImageIcon,       label: "AI Image Discovery", accent: true },
   { href: "/admin/image-sync",      icon: ImageIcon,       label: "Image Sync" },
+  { href: "/admin/specs-translator", icon: Languages,       label: "Specs Translator" },
+];
+
+const navTools = [
+  { href: "/admin/tools/wix-translation-sync", icon: Languages, label: "Wix Translation Sync" },
+  { href: "/admin/tools/cms-merge", icon: Database, label: "CMS Merge Tool" },
 ];
 
 // Mobile bottom bar (top 4 routes only)
@@ -64,6 +71,9 @@ const breadcrumbMap: Record<string, { label: string; parent?: string }> = {
   "/admin/scanner":          { label: "Manual Scanner",  parent: "Discovery" },
   "/admin/image-discovery":  { label: "AI Image Discovery", parent: "Discovery" },
   "/admin/image-sync":       { label: "Image Sync",      parent: "Discovery" },
+  "/admin/specs-translator": { label: "Specs Translator", parent: "Discovery" },
+  "/admin/tools/wix-translation-sync": { label: "Wix Translation Sync", parent: "Tools" },
+  "/admin/tools/cms-merge": { label: "CMS Merge Tool", parent: "Tools" },
 };
 
 function Breadcrumb({ pathname }: { pathname: string }) {
@@ -212,6 +222,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
+          <Separator className="opacity-50" />
+
+          {/* Tools */}
+          <div>
+            <p className="px-3 mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase">
+              Tools
+            </p>
+            <div className="space-y-0.5">
+              {navTools.map(item => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={pathname === item.href}
+                  onNavigate={startLoading}
+                />
+              ))}
+            </div>
+          </div>
 
           <Separator className="opacity-50" />
 

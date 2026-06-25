@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { SheetData, ProductRow } from "@/types";
 import { parseSpecifications } from "@/lib/parser/parser";
+import { textToTechnicalSpecs } from "./specsTranslator";
 import { v4 as uuidv4 } from "uuid";
 
 /**
@@ -84,9 +85,35 @@ function transformRow(row: any, shouldParseSpecs: boolean = true): ProductRow {
   let errors: any[] = [];
 
   if (shouldParseSpecs) {
-    const parsed = parseSpecifications(techSpecs);
-    specifications = parsed.specifications;
-    errors = parsed.errors;
+    let parsedAsJson = false;
+    const trimmedTechSpecs = typeof techSpecs === "string" ? techSpecs.trim() : "";
+    
+    if (trimmedTechSpecs.startsWith("[") || trimmedTechSpecs.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmedTechSpecs);
+        const specsArray = Array.isArray(parsed) ? parsed : [parsed];
+        const isValid = specsArray.every(item => 
+          item && typeof item === "object" && typeof item.label === "string" && typeof item.value === "string"
+        );
+        if (isValid) {
+          specifications = specsArray;
+          parsedAsJson = true;
+        }
+      } catch (e) {
+        // Fall back to plain text parsing
+      }
+    }
+
+    if (!parsedAsJson) {
+      specifications = textToTechnicalSpecs(techSpecs);
+      if (specifications.length === 0 && trimmedTechSpecs.length > 0) {
+        errors.push({
+          field: "Technical Specifications",
+          message: "No structured specifications found. Please check format (Label: Value).",
+          severity: "warning",
+        });
+      }
+    }
   }
 
   // Check for "CẦN VERIFY" (case-insensitive) in all columns of the parsed row

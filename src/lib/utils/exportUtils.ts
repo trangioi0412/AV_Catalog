@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { SheetData, ProductRow } from "@/types";
+import { technicalSpecsToText } from "./specsTranslator";
 
 /**
  * Helper to clean row data before export, excluding metadata fields case-insensitively.
@@ -44,9 +45,9 @@ function cleanRowForExport(row: ProductRow, isWarnings?: boolean): Record<string
   
   if (isWarnings && originalRawRow && techSpecsKey in originalRawRow) {
     const originalSpecs = originalRawRow[techSpecsKey];
-    finalData[techSpecsKey] = originalSpecs !== undefined ? originalSpecs : JSON.stringify(transformedSpecifications, null, 2);
+    finalData[techSpecsKey] = originalSpecs !== undefined ? originalSpecs : technicalSpecsToText(transformedSpecifications);
   } else {
-    finalData[techSpecsKey] = JSON.stringify(transformedSpecifications, null, 2);
+    finalData[techSpecsKey] = technicalSpecsToText(transformedSpecifications);
   }
 
   return finalData;

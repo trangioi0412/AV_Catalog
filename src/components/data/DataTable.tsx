@@ -104,7 +104,8 @@ function isEmptyValue(val: any): boolean {
 }
 
 function getColumnValue(row: any, col: string): any {
-  if (col.toLowerCase() === "technical specifications") {
+  const lowerCol = col.toLowerCase();
+  if (lowerCol === "technical specifications" || lowerCol === "thông số kỹ thuật") {
     if (Array.isArray(row.transformedSpecifications)) {
       if (row.transformedSpecifications.length === 0) return "";
       return row.transformedSpecifications.map((s: any) => `${s.label}: ${s.value}`).join("\n");

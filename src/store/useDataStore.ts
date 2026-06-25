@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { AppState, SheetData, ProductRow, Specification, ParsingError } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 import { parseSpecifications } from "@/lib/parser/parser";
+import { textToTechnicalSpecs } from "@/lib/utils/specsTranslator";
 
 interface DataActions {
   setFileData: (fileName: string, fileType: "xlsx" | "csv", sheets: SheetData[]) => void;
@@ -325,7 +326,39 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
           rows: sheet.rows.map((row) => {
             const rawRow = row.originalRawRow || row;
             const techSpecs = rawRow[techSpecsKey] || "";
-            const { specifications, errors } = parseSpecifications(techSpecs);
+            
+            let specifications: any[] = [];
+            let errors: ParsingError[] = [];
+
+            let parsedAsJson = false;
+            const trimmedTechSpecs = typeof techSpecs === "string" ? techSpecs.trim() : "";
+            
+            if (trimmedTechSpecs.startsWith("[") || trimmedTechSpecs.startsWith("{")) {
+              try {
+                const parsed = JSON.parse(trimmedTechSpecs);
+                const specsArray = Array.isArray(parsed) ? parsed : [parsed];
+                const isValid = specsArray.every(item => 
+                  item && typeof item === "object" && typeof item.label === "string" && typeof item.value === "string"
+                );
+                if (isValid) {
+                  specifications = specsArray;
+                  parsedAsJson = true;
+                }
+              } catch (e) {
+                // Fall back
+              }
+            }
+
+            if (!parsedAsJson) {
+              specifications = textToTechnicalSpecs(techSpecs);
+              if (specifications.length === 0 && trimmedTechSpecs.length > 0) {
+                errors.push({
+                  field: "Technical Specifications",
+                  message: "No structured specifications found. Please check format (Label: Value).",
+                  severity: "warning",
+                });
+              }
+            }
 
             // Re-run warning verification for CẦN VERIFY
             Object.entries(rawRow).forEach(([key, val]) => {

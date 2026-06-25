@@ -13,6 +13,7 @@ const routeLabels: Record<string, string> = {
   "/admin/scanner":          "Manual Scanner",
   "/admin/image-discovery":  "AI Image Discovery",
   "/admin/image-sync":       "Image Sync",
+  "/admin/tools/wix-translation-sync": "Wix Translation Sync",
 };
 
 function getRouteLabel(pathname: string): string {

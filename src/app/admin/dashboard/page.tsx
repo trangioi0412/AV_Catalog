@@ -9,8 +9,11 @@ import {
   XCircle, 
   AlertCircle,
   FileMinus,
-  RefreshCw
+  RefreshCw,
+  Languages,
+  ChevronRight
 } from "lucide-react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { revalidatePath } from "next/cache";
@@ -75,8 +78,8 @@ export default async function AdminDashboardPage() {
           </form>
         </div>
 
-        {/* Timestamps */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Timestamps & Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="border-border/60 bg-card card-hover">
             <CardContent className="flex items-center gap-4 p-5">
               <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 shrink-0">
@@ -103,6 +106,30 @@ export default async function AdminDashboardPage() {
                 <p className="text-base font-bold mt-0.5">{formatDate(stats.lastSync)}</p>
               </div>
             </CardContent>
+          </Card>
+
+          <Card className="border-border/60 bg-card card-hover flex flex-col justify-between">
+            <CardContent className="flex items-center gap-4 p-5 flex-1">
+              <div className="p-3 bg-primary/10 rounded-xl text-primary shrink-0">
+                <Languages className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+                  Specs Translation Pipeline
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Batch convert product specs for localization.
+                </p>
+              </div>
+            </CardContent>
+            <div className="px-5 pb-4 pt-0 flex justify-end">
+              <Button size="sm" variant="outline" asChild className="h-7 text-xs gap-1 shadow-sm">
+                <Link href="/admin/specs-translator">
+                  Open Translator
+                  <ChevronRight className="w-3 h-3" />
+                </Link>
+              </Button>
+            </div>
           </Card>
         </div>
 
