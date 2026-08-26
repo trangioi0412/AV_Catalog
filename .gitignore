@@ -159,6 +159,12 @@ dist
 .DS_Store
 *.pem
 
+# Local environment and credentials
+env.local
+.env.local
+.env
+.env.*
+
 # debug
 npm-debug.log*
 yarn-debug.log*

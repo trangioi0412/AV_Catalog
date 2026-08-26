@@ -54,6 +54,7 @@ const navDiscovery = [
 ];
 
 const navTools = [
+  { href: "/admin/wix-translations", icon: Languages, label: "Dịch đa ngôn ngữ", accent: true },
   { href: "/admin/tools/wix-translation-sync", icon: Languages, label: "Wix Translation Sync" },
   { href: "/admin/tools/cms-merge", icon: Database, label: "CMS Merge Tool" },
   { href: "/admin/media", icon: HardDrive, label: "Media Manager" },
@@ -77,6 +78,7 @@ const breadcrumbMap: Record<string, { label: string; parent?: string }> = {
   "/admin/image-discovery":     { label: "AI Image Discovery", parent: "Discovery" },
   "/admin/image-sync":          { label: "Image Sync",        parent: "Discovery" },
   "/admin/specs-translator":    { label: "Specs Translator",  parent: "Discovery" },
+  "/admin/wix-translations":    { label: "Dịch đa ngôn ngữ",  parent: "Tools" },
   "/admin/tools/wix-translation-sync": { label: "Wix Translation Sync", parent: "Tools" },
   "/admin/tools/cms-merge":     { label: "CMS Merge Tool",   parent: "Tools" },
   "/admin/media":               { label: "Media Manager",    parent: "Tools" },

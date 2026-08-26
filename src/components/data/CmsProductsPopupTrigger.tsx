@@ -25,7 +25,8 @@ import {
   Sparkles,
   Filter,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Languages
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ import {
   hasProductDocument,
   type DocumentEntry,
 } from "@/lib/utils/documentFields";
+import { TranslationReviewModal } from "@/components/data/translation/TranslationReviewModal";
 
 interface CmsProductsPopupTriggerProps {
   products: WixProduct[];
@@ -87,6 +89,10 @@ export function CmsProductsPopupTrigger({
   /** Track which product IDs are currently being processed */
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+
+  // ── Translate-to-English states ─────────────────────────────────────────
+  /** Products currently open in the translation review modal (null = closed) */
+  const [translateProducts, setTranslateProducts] = useState<WixProduct[] | null>(null);
 
   // ── Document deletion handlers ──────────────────────────────────────────
 
@@ -730,6 +736,20 @@ export function CmsProductsPopupTrigger({
                         </span>
                         <Button
                           size="sm"
+                          variant="default"
+                          className="h-7 text-xs gap-1.5 cursor-pointer font-bold shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white"
+                          onClick={() => {
+                            const chosen = filteredProducts.filter(
+                              (p) => p._id && checkedProductIds.has(p._id)
+                            );
+                            setTranslateProducts(chosen);
+                          }}
+                        >
+                          <Languages className="w-3.5 h-3.5" />
+                          Dịch đã chọn ({checkedProductIds.size} SP)
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="destructive"
                           className="h-7 text-xs gap-1.5 cursor-pointer font-bold shadow-sm"
                           onClick={() => {
@@ -937,6 +957,16 @@ export function CmsProductsPopupTrigger({
                       <span className="text-[10px] font-mono text-muted-foreground bg-muted border border-border/40 px-2.5 py-1 rounded-md">
                         ID: {selectedProduct._id}
                       </span>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs gap-1.5 border-indigo-400/40 hover:bg-indigo-500/10 text-indigo-600"
+                        onClick={() => setTranslateProducts([selectedProduct])}
+                      >
+                        <Languages className="w-3.5 h-3.5" />
+                        Dịch sang tiếng Anh
+                      </Button>
 
                       {/* Delete ALL document button for this product (detail view) */}
                       {(() => {
@@ -1290,6 +1320,15 @@ export function CmsProductsPopupTrigger({
           </div>
         </div>,
         document.body
+      )}
+
+      {translateProducts && (
+        <TranslationReviewModal
+          open={!!translateProducts}
+          products={translateProducts}
+          onClose={() => setTranslateProducts(null)}
+          onSaved={() => router.refresh()}
+        />
       )}
     </>
   );
