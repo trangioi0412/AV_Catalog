@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { runProductDiscovery, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
 import { getActiveBrands, getAllProducts, insertProduct, WixProduct, isValidProductImageFormat, isProductImageAccessible } from "@/lib/services/wixCms";
+import { getProductDocumentEntries, hasProductDocument } from "@/lib/utils/documentFields";
 
 export interface DashboardStats {
   totalBrands: number;
   totalProducts: number;
   productsWithImagesCount: number;
+  productsWithDocumentsCount: number;
   newProductCount: number;
   deletedProductCount: number;
   pendingCount: number;
@@ -33,13 +35,16 @@ export interface PendingProduct {
   Brand: string; // Brand ID
   Datasheet: string;
   brandName?: string;
+  status?: string;
+  notes?: string;
 }
 
 export interface SyncLogEntry {
   timestamp: string;
-  level: string;
+  level: "INFO" | "WARNING" | "ERROR";
   message: string;
-  brand: string;
+  brand?: string;
+  details?: string;
 }
 
 /**
@@ -109,10 +114,14 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     // Count products with image
     const productsWithImagesCount = products.filter((p) => isValidProductImageFormat(p.image)).length;
 
+    // Count products strictly having a document in the 'document' / 'Document' column
+    const productsWithDocumentsCount = products.filter(hasProductDocument).length;
+
     return {
       totalBrands: brands.length,
       totalProducts: products.length,
       productsWithImagesCount,
+      productsWithDocumentsCount,
       newProductCount,
       deletedProductCount,
       pendingCount: newProductCount,
@@ -128,6 +137,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
       totalBrands: 0,
       totalProducts: 0,
       productsWithImagesCount: 0,
+      productsWithDocumentsCount: 0,
       newProductCount: 0,
       deletedProductCount: 0,
       pendingCount: 0,

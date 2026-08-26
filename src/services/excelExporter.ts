@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import { ProductRecord } from "@/types/ProductRecord";
 
 /**
@@ -21,7 +20,9 @@ function downloadBlob(blob: Blob, filename: string): void {
 /**
  * Exports records array to an Excel (.xlsx) file.
  */
-export function exportToExcel(records: ProductRecord[], filename = "products_completed.xlsx"): void {
+export async function exportToExcel(records: ProductRecord[], filename = "products_completed.xlsx"): Promise<void> {
+  const XLSX = await import("xlsx");
+
   // Clean internal properties before exporting
   const cleanedData = records.map((record) => {
     const { _status, ...rest } = record;
@@ -41,3 +42,4 @@ export function exportToExcel(records: ProductRecord[], filename = "products_com
 
   downloadBlob(blob, filename);
 }
+

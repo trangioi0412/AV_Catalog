@@ -16,6 +16,8 @@ import {
   LogOut,
   Zap,
   Languages,
+  FileText,
+  HardDrive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,7 @@ import {
 // ─── Nav item definitions ──────────────────────────────────────────────────
 const navMain = [
   { href: "/", icon: Upload, label: "Catalog Upload" },
+  { href: "/admin/catalog-upload", icon: FileText, label: "Catalog PDF" },
 ];
 
 const navDiscovery = [
@@ -53,6 +56,7 @@ const navDiscovery = [
 const navTools = [
   { href: "/admin/tools/wix-translation-sync", icon: Languages, label: "Wix Translation Sync" },
   { href: "/admin/tools/cms-merge", icon: Database, label: "CMS Merge Tool" },
+  { href: "/admin/media", icon: HardDrive, label: "Media Manager" },
 ];
 
 // Mobile bottom bar (top 4 routes only)
@@ -65,15 +69,17 @@ const navMobile = [
 
 // ─── Breadcrumb map ────────────────────────────────────────────────────────
 const breadcrumbMap: Record<string, { label: string; parent?: string }> = {
-  "/":                       { label: "Catalog Upload" },
-  "/admin/dashboard":        { label: "Dashboard",       parent: "Discovery" },
-  "/admin/discovery":        { label: "Discovery Queue", parent: "Discovery" },
-  "/admin/scanner":          { label: "Manual Scanner",  parent: "Discovery" },
-  "/admin/image-discovery":  { label: "AI Image Discovery", parent: "Discovery" },
-  "/admin/image-sync":       { label: "Image Sync",      parent: "Discovery" },
-  "/admin/specs-translator": { label: "Specs Translator", parent: "Discovery" },
+  "/":                          { label: "Catalog Upload" },
+  "/admin/catalog-upload":      { label: "Catalog PDF",       parent: "Main" },
+  "/admin/dashboard":           { label: "Dashboard",         parent: "Discovery" },
+  "/admin/discovery":           { label: "Discovery Queue",   parent: "Discovery" },
+  "/admin/scanner":             { label: "Manual Scanner",    parent: "Discovery" },
+  "/admin/image-discovery":     { label: "AI Image Discovery", parent: "Discovery" },
+  "/admin/image-sync":          { label: "Image Sync",        parent: "Discovery" },
+  "/admin/specs-translator":    { label: "Specs Translator",  parent: "Discovery" },
   "/admin/tools/wix-translation-sync": { label: "Wix Translation Sync", parent: "Tools" },
-  "/admin/tools/cms-merge": { label: "CMS Merge Tool", parent: "Tools" },
+  "/admin/tools/cms-merge":     { label: "CMS Merge Tool",   parent: "Tools" },
+  "/admin/media":               { label: "Media Manager",    parent: "Tools" },
 };
 
 function Breadcrumb({ pathname }: { pathname: string }) {

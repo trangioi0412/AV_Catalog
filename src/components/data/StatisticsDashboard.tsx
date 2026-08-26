@@ -92,9 +92,9 @@ export function StatisticsDashboard() {
                     size="xs"
                     variant="outline"
                     className="h-6 text-[10px] px-2 py-0 border-emerald-500/25 text-emerald-700 hover:bg-emerald-500/5 dark:text-emerald-400 cursor-pointer gap-1 flex items-center"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      const success = exportValidToExcel(sheets, fileName || "catalog");
+                      const success = await exportValidToExcel(sheets, fileName || "catalog");
                       if (success) {
                         toast.success("Exported all valid rows across all sheets!");
                       } else {
@@ -112,9 +112,9 @@ export function StatisticsDashboard() {
                       size="xs"
                       variant="outline"
                       className="h-6 text-[10px] px-2 py-0 border-amber-500/25 text-amber-700 hover:bg-amber-500/5 dark:text-amber-400 cursor-pointer gap-1 flex items-center"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        const success = exportWarningsToExcel(sheets, fileName || "catalog");
+                        const success = await exportWarningsToExcel(sheets, fileName || "catalog");
                         if (success) {
                           toast.success("Exported all warning rows across all sheets!");
                         } else {

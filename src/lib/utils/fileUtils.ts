@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { SheetData, ProductRow } from "@/types";
 import { parseSpecifications } from "@/lib/parser/parser";
@@ -21,12 +20,14 @@ export async function parseFile(file: File, shouldParseSpecs: boolean = true): P
 }
 
 async function parseExcel(file: File, shouldParseSpecs: boolean = true): Promise<SheetData[]> {
+  const XLSX = await import("xlsx");
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
+
         const sheets: SheetData[] = [];
 
         workbook.SheetNames.forEach((sheetName) => {

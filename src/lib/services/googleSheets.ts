@@ -57,112 +57,153 @@ function getSpreadsheetId() {
   return SPREADSHEET_ID;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CACHING & QUOTA MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+let hasEnsuredSheets = false;
+let lastEnsureTimestamp = 0;
+const ENSURE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+const sheetIdCache = new Map<string, number>();
+
+interface ReadCacheEntry {
+  data: any[][];
+  timestamp: number;
+}
+const readCache = new Map<string, ReadCacheEntry>();
+const READ_CACHE_TTL_MS = 15 * 1000; // 15 seconds cache
+
+export function invalidateSheetCache(sheetName: string) {
+  readCache.delete(sheetName.toLowerCase().trim());
+}
+
 /**
  * Ensures that the required sheets exist in the spreadsheet.
- * If not, they are created with headers.
+ * Cached to only run once per 15 minutes to save Google API quota.
  */
-export async function ensureSheetsExist() {
+export async function ensureSheetsExist(force = false) {
+  const now = Date.now();
+  if (!force && hasEnsuredSheets && now - lastEnsureTimestamp < ENSURE_TTL_MS) {
+    return;
+  }
+
   const sheets = getSheets();
   if (!sheets) return;
   const spreadsheetId = getSpreadsheetId();
   if (!spreadsheetId) return;
 
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const existingTitles = meta.data.sheets?.map((s: any) => s.properties.title) || [];
-  const existingTitlesLower = existingTitles.map((t: string) => t.toLowerCase().trim());
-
-  const requiredSheets = [
-    {
-      title: "Product_New",
-      headers: [
-        "Category",
-        "Product",
-        "Title",
-        "productItem",
-        "Series",
-        "MainFeature",
-        "ProductOverview",
-        "TechnicalSpecifications",
-        "image",
-        "Brand",
-        "Datasheet",
-      ],
-    },
-    {
-      title: "Product_Delete",
-      headers: [
-        "Category",
-        "Product",
-        "Title",
-        "productItem",
-        "Series",
-        "MainFeature",
-        "ProductOverview",
-        "TechnicalSpecifications",
-        "image",
-        "Brand",
-        "Datasheet",
-      ],
-    },
-    {
-      title: "Sync_Logs",
-      headers: ["Timestamp", "Level", "Message", "Brand"],
-    },
-    {
-      title: "System_Config",
-      headers: ["Key", "Value"],
-    },
-  ];
-
-  const requests: any[] = [];
-  for (const sheet of requiredSheets) {
-    if (!existingTitlesLower.includes(sheet.title.toLowerCase().trim())) {
-      requests.push({
-        addSheet: {
-          properties: { title: sheet.title },
-        },
-      });
-    }
-  }
-
-  if (requests.length > 0) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: { requests },
+  try {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const existingSheets = meta.data.sheets || [];
+    existingSheets.forEach((s: any) => {
+      if (s.properties?.title && s.properties?.sheetId !== undefined) {
+        sheetIdCache.set(s.properties.title.toLowerCase().trim(), s.properties.sheetId);
+      }
     });
 
-    // Populate headers for newly created sheets
+    const existingTitlesLower = Array.from(sheetIdCache.keys());
+
+    const requiredSheets = [
+      {
+        title: "Product_New",
+        headers: [
+          "Category",
+          "Product",
+          "Title",
+          "productItem",
+          "Series",
+          "MainFeature",
+          "ProductOverview",
+          "TechnicalSpecifications",
+          "image",
+          "Brand",
+          "Datasheet",
+        ],
+      },
+      {
+        title: "Product_Delete",
+        headers: [
+          "Category",
+          "Product",
+          "Title",
+          "productItem",
+          "Series",
+          "MainFeature",
+          "ProductOverview",
+          "TechnicalSpecifications",
+          "image",
+          "Brand",
+          "Datasheet",
+        ],
+      },
+      {
+        title: "Sync_Logs",
+        headers: ["Timestamp", "Level", "Message", "Brand"],
+      },
+      {
+        title: "System_Config",
+        headers: ["Key", "Value"],
+      },
+    ];
+
+    const requests: any[] = [];
     for (const sheet of requiredSheets) {
       if (!existingTitlesLower.includes(sheet.title.toLowerCase().trim())) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `${sheet.title}!A1`,
-          valueInputOption: "RAW",
-          requestBody: {
-            values: [sheet.headers],
+        requests.push({
+          addSheet: {
+            properties: { title: sheet.title },
           },
         });
       }
     }
 
-    // Initialize System_Config defaults if newly created
-    const configSheet = requiredSheets.find((s) => s.title === "System_Config");
-    if (configSheet && !existingTitlesLower.includes("system_config")) {
-      const defaults = [
-        ["LastScan", ""],
-        ["LastSync", ""],
-        ["ApprovedCount", "0"],
-        ["RejectedCount", "0"],
-      ];
-      await sheets.spreadsheets.values.append({
+    if (requests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
-        range: "System_Config!A2",
-        valueInputOption: "RAW",
-        requestBody: {
-          values: defaults,
-        },
+        requestBody: { requests },
       });
+
+      // Populate headers for newly created sheets
+      for (const sheet of requiredSheets) {
+        if (!existingTitlesLower.includes(sheet.title.toLowerCase().trim())) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${sheet.title}!A1`,
+            valueInputOption: "RAW",
+            requestBody: {
+              values: [sheet.headers],
+            },
+          });
+        }
+      }
+
+      // Initialize System_Config defaults if newly created
+      const configSheet = requiredSheets.find((s) => s.title === "System_Config");
+      if (configSheet && !existingTitlesLower.includes("system_config")) {
+        const defaults = [
+          ["LastScan", ""],
+          ["LastSync", ""],
+          ["ApprovedCount", "0"],
+          ["RejectedCount", "0"],
+        ];
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: "System_Config!A2",
+          valueInputOption: "RAW",
+          requestBody: {
+            values: defaults,
+          },
+        });
+      }
     }
+
+    hasEnsuredSheets = true;
+    lastEnsureTimestamp = now;
+  } catch (err: any) {
+    console.warn("[GoogleSheets] ensureSheetsExist warning:", err.message || err);
+    hasEnsuredSheets = true;
+    lastEnsureTimestamp = now;
   }
 }
 
@@ -170,35 +211,61 @@ export async function ensureSheetsExist() {
  * Returns the numerical sheet ID (gid) for a given sheet title.
  */
 async function getSheetId(title: string): Promise<number> {
-  const sheets = getSheets();
-  if (!sheets) throw new Error("Google Sheets not configured");
-  const spreadsheetId = getSpreadsheetId();
-  if (!spreadsheetId) throw new Error("GOOGLE_SPREADSHEET_ID not configured");
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const sheet = meta.data.sheets?.find((s: any) => s.properties.title.toLowerCase().trim() === title.toLowerCase().trim());
-  if (!sheet) {
-    throw new Error(`Sheet with title "${title}" not found`);
+  const normalizedTitle = title.toLowerCase().trim();
+  if (sheetIdCache.has(normalizedTitle)) {
+    return sheetIdCache.get(normalizedTitle)!;
   }
-  return sheet.properties.sheetId;
+
+  await ensureSheetsExist(true);
+  if (sheetIdCache.has(normalizedTitle)) {
+    return sheetIdCache.get(normalizedTitle)!;
+  }
+
+  throw new Error(`Sheet with title "${title}" not found`);
 }
 
 /**
- * Reads all rows from a sheet.
+ * Reads all rows from a sheet with 15s in-memory TTL caching & quota fallback.
  */
-export async function readSheet(sheetName: string): Promise<any[][]> {
-  await ensureSheetsExist();
-  const sheets = getSheets();
-  if (!sheets) return [];
-  const spreadsheetId = getSpreadsheetId();
-  if (!spreadsheetId) return [];
+export async function readSheet(sheetName: string, forceFresh = false): Promise<any[][]> {
+  const cacheKey = sheetName.toLowerCase().trim();
+  const now = Date.now();
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${sheetName}!A:Z`,
-  });
+  if (!forceFresh && readCache.has(cacheKey)) {
+    const entry = readCache.get(cacheKey)!;
+    if (now - entry.timestamp < READ_CACHE_TTL_MS) {
+      return entry.data;
+    }
+  }
 
-  return response.data.values || [];
+  try {
+    await ensureSheetsExist();
+    const sheets = getSheets();
+    if (!sheets) return readCache.get(cacheKey)?.data || [];
+    const spreadsheetId = getSpreadsheetId();
+    if (!spreadsheetId) return readCache.get(cacheKey)?.data || [];
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A:Z`,
+    });
+
+    const values = response.data.values || [];
+    readCache.set(cacheKey, { data: values, timestamp: now });
+    return values;
+  } catch (err: any) {
+    const isQuota = /quota|rate limit|read requests|429/i.test(err.message || String(err));
+    if (isQuota) {
+      console.warn(`[GoogleSheets] Quota exceeded reading "${sheetName}". Returning cached data.`);
+    } else {
+      console.warn(`[GoogleSheets] readSheet "${sheetName}" error:`, err.message || err);
+    }
+
+    if (readCache.has(cacheKey)) {
+      return readCache.get(cacheKey)!.data;
+    }
+    return [];
+  }
 }
 
 /**
@@ -206,75 +273,91 @@ export async function readSheet(sheetName: string): Promise<any[][]> {
  */
 export async function appendRows(sheetName: string, rows: any[][]): Promise<void> {
   if (rows.length === 0) return;
-  await ensureSheetsExist();
-  const sheets = getSheets();
-  if (!sheets) return;
-  const spreadsheetId = getSpreadsheetId();
-  if (!spreadsheetId) return;
+  invalidateSheetCache(sheetName);
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `${sheetName}!A2`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: rows,
-    },
-  });
+  try {
+    await ensureSheetsExist();
+    const sheets = getSheets();
+    if (!sheets) return;
+    const spreadsheetId = getSpreadsheetId();
+    if (!spreadsheetId) return;
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetName}!A2`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: rows,
+      },
+    });
+  } catch (err: any) {
+    console.error(`[GoogleSheets] appendRows "${sheetName}" error:`, err.message || err);
+  }
 }
 
 /**
  * Deletes a row by index (0-based, relative to the DATA rows - i.e. index 0 is row 2).
  */
 export async function deleteRowByIndex(sheetName: string, index: number): Promise<void> {
-  await ensureSheetsExist();
-  const sheets = getSheets();
-  const spreadsheetId = getSpreadsheetId();
-  const sheetId = await getSheetId(sheetName);
+  invalidateSheetCache(sheetName);
 
-  const startIndex = index + 1; // row 2 corresponds to index = 0, so sheet row index = 1
-  const endIndex = index + 2;
+  try {
+    await ensureSheetsExist();
+    const sheets = getSheets();
+    const spreadsheetId = getSpreadsheetId();
+    const sheetId = await getSheetId(sheetName);
 
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      requests: [
-        {
-          deleteDimension: {
-            range: {
-              sheetId,
-              dimension: "ROWS",
-              startIndex,
-              endIndex,
+    const startIndex = index + 1; // row 2 corresponds to index = 0, so sheet row index = 1
+    const endIndex = index + 2;
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: "ROWS",
+                startIndex,
+                endIndex,
+              },
             },
           },
-        },
-      ],
-    },
-  });
+        ],
+      },
+    });
+  } catch (err: any) {
+    console.error(`[GoogleSheets] deleteRowByIndex "${sheetName}" error:`, err.message || err);
+  }
 }
 
 /**
  * Clears all rows in a sheet except the header row (row 1).
  */
 export async function clearSheet(sheetName: string): Promise<void> {
-  await ensureSheetsExist();
-  const sheets = getSheets();
-  if (!sheets) return;
-  const spreadsheetId = getSpreadsheetId();
-  if (!spreadsheetId) return;
+  invalidateSheetCache(sheetName);
 
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId,
-    range: `${sheetName}!A2:Z`,
-  });
+  try {
+    await ensureSheetsExist();
+    const sheets = getSheets();
+    if (!sheets) return;
+    const spreadsheetId = getSpreadsheetId();
+    if (!spreadsheetId) return;
+
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `${sheetName}!A2:Z`,
+    });
+  } catch (err: any) {
+    console.error(`[GoogleSheets] clearSheet "${sheetName}" error:`, err.message || err);
+  }
 }
 
 /**
  * Gets the System Config as a key-value record.
  */
 export async function getSystemConfig(): Promise<Record<string, string>> {
-  const sheets = getSheets();
-  if (!sheets) return {};
   const rows = await readSheet("System_Config");
   const config: Record<string, string> = {};
 
@@ -294,40 +377,47 @@ export async function getSystemConfig(): Promise<Record<string, string>> {
  * Updates a key-value pair in System Config.
  */
 export async function updateSystemConfig(key: string, value: string): Promise<void> {
-  await ensureSheetsExist();
-  const sheets = getSheets();
-  if (!sheets) return;
-  const spreadsheetId = getSpreadsheetId();
-  if (!spreadsheetId) return;
-  const rows = await readSheet("System_Config");
+  invalidateSheetCache("System_Config");
 
-  let foundRowIndex = -1;
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] === key) {
-      foundRowIndex = i + 1; // 1-based coordinate in Google Sheets
-      break;
+  try {
+    await ensureSheetsExist();
+    const sheets = getSheets();
+    if (!sheets) return;
+    const spreadsheetId = getSpreadsheetId();
+    if (!spreadsheetId) return;
+
+    const rows = await readSheet("System_Config");
+
+    let foundRowIndex = -1;
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === key) {
+        foundRowIndex = i + 1; // 1-based coordinate in Google Sheets
+        break;
+      }
     }
-  }
 
-  if (foundRowIndex !== -1) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `System_Config!B${foundRowIndex}`,
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [[value]],
-      },
-    });
-  } else {
-    // Key not found, append a new row
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: "System_Config!A2",
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [[key, value]],
-      },
-    });
+    if (foundRowIndex !== -1) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `System_Config!B${foundRowIndex}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[value]],
+        },
+      });
+    } else {
+      // Key not found, append a new row
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: "System_Config!A2",
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[key, value]],
+        },
+      });
+    }
+  } catch (err: any) {
+    console.error(`[GoogleSheets] updateSystemConfig error:`, err.message || err);
   }
 }
 

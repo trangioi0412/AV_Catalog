@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { SheetData, ProductRow } from "@/types";
 import { technicalSpecsToText } from "./specsTranslator";
@@ -53,7 +52,8 @@ function cleanRowForExport(row: ProductRow, isWarnings?: boolean): Record<string
   return finalData;
 }
 
-export function exportToExcel(sheets: SheetData[], fileName: string) {
+export async function exportToExcel(sheets: SheetData[], fileName: string) {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
 
   sheets.forEach((sheet) => {
@@ -108,7 +108,8 @@ export function exportToJSON(sheets: SheetData[], fileName: string) {
   document.body.removeChild(link);
 }
 
-export function exportSelectedToExcel(rows: ProductRow[], brandName: string, fileName: string, isWarnings?: boolean) {
+export async function exportSelectedToExcel(rows: ProductRow[], brandName: string, fileName: string, isWarnings?: boolean) {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
   
   const exportData = rows.map((row) => cleanRowForExport(row, isWarnings));
@@ -120,7 +121,8 @@ export function exportSelectedToExcel(rows: ProductRow[], brandName: string, fil
   XLSX.writeFile(workbook, `${safeFileName}_selected_rows.xlsx`);
 }
 
-export function exportWarningsToExcel(sheets: SheetData[], fileName: string): boolean {
+export async function exportWarningsToExcel(sheets: SheetData[], fileName: string): Promise<boolean> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
   let hasWarnings = false;
 
@@ -157,7 +159,8 @@ export function exportWarningsToExcel(sheets: SheetData[], fileName: string): bo
   return true;
 }
 
-export function exportValidToExcel(sheets: SheetData[], fileName: string): boolean {
+export async function exportValidToExcel(sheets: SheetData[], fileName: string): Promise<boolean> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
   let hasValid = false;
 
@@ -193,3 +196,4 @@ export function exportValidToExcel(sheets: SheetData[], fileName: string): boole
   XLSX.writeFile(workbook, `${safeFileName}_valid.xlsx`);
   return true;
 }
+

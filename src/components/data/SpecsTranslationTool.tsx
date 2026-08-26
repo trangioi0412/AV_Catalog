@@ -35,7 +35,6 @@ import {
   textToTechnicalSpecs, 
   TechnicalSpecification 
 } from "@/lib/utils/specsTranslator";
-import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { cn } from "@/lib/utils";
 import {
@@ -224,8 +223,9 @@ export function SpecsTranslationTool() {
     });
   };
 
-  const parseExcelFile = (file: File) => {
+  const parseExcelFile = async (file: File) => {
     setIsProcessing(true);
+    const XLSX = await import("xlsx");
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -288,7 +288,7 @@ export function SpecsTranslationTool() {
   };
 
   // Convert File Specifications and Download
-  const handleConvertFile = (targetType: "text" | "json") => {
+  const handleConvertFile = async (targetType: "text" | "json") => {
     if (!fileState) return;
     setIsProcessing(true);
 
@@ -357,6 +357,8 @@ export function SpecsTranslationTool() {
       const finalFileName = isUuid 
         ? `${brandPrefix || "catalog_"}${targetType}_specs`
         : `${brandPrefix}${baseName}_${targetType}_specs`;
+
+      const XLSX = await import("xlsx");
 
       // Trigger file download - Always output as Excel (.xlsx)
       const worksheet = XLSX.utils.json_to_sheet(convertedRows);

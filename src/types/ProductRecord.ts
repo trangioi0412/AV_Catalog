@@ -10,6 +10,8 @@ export interface ProductRecord {
   image?: string;
   Brand?: string;
   Datasheet?: string;
+  document?: string;
+  Document?: string;
   "Created Date"?: string;
   "Updated Date"?: string;
   Owner?: string;

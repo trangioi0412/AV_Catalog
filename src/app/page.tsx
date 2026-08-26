@@ -149,24 +149,25 @@ export default function DashboardPage() {
     }, 0);
   }, [sheets]);
 
-  const handleExport = (type: "xlsx" | "csv" | "json" | "warnings" | "valid") => {
-    if (!fileName) return;
-    
+  const handleExport = async (type: "xlsx" | "csv" | "json" | "warnings" | "valid") => {
+    if (sheets.length === 0) return;
+    const exportFileName = fileName || "catalog";
+
     if (type === "xlsx") {
-      exportToExcel(sheets, fileName);
+      await exportToExcel(sheets, exportFileName);
     } else if (type === "csv") {
-      exportToCSV(sheets[activeSheetIndex], fileName);
+      exportToCSV(sheets[activeSheetIndex], exportFileName);
     } else if (type === "json") {
-      exportToJSON(sheets, fileName);
+      exportToJSON(sheets, exportFileName);
     } else if (type === "warnings") {
-      const success = exportWarningsToExcel(sheets, fileName);
+      const success = await exportWarningsToExcel(sheets, exportFileName);
       if (success) {
         toast.success("Exported all warning rows across all sheets!");
       } else {
         toast.error("No warning rows found to export.");
       }
     } else if (type === "valid") {
-      const success = exportValidToExcel(sheets, fileName);
+      const success = await exportValidToExcel(sheets, exportFileName);
       if (success) {
         toast.success("Exported all valid rows across all sheets!");
       } else {

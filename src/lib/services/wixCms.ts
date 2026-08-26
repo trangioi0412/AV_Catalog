@@ -1,6 +1,4 @@
 import { cache } from "react";
-import fs from "fs";
-import path from "path";
 
 export interface WixBrand {
   _id: string;
@@ -24,6 +22,8 @@ export interface WixProduct {
   image?: string;
   Brand: string; // Wix Brand CMS ID
   Datasheet?: string;
+  document?: string;
+  Document?: string;
   slug?: string;
   galleryImages?: string[];
   Manual?: string;
@@ -90,6 +90,8 @@ function normalizeCmsItem<T>(item: any): T {
   const Product = rawData.Product || rawData.product || "";
   const Brand = rawData.Brand || rawData.brand || "";
   const image = rawData.image || rawData.Image || "";
+  const document = rawData.document || rawData.Document || "";
+  const Datasheet = rawData.Datasheet || rawData.datasheet || "";
 
   return {
     _id: id,
@@ -98,6 +100,8 @@ function normalizeCmsItem<T>(item: any): T {
     Product,
     Brand,
     image,
+    document,
+    Datasheet,
   } as T;
 }
 
@@ -222,6 +226,7 @@ export async function getActiveBrands(): Promise<WixBrand[]> {
     const response = await fetch(url, {
       method: "POST",
       headers,
+      cache: "no-store",
       body: JSON.stringify({
         dataCollectionId: "brand",
         query: {
@@ -316,6 +321,7 @@ export async function getAllProducts(): Promise<WixProduct[]> {
     const response = await fetch(url, {
       method: "POST",
       headers,
+      cache: "no-store",
       body: JSON.stringify({
         dataCollectionId: "Import1",
         query: {
@@ -445,6 +451,8 @@ async function buildCmsData(product: WixProduct, existingItemData?: any): Promis
     image: "image",
     Brand: "brand",
     Datasheet: "datasheet",
+    document: "document",
+    Document: "document",
     slug: "slug",
     galleryImages: "galleryImages",
     Manual: "manual",
@@ -667,8 +675,10 @@ export async function getAllProductsForImageSync(
  *
  * Handles:
  *   - ALL_CAPS, Title Case, camelCase, PascalCase
- *   - Hyphens, underscores, slashes → space
- *   - Parentheses / brackets removed
+ *   - Hyphens, underscores → space (the only characters treated as separators)
+ *   - "/", "\", "+", ":", "*" dropped entirely (not replaced with space)
+ *   - All other special characters (parentheses, brackets, ...) are kept as
+ *     literal characters — they still count when comparing names
  *   - Number–letter boundaries: "MXA920" → "mxa 920", "Gen2" → "gen 2"
  *   - Extra whitespace collapsed
  *
@@ -678,7 +688,8 @@ export async function getAllProductsForImageSync(
  *   "Neat_Board_Pro"      → "neat board pro"
  *   "Shure MXA920"        → "shure mxa 920"
  *   "Logitech RallyBarMini" → "logitech rally bar mini"
- *   "Neat Bar (Gen 2)"    → "neat bar gen 2"
+ *   "Neat Bar (Gen 2)"    → "neat bar (gen 2)"
+ *   "on/off"              → "onoff"
  */
 export function normalizeName(name: string): string {
   return (
@@ -689,11 +700,14 @@ export function normalizeName(name: string): string {
       .normalize("NFD")
       // Remove diacritical marks (e.g. "Parlé" → "Parle")
       .replace(/[\u0300-\u036f]/g, "")
-      // 1. Remove parentheses and their contents if they contain only non-alphanumeric
-      //    e.g. "(Gen 2)" → "Gen 2", "(USB-C)" → "USB-C"
-      .replace(/[()[\]{}]/g, " ")
-      // 2. Replace separators with space
-      .replace(/[-_/\\|]/g, " ")
+      // 1. Replace word separators with space: "-" and "_" only.
+      //    All other special characters (e.g. "(", ")") are kept as-is
+      //    so they still count when comparing names.
+      .replace(/[-_]/g, " ")
+      // 2. Drop slashes and other punctuation entirely (not replaced with
+      //    space) on both sides before comparing, e.g. "USB-C/Type-C" and
+      //    "USB-CType-C" match.
+      .replace(/[/\\+:*]/g, "")
       // 3. Insert space between letter→digit boundary: "MXA920" → "MXA 920", "Gen2" → "Gen 2"
       .replace(/([a-zA-Z])(\d)/g, "$1 $2")
       // 4. Insert space between digit→letter boundary: "920A" → "920 A"
@@ -702,9 +716,7 @@ export function normalizeName(name: string): string {
       .replace(/([a-z])([A-Z])/g, "$1 $2")
       // 6. Lowercase everything
       .toLowerCase()
-      // 7. Remove any remaining non-alphanumeric characters (except space)
-      .replace(/[^a-z0-9\s]/g, "")
-      // 8. Collapse multiple spaces
+      // 7. Collapse multiple spaces
       .replace(/\s+/g, " ")
       .trim()
   );
@@ -1212,9 +1224,14 @@ export async function isProductImageAccessible(imageVal: string | undefined | nu
     targetUrl = staticUrl;
   }
 
-  // Local assets: verify they exist on disk under public/ directory
+  // Local assets: verify format (on browser) or check disk (on server)
   if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+    if (typeof window !== "undefined") {
+      return targetUrl.length > 1;
+    }
     try {
+      const fs = require("fs");
+      const path = require("path");
       const cleanPath = targetUrl.startsWith("/") ? targetUrl.substring(1) : targetUrl;
       const localPath = path.join(process.cwd(), "public", cleanPath);
       return fs.existsSync(localPath);
@@ -1269,4 +1286,229 @@ export async function isProductImageAccessible(imageVal: string | undefined | nu
     console.warn(`[Wix CMS] Failed to check accessibility for ${targetUrl}:`, err);
     return false;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE / CLEAR FUNCTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The document-type fields that can be individually cleared on a CMS product.
+ * Both the product-object key and the likely CMS column name variants are listed.
+ */
+export const DOCUMENT_FIELD_KEYS = [
+  "Datasheet",
+  "datasheet",
+  "document",
+  "Document",
+  "Manual",
+  "manual",
+  "Brochure",
+  "brochure",
+  "Firmware",
+  "firmware",
+] as const;
+
+export type DocumentFieldKey = (typeof DOCUMENT_FIELD_KEYS)[number];
+
+/**
+ * Clear (null-out) one or more document fields on an existing CMS item using a PATCH.
+ * Does NOT delete the entire product — only the selected field values are cleared.
+ *
+ * @param itemId       Wix CMS item ID
+ * @param collectionId Wix Data Collection ID (default: "Import1")
+ * @param fieldsToClear Array of field names to set to null (e.g. ["Datasheet", "Manual"])
+ */
+export async function clearProductDocumentFields(
+  itemId: string,
+  collectionId = "Import1",
+  fieldsToClear: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const headers = getWixHeaders();
+  if (!headers) {
+    return { success: false, error: "Wix credentials not configured." };
+  }
+  if (!fieldsToClear || fieldsToClear.length === 0) {
+    return { success: true }; // nothing to do
+  }
+
+  const url = `https://www.wixapis.com/wix-data/v2/items/${itemId}`;
+
+  // Filter out any datasheet fields to guarantee Datasheet column is NEVER touched
+  const safeFields = fieldsToClear.filter(
+    (f) => f.toLowerCase() !== "datasheet"
+  );
+
+  if (safeFields.length === 0) {
+    return { success: true };
+  }
+
+  const fieldModifications = safeFields.map((fieldPath) => ({
+    fieldPath,
+    action: "SET_FIELD" as const,
+    setFieldOptions: { value: "" },
+  }));
+
+  try {
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers,
+      cache: "no-store",
+      body: JSON.stringify({
+        dataCollectionId: collectionId,
+        patch: { fieldModifications },
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(
+        `[Wix CMS] clearProductDocumentFields failed for ${itemId}: ${response.status} — ${text}`
+      );
+      return { success: false, error: `HTTP ${response.status}: ${text}` };
+    }
+
+    console.log(
+      `[Wix CMS] Cleared document fields [${safeFields.join(", ")}] on item ${itemId}`
+    );
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[Wix CMS] clearProductDocumentFields error for ${itemId}:`, err);
+    return { success: false, error: err?.message ?? String(err) };
+  }
+}
+
+/**
+ * Delete a single item from a Wix CMS Data Collection.
+ * Uses DELETE /wix-data/v2/items/{itemId}?dataCollectionId={collectionId}
+ */
+export async function deleteProductFromCms(
+  itemId: string,
+  collectionId = "Import1"
+): Promise<{ success: boolean; error?: string }> {
+  const headers = getWixHeaders();
+  if (!headers) {
+    return { success: false, error: "Wix credentials not configured." };
+  }
+
+  const url = `https://www.wixapis.com/wix-data/v2/items/${itemId}?dataCollectionId=${collectionId}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(`[Wix CMS] deleteProductFromCms failed for ${itemId}: ${response.status} — ${text}`);
+      return { success: false, error: `HTTP ${response.status}: ${text}` };
+    }
+
+    console.log(`[Wix CMS] Deleted CMS item: ${itemId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[Wix CMS] deleteProductFromCms error for ${itemId}:`, err);
+    return { success: false, error: err?.message ?? String(err) };
+  }
+}
+
+/**
+ * Extract the raw file ID from a Wix media/document URL.
+ * Handles:
+ *   wix:image://v1/{fileId}/filename.jpg
+ *   wix:document://v1/ugd/{fileId}/filename.pdf
+ *   wix:document://v1/{fileId}/filename.pdf
+ *   https://static.wixstatic.com/media/{fileId}
+ *   https://static.wixstatic.com/ugd/{fileId}
+ */
+export function extractWixFileId(wixUrl: string): string | null {
+  if (!wixUrl || typeof wixUrl !== "string") return null;
+  const trimmed = wixUrl.trim();
+
+  // 1. wix:document://v1/ugd/123456_abcdef.pdf/filename.pdf
+  const ugdMatch = trimmed.match(/^wix:(?:image|document|video):\/\/v\d+\/ugd\/([^/]+)/);
+  if (ugdMatch) {
+    return `ugd/${ugdMatch[1]}`;
+  }
+
+  // 2. wix:image://v1/{fileId}/... or wix:document://v1/{fileId}/...
+  const wixProtocolMatch = trimmed.match(/^wix:(?:image|document|video):\/\/v\d+\/([^/]+)/);
+  if (wixProtocolMatch) {
+    return wixProtocolMatch[1];
+  }
+
+  // 3. https://static.wixstatic.com/ugd/{fileId}
+  const staticUgdMatch = trimmed.match(/static\.wixstatic\.com\/ugd\/([^/?#]+)/);
+  if (staticUgdMatch) {
+    return `ugd/${staticUgdMatch[1]}`;
+  }
+
+  // 4. https://static.wixstatic.com/media/{fileId}
+  const staticMatch = trimmed.match(/static\.wixstatic\.com\/media\/([^/?#]+)/);
+  if (staticMatch) {
+    return staticMatch[1];
+  }
+
+  return null;
+}
+
+/**
+ * Delete a single file from Wix Media Manager (Site Media) by its wix:// URL or static URL.
+ * Uses DELETE https://www.wixapis.com/site-media/v1/files/{fileId}
+ */
+export async function deleteMediaFile(
+  wixUrl: string
+): Promise<{ success: boolean; fileId?: string; error?: string }> {
+  const headers = getWixHeaders();
+  if (!headers) {
+    return { success: false, error: "Wix credentials not configured." };
+  }
+
+  const rawFileId = extractWixFileId(wixUrl);
+  if (!rawFileId) {
+    return { success: false, error: `Could not extract file ID from URL: ${wixUrl}` };
+  }
+
+  // Build candidate IDs to guarantee deletion whether file is stored with or without ugd/ prefix
+  const candidateIds: string[] = [rawFileId];
+  if (rawFileId.startsWith("ugd/")) {
+    candidateIds.push(rawFileId.replace("ugd/", ""));
+  } else if (!rawFileId.includes("/")) {
+    candidateIds.push(`ugd/${rawFileId}`);
+  }
+
+  let lastError = "";
+  for (const fileId of candidateIds) {
+    const encodedId = encodeURIComponent(fileId);
+    const url = `https://www.wixapis.com/site-media/v1/files/${encodedId}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers,
+        cache: "no-store",
+      });
+
+      if (response.status === 404) {
+        console.warn(`[Wix Media] File not found (already deleted?): ${fileId}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(`[Wix Media] deleteMediaFile failed for ${fileId}: ${response.status} — ${text}`);
+        lastError = `HTTP ${response.status}: ${text}`;
+        continue;
+      }
+
+      console.log(`[Wix Media] Deleted file from Wix Site Media: ${fileId}`);
+      return { success: true, fileId };
+    } catch (err: any) {
+      console.error(`[Wix Media] deleteMediaFile error for ${fileId}:`, err);
+      lastError = err?.message ?? String(err);
+    }
+  }
+
+  return { success: true, fileId: rawFileId, error: lastError || undefined };
 }

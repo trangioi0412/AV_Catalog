@@ -22,6 +22,7 @@ import { CmsProductsPopupTrigger } from "@/components/data/CmsProductsPopupTrigg
 import { ImageSearchToggle } from "@/components/data/ImageSearchToggle";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function AdminDashboardPage() {
   const [stats, products, brands] = await Promise.all([
@@ -142,7 +143,7 @@ export default async function AdminDashboardPage() {
             <Building2 className="w-4 h-4 text-primary" />
             Wix Studio CMS Master Data
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
@@ -178,10 +179,16 @@ export default async function AdminDashboardPage() {
 
             <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary flex flex-col justify-between">
               <div>
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                     Products with Images
                   </CardTitle>
+                  <CmsProductsPopupTrigger 
+                    products={products} 
+                    brands={brands} 
+                    showOnlyWithImages={true} 
+                    triggerLabel="Xem SP đã có ảnh" 
+                  />
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-baseline gap-2">
@@ -199,7 +206,7 @@ export default async function AdminDashboardPage() {
                   </div>
                 </CardContent>
               </div>
-              <CardContent className="pt-0 pb-4 flex justify-between items-center">
+              <CardContent className="pt-0 pb-4 flex justify-between items-center border-t border-border/40 pt-3">
                 <span className="text-xs text-muted-foreground font-medium">
                   Chưa có ảnh: <span className="font-bold text-amber-600 dark:text-amber-400">{(stats.totalProducts - stats.productsWithImagesCount).toLocaleString()}</span>
                 </span>
@@ -208,6 +215,49 @@ export default async function AdminDashboardPage() {
                   brands={brands} 
                   showOnlyNoImages={true} 
                   triggerLabel="Xem sản phẩm thiếu ảnh" 
+                />
+              </CardContent>
+            </Card>
+
+            {/* Products with Documents Card */}
+            <Card className="bg-card border-border/60 card-hover border-l-4 border-l-blue-500 flex flex-col justify-between">
+              <div>
+                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Products with Documents
+                  </CardTitle>
+                  <CmsProductsPopupTrigger 
+                    products={products} 
+                    brands={brands} 
+                    showOnlyWithDocuments={true} 
+                    triggerLabel="Xem SP đã có tài liệu" 
+                  />
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-extrabold text-blue-600 dark:text-blue-400">
+                      {(stats.productsWithDocumentsCount ?? 0).toLocaleString()}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      / {stats.totalProducts.toLocaleString()} items
+                    </span>
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 ml-2">
+                      {stats.totalProducts > 0 
+                        ? Math.round(((stats.productsWithDocumentsCount ?? 0) / stats.totalProducts) * 100) 
+                        : 0}%
+                    </span>
+                  </div>
+                </CardContent>
+              </div>
+              <CardContent className="pt-0 pb-4 flex justify-between items-center border-t border-border/40 pt-3">
+                <span className="text-xs text-muted-foreground font-medium">
+                  Chưa có tài liệu: <span className="font-bold text-amber-600 dark:text-amber-400">{(stats.totalProducts - (stats.productsWithDocumentsCount ?? 0)).toLocaleString()}</span>
+                </span>
+                <CmsProductsPopupTrigger 
+                  products={products} 
+                  brands={brands} 
+                  showOnlyNoDocuments={true} 
+                  triggerLabel="Xem sản phẩm thiếu tài liệu" 
                 />
               </CardContent>
             </Card>
