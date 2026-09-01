@@ -20,6 +20,10 @@ export const ALLOWED_COLLECTIONS: Record<string, AllowedCollectionDef> = {
     collectionId: process.env.WIX_PRODUCT_COLLECTION_ID || "Import1",
     label: "Sản phẩm",
   },
+  brand: {
+    collectionId: process.env.WIX_BRAND_COLLECTION_ID || "brand",
+    label: "Thương hiệu",
+  },
 };
 
 export const DEFAULT_COLLECTION_KEY = "products";

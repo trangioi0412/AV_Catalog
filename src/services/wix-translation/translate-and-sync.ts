@@ -41,13 +41,14 @@ import {
   type BulkContentInput,
 } from "./wix-multilingual.service";
 import { getWixTranslationProvider, TranslationProviderError } from "./translation-provider.service";
-import { computeSourceHash, sanitizeFieldKeys } from "./translation-mapper.service";
+import { computeSourceHash, sanitizeFieldKeys, sanitizeHtmlForPreview } from "./translation-mapper.service";
 import type {
   TranslateAndSyncWixCmsItemsInput,
   TranslateAndSyncWixCmsItemsResult,
   TranslateAndSyncItemInput,
   TranslationItemResult,
 } from "@/types/wix-translation";
+import type { TranslationSchema } from "./wix-multilingual.service";
 
 export type TranslateAndSyncErrorCode =
   | "VALIDATION_ERROR"
@@ -79,6 +80,20 @@ function resolveItemName(rawItem: Record<string, unknown>, fallback: string): st
   const title = rawItem.title ?? rawItem.Title;
   const product = rawItem.product ?? rawItem.Product;
   return String(title || product || fallback);
+}
+
+/**
+ * Runs HTML-type field values through `sanitizeHtmlForPreview` before they are
+ * ever shown in the review UI or written back to Wix. Non-HTML fields
+ * (SHORT_TEXT/LONG_TEXT) pass through unchanged — sanitizing plain text would
+ * be a no-op at best and mangle legitimate `<`/`>` characters at worst.
+ */
+function sanitizeHtmlFields(fields: Record<string, string>, schema: TranslationSchema): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    out[key] = schema.fields[key]?.type === "HTML" ? sanitizeHtmlForPreview(value) : value;
+  }
+  return out;
 }
 
 async function assertBatch(input: TranslateAndSyncWixCmsItemsInput) {
@@ -166,8 +181,8 @@ export async function translateAndSyncWixCmsItems(
 
   const items: TranslationItemResult[] =
     input.mode === "preview"
-      ? await runPreview(collectionId, schema.id, input, fieldKeys, overwriteExisting)
-      : await runWrite(collectionId, schema.id, input, fieldKeys, overwriteExisting);
+      ? await runPreview(collectionId, schema, input, fieldKeys, overwriteExisting)
+      : await runWrite(collectionId, schema, input, fieldKeys, overwriteExisting);
 
   const succeeded = items.filter((i) => i.status === "success").length;
   const failed = items.filter((i) => i.status === "failed").length;
@@ -193,22 +208,34 @@ export async function translateAndSyncWixCmsItems(
 
 async function runPreview(
   collectionId: string,
-  schemaId: string,
+  schema: TranslationSchema,
   input: TranslateAndSyncWixCmsItemsInput,
   fieldKeys: string[],
   overwriteExisting: boolean
 ): Promise<TranslationItemResult[]> {
   return mapWithConcurrency(input.itemIds, TRANSLATION_CONCURRENCY, async (itemId): Promise<TranslationItemResult> => {
+    // Populated as soon as the Wix CMS read succeeds, so that a later failure
+    // (AI provider rate-limited, timed out, etc.) still lets the review UI show
+    // the Vietnamese original instead of "(Trống)" — the original content was
+    // already fetched successfully and shouldn't be thrown away just because
+    // translation itself failed afterwards.
+    let itemName = itemId;
+    let sanitizedSourceFields: Record<string, string> | undefined;
+    let sourceHash: string | undefined;
+
     try {
       const rawItem = await getWixCmsItemById(collectionId, itemId);
       if (!rawItem) {
         return { itemId, status: "failed", action: "skipped", message: "Không tìm thấy item trong Wix CMS." };
       }
-      const itemName = resolveItemName(rawItem, itemId);
+      itemName = resolveItemName(rawItem, itemId);
+      // sha256 hash of the RAW (pre-sanitize) source, so a later save can still
+      // detect if the CMS content changed since preview.
       const sourceFields = extractSourceFields(rawItem, fieldKeys);
-      const sourceHash = computeSourceHash(sourceFields);
+      sourceHash = computeSourceHash(sourceFields);
+      sanitizedSourceFields = sanitizeHtmlFields(sourceFields, schema);
 
-      const existing = await queryContentForEntity(schemaId, itemId, input.targetLocale);
+      const existing = await queryContentForEntity(schema.id, itemId, input.targetLocale);
 
       const keysNeedingTranslation = fieldKeys.filter((key) => {
         if (overwriteExisting || !existing) return true;
@@ -223,8 +250,11 @@ async function runPreview(
         }
       }
 
+      let providerWarnings: string[] = [];
       if (keysNeedingTranslation.length > 0) {
-        const provider = getWixTranslationProvider();
+        const provider = getWixTranslationProvider(
+          input.providerKind ? { kind: input.providerKind, model: input.providerModel } : undefined
+        );
         const toTranslate: Record<string, string> = {};
         for (const key of keysNeedingTranslation) toTranslate[key] = sourceFields[key];
 
@@ -239,6 +269,7 @@ async function runPreview(
           },
         });
         Object.assign(translatedFields, result.fields);
+        providerWarnings = result.warnings;
       }
 
       return {
@@ -246,19 +277,31 @@ async function runPreview(
         itemName,
         status: "success",
         action: "previewed",
-        sourceFields,
-        translatedFields,
+        sourceFields: sanitizedSourceFields,
+        translatedFields: sanitizeHtmlFields(translatedFields, schema),
         sourceHash,
+        // Surfaced as the same amber notice used for errors — a length-drift
+        // warning means "AI may have added/dropped content, check before
+        // saving", not a failure, so status stays "success".
+        message: providerWarnings.length > 0 ? providerWarnings.join(" ") : undefined,
       };
     } catch (err) {
-      return { itemId, status: "failed", action: "skipped", message: describeError(err) };
+      return {
+        itemId,
+        itemName,
+        status: "failed",
+        action: "skipped",
+        message: describeError(err),
+        sourceFields: sanitizedSourceFields,
+        sourceHash,
+      };
     }
   });
 }
 
 async function runWrite(
   collectionId: string,
-  schemaId: string,
+  schema: TranslationSchema,
   input: TranslateAndSyncWixCmsItemsInput,
   fieldKeys: string[],
   overwriteExisting: boolean
@@ -292,16 +335,17 @@ async function runWrite(
         }
       }
 
-      const sanitizedFields: Record<string, string> = {};
+      const pickedFields: Record<string, string> = {};
       for (const key of fieldKeys) {
         const val = item.fieldValues?.[key];
-        if (val !== undefined) sanitizedFields[key] = val;
+        if (val !== undefined) pickedFields[key] = val;
       }
-      if (Object.keys(sanitizedFields).length === 0) {
+      if (Object.keys(pickedFields).length === 0) {
         return { kind: "skip", itemId: item.itemId, itemName, message: "Không có nội dung bản dịch nào được gửi lên." };
       }
+      const sanitizedFields = sanitizeHtmlFields(pickedFields, schema);
 
-      const existing = await queryContentForEntity(schemaId, item.itemId, input.targetLocale);
+      const existing = await queryContentForEntity(schema.id, item.itemId, input.targetLocale);
       if (existing && !overwriteExisting) {
         return {
           kind: "skip",
@@ -324,7 +368,7 @@ async function runWrite(
   const skipped = plans.filter((p): p is Extract<Plan, { kind: "skip" }> => p.kind === "skip");
 
   const toBulkInput = (p: Extract<Plan, { kind: "create" | "update" }>): BulkContentInput => ({
-    schemaId,
+    schemaId: schema.id,
     entityId: p.itemId,
     locale: input.targetLocale,
     fields: Object.fromEntries(Object.entries(p.sanitizedFields).map(([key, value]) => [key, { textValue: value, published }])),
@@ -342,7 +386,7 @@ async function runWrite(
       writtenPlans.filter((p) => writeResultByItemId.get(p.itemId)?.success),
       TRANSLATION_CONCURRENCY,
       async (p) => {
-        const content = await verifyTranslationContent(schemaId, p.itemId, input.targetLocale);
+        const content = await verifyTranslationContent(schema.id, p.itemId, input.targetLocale);
         const publishedOk = !content || fieldKeys.every((k) => !(k in p.sanitizedFields) || (content.fields[k]?.published ?? false) === published);
         return [p.itemId, Boolean(content) && publishedOk] as const;
       }

@@ -24,6 +24,8 @@ const requestSchema = z.object({
   targetLocale: z.string().min(1).max(20),
   fieldKeys: z.array(z.string().min(1).max(100)).min(1).max(50),
   overwriteExisting: z.boolean().optional().default(false),
+  providerKind: z.enum(["gemini", "gpt", "ollama"]).optional(),
+  providerModel: z.string().min(1).max(200).optional(),
 });
 
 function noStore(json: unknown, init?: ResponseInit) {

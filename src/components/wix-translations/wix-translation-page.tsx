@@ -11,6 +11,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { TranslationReviewPanel } from "@/components/wix-translations/translation-review-panel";
+import { TranslatedContentViewer } from "@/components/wix-translations/translated-content-viewer";
 import type { CmsTranslationStatus, WixTranslationConfigResponse, WixTranslationListItem } from "@/types/wix-translation";
 
 const PAGE_SIZE = 20;
@@ -38,6 +39,10 @@ export function WixTranslationPage() {
   const [targetLocale, setTargetLocale] = useState<string>("");
   const [selectedFieldKeys, setSelectedFieldKeys] = useState<Set<string>>(new Set());
   const [overwriteMode, setOverwriteMode] = useState<"missing-only" | "overwrite">("missing-only");
+  /** "" = auto (env-resolved default provider) */
+  const [providerKind, setProviderKind] = useState<string>("");
+  /** "" = use that provider's default model */
+  const [ollamaModel, setOllamaModel] = useState<string>("");
 
   const [items, setItems] = useState<WixTranslationListItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
@@ -49,8 +54,10 @@ export function WixTranslationPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [viewingItemId, setViewingItemId] = useState<string | null>(null);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fieldsCollectionRef = useRef<string>("");
 
   const loadConfig = useCallback(async () => {
     setConfigLoading(true);
@@ -63,7 +70,9 @@ export function WixTranslationPage() {
     }
     const cfg = json as WixTranslationConfigResponse;
     setConfig(cfg);
-    setCollectionKey((prev) => prev || cfg.collections[0]?.key || "");
+    const initialKey = cfg.collections[0]?.key || "";
+    fieldsCollectionRef.current = initialKey;
+    setCollectionKey((prev) => prev || initialKey);
     setSourceLocale((prev) => prev || cfg.defaultSourceLocale || "vi");
     setTargetLocale((prev) => prev || cfg.defaultTargetLocale || "en");
     setSelectedFieldKeys((prev) => (prev.size > 0 ? prev : new Set(cfg.fields.map((f) => f.key))));
@@ -74,6 +83,27 @@ export function WixTranslationPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadConfig();
   }, [loadConfig]);
+
+  // Every collection has its own translation schema/field list, so switching
+  // "Collection" must re-fetch fields for that collection — the initial
+  // /config call above only ever resolves fields for the default collection.
+  const loadFieldsForCollection = useCallback(async (key: string) => {
+    const { ok, json } = await fetchJson(`/api/admin/wix-translations/config?collectionKey=${encodeURIComponent(key)}`);
+    fieldsCollectionRef.current = key;
+    if (!ok) {
+      toast.error(json?.error || "Không thể tải field cho collection này.");
+      return;
+    }
+    const cfg = json as WixTranslationConfigResponse;
+    setConfig((prev) => (prev ? { ...prev, fields: cfg.fields, multilingualReady: cfg.multilingualReady, warnings: cfg.warnings } : prev));
+    setSelectedFieldKeys(new Set(cfg.fields.map((f) => f.key)));
+  }, []);
+
+  useEffect(() => {
+    if (!collectionKey || !config) return;
+    if (fieldsCollectionRef.current === collectionKey) return;
+    void loadFieldsForCollection(collectionKey);
+  }, [collectionKey, config, loadFieldsForCollection]);
 
   const loadItems = useCallback(async () => {
     if (!collectionKey || !targetLocale) return;
@@ -155,9 +185,19 @@ export function WixTranslationPage() {
 
   const itemNamesById = useMemo(() => Object.fromEntries(items.map((i) => [i.itemId, i.name])), [items]);
   const selectedFieldDefs = useMemo(
-    () => (config?.fields || []).filter((f) => selectedFieldKeys.has(f.key)).map((f) => ({ key: f.key, displayName: f.displayName })),
+    () => (config?.fields || []).filter((f) => selectedFieldKeys.has(f.key)).map((f) => ({ key: f.key, displayName: f.displayName, type: f.type })),
     [config, selectedFieldKeys]
   );
+
+  const ollamaProviderInfo = config?.availableProviders.find((p) => p.kind === "ollama");
+  const effectiveOllamaModel = ollamaModel || ollamaProviderInfo?.defaultModel || "";
+  const ollamaModelOptions = (config?.ollamaModels?.length ? config.ollamaModels : [ollamaProviderInfo?.defaultModel].filter(Boolean)) as string[];
+
+  // Whichever provider will actually run the translation: the explicitly
+  // selected one, or the env-auto-resolved default when left on "Tự động".
+  const selectedProviderConfigured = providerKind
+    ? Boolean(config?.availableProviders.find((p) => p.kind === providerKind)?.configured)
+    : Boolean(config?.translationProvider.configured);
 
   const canTranslate =
     selectedIds.size > 0 &&
@@ -167,7 +207,7 @@ export function WixTranslationPage() {
     sourceLocale !== targetLocale &&
     Boolean(config?.wixConfigured) &&
     Boolean(config?.multilingualReady) &&
-    Boolean(config?.translationProvider.configured);
+    selectedProviderConfigured;
 
   if (configLoading) {
     return (
@@ -272,6 +312,37 @@ export function WixTranslationPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Model AI dịch">
+              <Select value={providerKind || "auto"} onValueChange={(v) => setProviderKind(v === "auto" ? "" : v)}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">
+                    Tự động ({config?.translationProvider.name || "chưa cấu hình"})
+                  </SelectItem>
+                  {(config?.availableProviders || []).map((p) => (
+                    <SelectItem key={p.kind} value={p.kind} disabled={!p.configured}>
+                      {p.label}{!p.configured ? " — chưa cấu hình" : ` — ${p.defaultModel}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {providerKind === "ollama" && (
+              <Field label="Model Ollama">
+                <Select value={effectiveOllamaModel} onValueChange={setOllamaModel} disabled={ollamaModelOptions.length === 0}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Không có model nào" /></SelectTrigger>
+                  <SelectContent>
+                    {ollamaModelOptions.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+          </div>
+
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Chế độ xử lý bản dịch hiện có</p>
             <div className="flex flex-col gap-2">
@@ -289,7 +360,7 @@ export function WixTranslationPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="text-base">Sản phẩm trong CMS</CardTitle>
             <CardDescription>Chọn tối đa {MAX_BATCH_SELECT} sản phẩm mỗi lần dịch.</CardDescription>
@@ -338,42 +409,72 @@ export function WixTranslationPage() {
                     />
                   </TableHead>
                   <TableHead>Tên</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Thương hiệu</TableHead>
-                  <TableHead>Ngày cập nhật</TableHead>
+                  <TableHead>Field chưa dịch</TableHead>
                   <TableHead>Trạng thái dịch</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {itemsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                    <TableCell colSpan={4} className="text-center py-10 text-muted-foreground text-sm">
                       <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
                       Đang tải...
                     </TableCell>
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm italic">
+                    <TableCell colSpan={4} className="text-center py-10 text-muted-foreground text-sm italic">
                       Không có sản phẩm nào phù hợp.
                     </TableCell>
                   </TableRow>
                 ) : (
                   items.map((item) => {
                     const status = STATUS_LABEL[item.translationStatus];
+                    const MAX_SHOWN = 3;
+                    const shownMissing = item.untranslatedFields.slice(0, MAX_SHOWN);
+                    const extraMissing = item.untranslatedFields.length - shownMissing.length;
                     return (
                       <TableRow key={item.itemId} className={cn(selectedIds.has(item.itemId) && "bg-primary/5")}>
                         <TableCell>
                           <Checkbox checked={selectedIds.has(item.itemId)} onCheckedChange={() => toggleItem(item.itemId)} />
                         </TableCell>
                         <TableCell className="font-medium max-w-[260px] truncate" title={item.name}>{item.name}</TableCell>
-                        <TableCell className="font-mono text-xs">{item.model || "—"}</TableCell>
-                        <TableCell className="text-xs">{item.brand || "—"}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {item.updatedDate ? new Date(item.updatedDate).toLocaleDateString("vi-VN") : "—"}
+                        <TableCell className="max-w-[320px]">
+                          {item.untranslatedFields.length === 0 ? (
+                            <span className="text-xs text-emerald-600 font-medium">Đầy đủ</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1" title={item.untranslatedFields.join(", ")}>
+                              {shownMissing.map((f) => (
+                                <Badge key={f} variant="outline" className="text-[10px] font-normal bg-red-500/5 text-red-600 border-red-500/20">
+                                  {f}
+                                </Badge>
+                              ))}
+                              {extraMissing > 0 && (
+                                <Badge variant="outline" className="text-[10px] font-normal">
+                                  +{extraMissing}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
+                          {item.translationStatus === "none" ? (
+                            <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
+                          ) : (
+                            <button
+                              type="button"
+                              className="inline-flex"
+                              title="Xem nội dung bản dịch đã lưu"
+                              onClick={() => setViewingItemId(item.itemId)}
+                            >
+                              <Badge
+                                variant="outline"
+                                className={cn("text-[10px] font-bold cursor-pointer hover:opacity-80", status.className)}
+                              >
+                                {status.label}
+                              </Badge>
+                            </button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -406,6 +507,16 @@ export function WixTranslationPage() {
         </div>
       )}
 
+      {viewingItemId && (
+        <TranslatedContentViewer
+          open={!!viewingItemId}
+          itemId={viewingItemId}
+          collectionKey={collectionKey}
+          targetLocale={targetLocale}
+          onClose={() => setViewingItemId(null)}
+        />
+      )}
+
       {reviewOpen && config && (
         <TranslationReviewPanel
           open={reviewOpen}
@@ -416,6 +527,8 @@ export function WixTranslationPage() {
           sourceLocale={sourceLocale}
           targetLocale={targetLocale}
           overwriteExisting={overwriteMode === "overwrite"}
+          providerKind={providerKind || undefined}
+          providerModel={providerKind === "ollama" ? effectiveOllamaModel || undefined : undefined}
           onClose={() => setReviewOpen(false)}
           onSaved={() => {
             setReviewOpen(false);

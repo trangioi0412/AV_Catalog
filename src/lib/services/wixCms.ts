@@ -1,5 +1,14 @@
 import { cache } from "react";
 
+/**
+ * Must match `export const revalidate` in `app/products/[slug]/page.tsx` —
+ * that route-segment export has to be a static literal (Next.js can't
+ * statically analyze an imported reference there), so this constant only
+ * covers the `fetch()`-level `next.revalidate` calls below; keep both in sync
+ * by hand if this number ever changes.
+ */
+const PUBLIC_PAGE_REVALIDATE_SECONDS = 3600;
+
 export interface WixBrand {
   _id: string;
   name: string;
@@ -211,8 +220,16 @@ export function getFallbackBrandsList(): WixBrand[] {
 
 /**
  * Fetch all active brands from the Wix "Brand" collection.
+ *
+ * `fetchCacheInit` controls Next.js's fetch caching for this request only —
+ * it does not change anything else about the query/response handling. Admin
+ * tools (`getActiveBrands`) always want live data (`cache: "no-store"`); the
+ * public product page uses the ISR-cached variant below instead, because an
+ * uncached fetch anywhere in a page's render tree forces the *whole route*
+ * to render dynamically on every request under Next's default caching mode
+ * — silently defeating that page's `export const revalidate`.
  */
-export async function getActiveBrands(): Promise<WixBrand[]> {
+async function queryActiveBrands(fetchCacheInit: Pick<RequestInit, "cache" | "next">): Promise<WixBrand[]> {
   const headers = getWixHeaders();
   if (!headers) {
     console.warn("Wix credentials not configured — skipping getActiveBrands");
@@ -226,7 +243,7 @@ export async function getActiveBrands(): Promise<WixBrand[]> {
     const response = await fetch(url, {
       method: "POST",
       headers,
-      cache: "no-store",
+      ...fetchCacheInit,
       body: JSON.stringify({
         dataCollectionId: "brand",
         query: {
@@ -301,10 +318,28 @@ export async function getActiveBrands(): Promise<WixBrand[]> {
   return brands.filter((b: WixBrand) => b.isActive !== false);
 }
 
+/** Admin/tooling use — always live data, never cached. */
+export async function getActiveBrands(): Promise<WixBrand[]> {
+  return queryActiveBrands({ cache: "no-store" });
+}
+
 /**
- * Fetch all products from the Wix "Products" collection, handles automatic pagination.
+ * Public product page use — ISR-cached (see `queryActiveBrands` doc above).
+ * Memoized per request with React `cache` on top of Next's fetch cache, so a
+ * page that calls this more than once in the same render doesn't repeat the
+ * query.
  */
-export async function getAllProducts(): Promise<WixProduct[]> {
+export const getActiveBrandsForPublicPage = cache(async (): Promise<WixBrand[]> => {
+  return queryActiveBrands({ next: { revalidate: PUBLIC_PAGE_REVALIDATE_SECONDS } });
+});
+
+/**
+ * Fetch all products from the Wix "Products" collection, handles automatic
+ * pagination. See `queryActiveBrands` doc above for why `fetchCacheInit`
+ * exists — admin tools want `getAllProducts()` (always live); the public
+ * product page wants `getAllProductsForPublicPage()` (ISR-cached) instead.
+ */
+async function queryAllProducts(fetchCacheInit: Pick<RequestInit, "cache" | "next">): Promise<WixProduct[]> {
   const headers = getWixHeaders();
   if (!headers) {
     console.warn("Wix credentials not configured — skipping getAllProducts");
@@ -321,7 +356,7 @@ export async function getAllProducts(): Promise<WixProduct[]> {
     const response = await fetch(url, {
       method: "POST",
       headers,
-      cache: "no-store",
+      ...fetchCacheInit,
       body: JSON.stringify({
         dataCollectionId: "Import1",
         query: {
@@ -356,6 +391,21 @@ export async function getAllProducts(): Promise<WixProduct[]> {
 
   return allProducts;
 }
+
+/** Admin/tooling use — always live data, never cached. */
+export async function getAllProducts(): Promise<WixProduct[]> {
+  return queryAllProducts({ cache: "no-store" });
+}
+
+/**
+ * Public product page use — ISR-cached. Memoized per request with React
+ * `cache` on top of Next's fetch cache, so a page that calls this more than
+ * once in the same render (e.g. `RelatedProducts` plus `getProductBySlug`'s
+ * fallback scan) only pays for the paginated fetch once.
+ */
+export const getAllProductsForPublicPage = cache(async (): Promise<WixProduct[]> => {
+  return queryAllProducts({ next: { revalidate: PUBLIC_PAGE_REVALIDATE_SECONDS } });
+});
 
 let knownCollectionKeys: Set<string> | null = null;
 
@@ -1154,8 +1204,10 @@ export const getProductBySlug = cache(async (slug: string): Promise<WixProduct |
       console.warn(`[Wix CMS] getProductBySlug query failed: ${response.status} — falling back to full scan.`);
     }
 
-    // 2. Fallback in-memory scan (robust against missing slug index / database mismatches)
-    const allProducts = await getAllProducts();
+    // 2. Fallback in-memory scan (robust against missing slug index / database mismatches).
+    // Only ever called from the public product page, so use the ISR-cached
+    // variant — getAllProducts() would force this whole route dynamic.
+    const allProducts = await getAllProductsForPublicPage();
     const normalizedTarget = normalizeName(slug);
 
     const found = allProducts.find((p) => {

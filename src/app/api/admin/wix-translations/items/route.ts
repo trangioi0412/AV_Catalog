@@ -12,7 +12,7 @@ import { z } from "zod";
 import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
 import { resolveCollection } from "@/config/wix-translation.config";
 import { getWixCmsItems, getWixCollectionSchema } from "@/services/wix-translation/wix-cms.service";
-import { queryContentForEntity, WixMultilingualError } from "@/services/wix-translation/wix-multilingual.service";
+import { getTranslatableFields, queryContentForEntity, WixMultilingualError } from "@/services/wix-translation/wix-multilingual.service";
 import { WixServerClientError } from "@/lib/wix/server-client";
 import { mapWithConcurrency } from "@/lib/utils/concurrencyLimit";
 import type { CmsTranslationStatus, WixTranslationItemsResponse, WixTranslationListItem } from "@/types/wix-translation";
@@ -33,15 +33,28 @@ function noStore(json: unknown, init?: ResponseInit) {
   return res;
 }
 
-async function statusFor(schemaId: string | null, itemId: string, targetLocale: string): Promise<CmsTranslationStatus> {
-  if (!schemaId) return "none";
+interface TranslationInfo {
+  status: CmsTranslationStatus;
+  /** Display names of translatable fields that have no saved translation yet, e.g. "Product Overview", "Series". */
+  untranslatedFields: string[];
+}
+
+async function translationInfoFor(
+  schemaId: string | null,
+  fieldDefs: Array<{ key: string; displayName: string }>,
+  itemId: string,
+  targetLocale: string
+): Promise<TranslationInfo> {
+  const allFieldNames = fieldDefs.map((f) => f.displayName);
+  if (!schemaId) return { status: "none", untranslatedFields: allFieldNames };
   try {
     const content = await queryContentForEntity(schemaId, itemId, targetLocale);
-    if (!content) return "none";
+    if (!content) return { status: "none", untranslatedFields: allFieldNames };
+    const untranslatedFields = fieldDefs.filter((f) => !content.fields[f.key]?.textValue).map((f) => f.displayName);
     const anyPublished = Object.values(content.fields).some((f) => f.published === true);
-    return anyPublished ? "published" : "draft";
+    return { status: anyPublished ? "published" : "draft", untranslatedFields };
   } catch {
-    return "none";
+    return { status: "none", untranslatedFields: allFieldNames };
   }
 }
 
@@ -66,14 +79,13 @@ export async function GET(req: NextRequest) {
       getWixCmsItems({ collectionId: collection.collectionId, page, limit, search }),
       getWixCollectionSchema(collection.collectionId).catch(() => null),
     ]);
+    const fieldDefs = schema ? getTranslatableFields(schema) : [];
 
     const items: WixTranslationListItem[] = await mapWithConcurrency(page_.items, 5, async (raw): Promise<WixTranslationListItem> => {
       const data = raw.data;
-      const name = String(data.title ?? data.Title ?? data.product ?? data.Product ?? raw.itemId);
-      const model = data.product != null ? String(data.product) : data.Product != null ? String(data.Product) : undefined;
-      const brand = data.brand != null ? String(data.brand) : data.Brand != null ? String(data.Brand) : undefined;
-      const translationStatus = await statusFor(schema?.id || null, raw.itemId, targetLocale);
-      return { itemId: raw.itemId, name, model, brand, updatedDate: raw.updatedDate, translationStatus };
+      const name = String(data.title ?? data.Title ?? data.product ?? data.Product ?? data.name ?? data.Name ?? raw.itemId);
+      const { status: translationStatus, untranslatedFields } = await translationInfoFor(schema?.id || null, fieldDefs, raw.itemId, targetLocale);
+      return { itemId: raw.itemId, name, updatedDate: raw.updatedDate, translationStatus, untranslatedFields };
     });
 
     const response: WixTranslationItemsResponse = { items, page, limit, total: page_.total };

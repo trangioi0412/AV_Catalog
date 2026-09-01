@@ -22,15 +22,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Languages, Loader2, RefreshCw, RotateCcw, Save, UploadCloud, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Languages, Loader2, RefreshCw, RotateCcw, Save, UploadCloud, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TranslationItemResult } from "@/types/wix-translation";
+import type { CmsFieldValueType, TranslationItemResult } from "@/types/wix-translation";
 
 const PREVIEW_CHUNK_SIZE = 5;
 
 export interface ReviewFieldDef {
   key: string;
   displayName: string;
+  type: CmsFieldValueType;
 }
 
 interface ReviewItemState {
@@ -53,6 +54,10 @@ export interface TranslationReviewPanelProps {
   sourceLocale: string;
   targetLocale: string;
   overwriteExisting: boolean;
+  /** Explicit AI provider to translate with, instead of the env-auto-resolved default. */
+  providerKind?: string;
+  /** Specific model tag for `providerKind` (Ollama only). */
+  providerModel?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -76,7 +81,7 @@ async function callPreview(payload: unknown) {
 }
 
 export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
-  const { open, itemIds, itemNamesById, fields, collectionKey, sourceLocale, targetLocale, overwriteExisting, onClose, onSaved } = props;
+  const { open, itemIds, itemNamesById, fields, collectionKey, sourceLocale, targetLocale, overwriteExisting, providerKind, providerModel, onClose, onSaved } = props;
 
   const [itemsState, setItemsState] = useState<Record<string, ReviewItemState>>(() => buildInitialState(itemIds, itemNamesById));
   const [isTranslating, setIsTranslating] = useState(false);
@@ -85,6 +90,7 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
   const [pendingOverwriteIds, setPendingOverwriteIds] = useState<string[] | null>(null);
   const [pendingMode, setPendingMode] = useState<"draft" | "publish">("draft");
   const [confirmClose, setConfirmClose] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   const savingRef = useRef(false);
   const translatingRef = useRef(false);
@@ -135,6 +141,8 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
           targetLocale,
           fieldKeys: fields.map((f) => f.key),
           overwriteExisting: forceOverwrite || overwriteExisting,
+          providerKind,
+          providerModel,
         });
 
         if (!ok) {
@@ -154,7 +162,7 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
       setIsTranslating(false);
       translatingRef.current = false;
     },
-    [collectionKey, sourceLocale, targetLocale, fields, overwriteExisting, applyPreviewResult, itemNamesById]
+    [collectionKey, sourceLocale, targetLocale, fields, overwriteExisting, providerKind, providerModel, applyPreviewResult, itemNamesById]
   );
 
   useEffect(() => {
@@ -297,6 +305,12 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
 
   const itemsList = Object.values(itemsState);
   const translatedCount = itemsList.filter((it) => it.status === "translated" || it.status === "saved").length;
+  const currentItem = itemsState[itemIds[currentIndex]];
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < itemIds.length - 1;
+
+  const handlePrevItem = () => setCurrentIndex((i) => Math.max(0, i - 1));
+  const handleNextItem = () => setCurrentIndex((i) => Math.min(itemIds.length - 1, i + 1));
 
   return (
     <>
@@ -322,13 +336,41 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto divide-y">
-            {itemsList.map((item) => (
-              <div key={item.itemId} className="p-6 space-y-4">
+          {itemIds.length > 1 && (
+            <div className="px-6 py-2.5 border-b shrink-0 flex items-center justify-between gap-3 bg-muted/10">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5"
+                disabled={!canGoPrev}
+                onClick={handlePrevItem}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Sản phẩm trước
+              </Button>
+              <span className="text-xs font-semibold text-muted-foreground">
+                Sản phẩm {currentIndex + 1}/{itemIds.length}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5"
+                disabled={!canGoNext}
+                onClick={handleNextItem}
+              >
+                Sản phẩm tiếp theo
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto">
+            {currentItem && (
+              <div className="p-6 space-y-5">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <StatusIcon status={item.status} />
-                    <span className="font-semibold text-sm">{item.itemName}</span>
+                    <StatusIcon status={currentItem.status} />
+                    <span className="font-semibold text-sm">{currentItem.itemName}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Button
@@ -336,7 +378,7 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
                       variant="outline"
                       className="h-7 text-xs gap-1.5"
                       disabled={isTranslating || isSaving}
-                      onClick={() => handleRestore(item.itemId)}
+                      onClick={() => handleRestore(currentItem.itemId)}
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                       Khôi phục
@@ -346,7 +388,7 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
                       variant="outline"
                       className="h-7 text-xs gap-1.5"
                       disabled={isTranslating || isSaving}
-                      onClick={() => handleRetry(item.itemId)}
+                      onClick={() => handleRetry(currentItem.itemId)}
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       Dịch lại
@@ -354,47 +396,73 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
                   </div>
                 </div>
 
-                {item.message && (
+                {currentItem.message && (
                   <div
                     className={cn(
                       "text-xs rounded-lg px-3 py-2 border",
-                      item.status === "failed" ? "bg-red-500/5 border-red-500/20 text-red-600" : "bg-amber-500/5 border-amber-500/20 text-amber-600"
+                      currentItem.status === "failed" ? "bg-red-500/5 border-red-500/20 text-red-600" : "bg-amber-500/5 border-amber-500/20 text-amber-600"
                     )}
                   >
-                    {item.message}
+                    {currentItem.message}
                   </div>
                 )}
 
                 {fields.map((field) => {
-                  const original = item.sourceFields[field.key] || "";
-                  const translated = item.translatedFields[field.key] ?? "";
+                  const original = currentItem.sourceFields[field.key] || "";
+                  const translated = currentItem.translatedFields[field.key] ?? "";
+                  const isHtml = field.type === "HTML";
+                  // Only rich-text (HTML) fields need full width, stacked — they contain
+                  // paragraphs/lists that need room to breathe. Plain text (SHORT_TEXT,
+                  // LONG_TEXT) reads better in a narrower column where lines wrap sooner,
+                  // so it keeps the side-by-side layout.
+                  const isStacked = isHtml;
                   return (
-                    <div key={field.key} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex justify-between">
-                          <span>{field.displayName} ({sourceLocale.toUpperCase()} · gốc)</span>
-                        </label>
-                        <div className="min-h-[70px] w-full p-3 text-xs rounded-xl border bg-muted/20 whitespace-pre-wrap text-foreground/80">
-                          {original || <span className="italic text-muted-foreground">(Trống)</span>}
+                    <div key={field.key} className="rounded-xl border bg-card/40 p-4">
+                      <p className="text-xs font-bold text-foreground mb-3">{field.displayName}</p>
+                      <div className={cn("grid gap-4", isStacked ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2")}>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {sourceLocale.toUpperCase()} · gốc (chỉ đọc)
+                          </label>
+                          <div
+                            className={cn(
+                              "w-full p-3 text-sm leading-relaxed rounded-lg border bg-muted/50 text-foreground overflow-y-auto",
+                              isStacked ? "min-h-[110px] max-h-[320px]" : "min-h-[90px] max-h-[240px]"
+                            )}
+                          >
+                            {!original ? (
+                              <span className="italic text-muted-foreground">(Trống)</span>
+                            ) : isHtml ? (
+                              <div
+                                className="[&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-1 [&_strong]:font-semibold [&_a]:underline [&_a]:text-primary"
+                                dangerouslySetInnerHTML={{ __html: original }}
+                              />
+                            ) : (
+                              <div className="whitespace-pre-wrap">{original}</div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex justify-between">
-                          <span>{field.displayName} ({targetLocale.toUpperCase()} · bản dịch)</span>
-                          <span className="normal-case font-medium text-muted-foreground/70">{translated.length} ký tự</span>
-                        </label>
-                        <textarea
-                          value={translated}
-                          onChange={(e) => handleFieldEdit(item.itemId, field.key, e.target.value)}
-                          disabled={isSaving}
-                          className="min-h-[70px] w-full p-3 text-xs rounded-xl border bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50 resize-y"
-                        />
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                            <span>{targetLocale.toUpperCase()} · bản dịch (có thể sửa)</span>
+                            <span className="normal-case font-medium text-muted-foreground/70">{translated.length} ký tự</span>
+                          </label>
+                          <textarea
+                            value={translated}
+                            onChange={(e) => handleFieldEdit(currentItem.itemId, field.key, e.target.value)}
+                            disabled={isSaving}
+                            className={cn(
+                              "w-full p-3 text-sm leading-relaxed rounded-lg border-2 border-primary/25 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/60 resize-y",
+                              isStacked ? "min-h-[110px]" : "min-h-[90px]"
+                            )}
+                          />
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            ))}
+            )}
           </div>
 
           <DialogFooter className="px-6 py-4 border-t shrink-0 flex-row justify-between sm:justify-between items-center">

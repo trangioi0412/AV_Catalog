@@ -13,7 +13,12 @@ import { isWixConfigured } from "@/lib/wix/server-client";
 import { ALLOWED_COLLECTIONS, DEFAULT_COLLECTION_KEY, MAX_TRANSLATION_BATCH_SIZE } from "@/config/wix-translation.config";
 import { getWixCollectionSchema } from "@/services/wix-translation/wix-cms.service";
 import { getTranslatableFields, listLocales } from "@/services/wix-translation/wix-multilingual.service";
-import { getTranslationProviderName, isTranslationProviderConfigured } from "@/services/wix-translation/translation-provider.service";
+import {
+  getTranslationProviderName,
+  isTranslationProviderConfigured,
+  listAvailableTranslationProviders,
+  listOllamaModels,
+} from "@/services/wix-translation/translation-provider.service";
 import type { WixTranslationConfigResponse } from "@/types/wix-translation";
 
 export const runtime = "nodejs";
@@ -32,6 +37,10 @@ export async function GET(req: NextRequest) {
   const warnings: string[] = [];
   const collections = Object.entries(ALLOWED_COLLECTIONS).map(([key, def]) => ({ key, label: def.label }));
   const wixConfigured = isWixConfigured();
+
+  const requestedCollectionKey = req.nextUrl.searchParams.get("collectionKey");
+  const activeCollectionKey =
+    requestedCollectionKey && ALLOWED_COLLECTIONS[requestedCollectionKey] ? requestedCollectionKey : DEFAULT_COLLECTION_KEY;
 
   let locales: WixTranslationConfigResponse["locales"] = [];
   let fields: WixTranslationConfigResponse["fields"] = [];
@@ -63,8 +72,8 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const defaultCollection = ALLOWED_COLLECTIONS[DEFAULT_COLLECTION_KEY];
-      const schema = await getWixCollectionSchema(defaultCollection.collectionId);
+      const activeCollection = ALLOWED_COLLECTIONS[activeCollectionKey];
+      const schema = await getWixCollectionSchema(activeCollection.collectionId);
       if (schema) {
         multilingualReady = true;
         fields = getTranslatableFields(schema).map((f) => ({
@@ -74,7 +83,7 @@ export async function GET(req: NextRequest) {
         }));
       } else {
         warnings.push(
-          `Không tìm thấy translation schema cho collection "${defaultCollection.label}". Hãy thêm collection này vào Wix Translation Manager và đánh dấu field có thể dịch.`
+          `Không tìm thấy translation schema cho collection "${activeCollection.label}". Hãy thêm collection này vào Wix Translation Manager và đánh dấu field có thể dịch.`
         );
       }
     } catch (err) {
@@ -84,8 +93,13 @@ export async function GET(req: NextRequest) {
 
   const providerConfigured = isTranslationProviderConfigured();
   if (!providerConfigured) {
-    warnings.push("Translation provider chưa được cấu hình (thiếu GEMINI_API_KEY).");
+    warnings.push("Translation provider chưa được cấu hình (thiếu OLLAMA_BASE_URL, GPT_API_KEY, hoặc GEMINI_API_KEY).");
   }
+
+  const availableProviders = listAvailableTranslationProviders();
+  const ollamaModels = availableProviders.some((p) => p.kind === "ollama" && p.configured)
+    ? await listOllamaModels()
+    : [];
 
   const response: WixTranslationConfigResponse = {
     collections,
@@ -95,6 +109,8 @@ export async function GET(req: NextRequest) {
     fields,
     maxBatchSize: MAX_TRANSLATION_BATCH_SIZE,
     translationProvider: { name: getTranslationProviderName(), configured: providerConfigured },
+    availableProviders,
+    ollamaModels,
     wixConfigured,
     multilingualReady,
     warnings,

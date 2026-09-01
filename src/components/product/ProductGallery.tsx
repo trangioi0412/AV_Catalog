@@ -50,16 +50,18 @@ export function ProductGallery({ mainImage, galleryImages = [], productName }: P
       {/* Main Display Area */}
       <div className="relative aspect-4/3 w-full bg-card/40 backdrop-blur-md border border-border/80 rounded-2xl overflow-hidden shadow-lg group">
         {/* Active Image */}
-        <div 
+        <div
           className="relative w-full h-full cursor-zoom-in overflow-hidden"
           onMouseEnter={() => setIsZoomed(true)}
           onMouseLeave={() => setIsZoomed(false)}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={activeImageUrl}
             alt={`${productName} image ${activeIndex + 1}`}
-            className={`w-full h-full object-contain p-6 transition-transform duration-500 ease-out ${
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
+            priority={activeIndex === 0}
+            className={`object-contain p-6 transition-transform duration-500 ease-out ${
               isZoomed ? "scale-125" : "scale-100"
             }`}
           />
@@ -108,11 +110,12 @@ export function ProductGallery({ mainImage, galleryImages = [], productName }: P
                     : "border-border/40 hover:border-border/80 opacity-70 hover:opacity-100"
                 }`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={transformWixImageUrl(imgUrl)}
                   alt={`${productName} thumbnail ${idx + 1}`}
-                  className="w-full h-full object-contain p-1.5"
+                  fill
+                  sizes="80px"
+                  className="object-contain p-1.5"
                 />
               </button>
             );

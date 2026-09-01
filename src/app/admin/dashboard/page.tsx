@@ -80,7 +80,7 @@ export default async function AdminDashboardPage() {
         </div>
 
         {/* Timestamps & Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="border-border/60 bg-card card-hover">
             <CardContent className="flex items-center gap-4 p-5">
               <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 shrink-0">
@@ -143,18 +143,23 @@ export default async function AdminDashboardPage() {
             <Building2 className="w-4 h-4 text-primary" />
             Wix Studio CMS Master Data
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Total Active Brands
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-extrabold">{stats.totalBrands.toLocaleString()}</span>
-                  <span className="text-sm text-muted-foreground">registered in Wix CMS</span>
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary flex flex-col justify-between">
+              <div>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Total Active Brands
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-extrabold">{stats.totalBrands.toLocaleString()}</span>
+                    <span className="text-sm text-muted-foreground">registered in Wix CMS</span>
+                  </div>
+                </CardContent>
+              </div>
+              <CardContent className="pt-3 pb-4 border-t border-border/40">
+                <span className="text-xs text-muted-foreground">Đồng bộ trực tiếp từ Wix CMS</span>
               </CardContent>
             </Card>
 
@@ -172,23 +177,17 @@ export default async function AdminDashboardPage() {
                   </div>
                 </CardContent>
               </div>
-              <CardContent className="pt-0 pb-4 flex justify-end">
+              <CardContent className="pt-3 pb-4 flex justify-end border-t border-border/40">
                 <CmsProductsPopupTrigger products={products} brands={brands} />
               </CardContent>
             </Card>
 
             <Card className="bg-card border-border/60 card-hover border-l-4 border-l-primary flex flex-col justify-between">
               <div>
-                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                <CardHeader className="pb-2">
                   <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                     Products with Images
                   </CardTitle>
-                  <CmsProductsPopupTrigger 
-                    products={products} 
-                    brands={brands} 
-                    showOnlyWithImages={true} 
-                    triggerLabel="Xem SP đã có ảnh" 
-                  />
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-baseline gap-2">
@@ -199,39 +198,41 @@ export default async function AdminDashboardPage() {
                       / {stats.totalProducts.toLocaleString()} items
                     </span>
                     <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 ml-2">
-                      {stats.totalProducts > 0 
-                        ? Math.round((stats.productsWithImagesCount / stats.totalProducts) * 100) 
+                      {stats.totalProducts > 0
+                        ? Math.round((stats.productsWithImagesCount / stats.totalProducts) * 100)
                         : 0}%
                     </span>
                   </div>
                 </CardContent>
               </div>
-              <CardContent className="pt-0 pb-4 flex justify-between items-center border-t border-border/40 pt-3">
+              <CardContent className="pt-3 pb-4 flex flex-col gap-2 border-t border-border/40">
                 <span className="text-xs text-muted-foreground font-medium">
                   Chưa có ảnh: <span className="font-bold text-amber-600 dark:text-amber-400">{(stats.totalProducts - stats.productsWithImagesCount).toLocaleString()}</span>
                 </span>
-                <CmsProductsPopupTrigger 
-                  products={products} 
-                  brands={brands} 
-                  showOnlyNoImages={true} 
-                  triggerLabel="Xem sản phẩm thiếu ảnh" 
-                />
+                <div className="flex flex-wrap gap-2">
+                  <CmsProductsPopupTrigger
+                    products={products}
+                    brands={brands}
+                    showOnlyWithImages={true}
+                    triggerLabel="Đã có ảnh"
+                  />
+                  <CmsProductsPopupTrigger
+                    products={products}
+                    brands={brands}
+                    showOnlyNoImages={true}
+                    triggerLabel="Thiếu ảnh"
+                  />
+                </div>
               </CardContent>
             </Card>
 
             {/* Products with Documents Card */}
             <Card className="bg-card border-border/60 card-hover border-l-4 border-l-blue-500 flex flex-col justify-between">
               <div>
-                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                <CardHeader className="pb-2">
                   <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                     Products with Documents
                   </CardTitle>
-                  <CmsProductsPopupTrigger 
-                    products={products} 
-                    brands={brands} 
-                    showOnlyWithDocuments={true} 
-                    triggerLabel="Xem SP đã có tài liệu" 
-                  />
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-baseline gap-2">
@@ -242,23 +243,31 @@ export default async function AdminDashboardPage() {
                       / {stats.totalProducts.toLocaleString()} items
                     </span>
                     <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 ml-2">
-                      {stats.totalProducts > 0 
-                        ? Math.round(((stats.productsWithDocumentsCount ?? 0) / stats.totalProducts) * 100) 
+                      {stats.totalProducts > 0
+                        ? Math.round(((stats.productsWithDocumentsCount ?? 0) / stats.totalProducts) * 100)
                         : 0}%
                     </span>
                   </div>
                 </CardContent>
               </div>
-              <CardContent className="pt-0 pb-4 flex justify-between items-center border-t border-border/40 pt-3">
+              <CardContent className="pt-3 pb-4 flex flex-col gap-2 border-t border-border/40">
                 <span className="text-xs text-muted-foreground font-medium">
                   Chưa có tài liệu: <span className="font-bold text-amber-600 dark:text-amber-400">{(stats.totalProducts - (stats.productsWithDocumentsCount ?? 0)).toLocaleString()}</span>
                 </span>
-                <CmsProductsPopupTrigger 
-                  products={products} 
-                  brands={brands} 
-                  showOnlyNoDocuments={true} 
-                  triggerLabel="Xem sản phẩm thiếu tài liệu" 
-                />
+                <div className="flex flex-wrap gap-2">
+                  <CmsProductsPopupTrigger
+                    products={products}
+                    brands={brands}
+                    showOnlyWithDocuments={true}
+                    triggerLabel="Đã có tài liệu"
+                  />
+                  <CmsProductsPopupTrigger
+                    products={products}
+                    brands={brands}
+                    showOnlyNoDocuments={true}
+                    triggerLabel="Thiếu tài liệu"
+                  />
+                </div>
               </CardContent>
             </Card>
           </div>

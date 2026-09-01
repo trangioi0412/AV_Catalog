@@ -45,17 +45,17 @@ function getHeaders(): Record<string, string> {
   };
 }
 
-/** POSTs to a `wix-data/v2` sub-path (e.g. "items/query") with server-side auth. */
-export async function wixDataFetch(subPath: string, body: unknown): Promise<unknown> {
+/** GETs, POSTs, or PATCHes a `wix-data/v2` sub-path (e.g. "items/query", "items/{id}", "collections") with server-side auth. `body` is omitted from the request for GET. */
+export async function wixDataFetch(subPath: string, body?: unknown, method: "GET" | "POST" | "PATCH" = "POST"): Promise<unknown> {
   const headers = getHeaders();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${WIX_DATA_API}/${subPath}`, {
-      method: "POST",
+      method,
       headers,
-      body: JSON.stringify(body),
+      ...(method === "GET" ? {} : { body: JSON.stringify(body) }),
       signal: controller.signal,
       cache: "no-store",
     });

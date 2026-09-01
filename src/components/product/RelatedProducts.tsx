@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { WixProduct, WixBrand } from "@/lib/services/wixCms";
 import { transformWixImageUrl } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
@@ -75,11 +76,13 @@ export function RelatedProducts({ currentProduct, allProducts, brands }: Related
             >
               {/* Product Image Cover */}
               <div className="relative aspect-4/3 w-full bg-card/60 border-b overflow-hidden flex items-center justify-center p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={imgUrl}
                   alt={product.Title}
-                  className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300 p-2"
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  loading="lazy"
+                  className="object-contain group-hover:scale-105 transition-transform duration-300 p-2"
                 />
               </div>
 

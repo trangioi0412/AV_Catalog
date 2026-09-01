@@ -130,7 +130,7 @@ describe("translateAndSyncWixCmsItems", () => {
     it("drops any requested field key that isn't in the translation schema's allowlist", async () => {
       vi.mocked(getWixCmsItemById).mockResolvedValue({ title: "Neat Bar", productOverview: "Mo ta" });
       vi.mocked(getWixTranslationProvider).mockReturnValue({
-        translate: vi.fn().mockResolvedValue({ fields: { title: "Neat Bar" }, provider: "gemini", translatedAt: "now" }),
+        translate: vi.fn().mockResolvedValue({ fields: { title: "Neat Bar" }, provider: "gemini", translatedAt: "now", warnings: [] }),
       });
 
       const result = await translateAndSyncWixCmsItems(
@@ -159,6 +159,7 @@ describe("translateAndSyncWixCmsItems", () => {
           fields: { title: "Neat Bar BYOD", productOverview: "Product description" },
           provider: "gemini",
           translatedAt: "now",
+          warnings: [],
         }),
       });
 
@@ -204,7 +205,7 @@ describe("translateAndSyncWixCmsItems", () => {
         locale: "en",
         fields: { title: { textValue: "Old EN title" }, productOverview: { textValue: "Old EN overview" } },
       } as unknown as TranslationContent);
-      const translateMock = vi.fn().mockResolvedValue({ fields: { title: "New EN title", productOverview: "New EN overview" }, provider: "gemini", translatedAt: "now" });
+      const translateMock = vi.fn().mockResolvedValue({ fields: { title: "New EN title", productOverview: "New EN overview" }, provider: "gemini", translatedAt: "now", warnings: [] });
       vi.mocked(getWixTranslationProvider).mockReturnValue({ translate: translateMock });
 
       const result = await translateAndSyncWixCmsItems(baseInput({ overwriteExisting: true }));
@@ -219,7 +220,7 @@ describe("translateAndSyncWixCmsItems", () => {
         return { title: "OK", productOverview: "OK" };
       });
       vi.mocked(getWixTranslationProvider).mockReturnValue({
-        translate: vi.fn().mockResolvedValue({ fields: { title: "OK EN", productOverview: "OK EN" }, provider: "gemini", translatedAt: "now" }),
+        translate: vi.fn().mockResolvedValue({ fields: { title: "OK EN", productOverview: "OK EN" }, provider: "gemini", translatedAt: "now", warnings: [] }),
       });
 
       const result = await translateAndSyncWixCmsItems(baseInput({ itemIds: ["good-item", "broken-item"] }));
@@ -230,6 +231,22 @@ describe("translateAndSyncWixCmsItems", () => {
       expect(byId["broken-item"].message).toMatch(/Wix upstream exploded/);
       expect(result.succeeded).toBe(1);
       expect(result.failed).toBe(1);
+    });
+
+    it("still returns the Vietnamese source content when the AI translation call itself fails", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ title: "Neat Bar BYOD", productOverview: "Mo ta san pham" });
+      vi.mocked(getWixTranslationProvider).mockReturnValue({
+        translate: vi.fn().mockRejectedValue(new Error("Translation provider rate limit reached.")),
+      });
+
+      const result = await translateAndSyncWixCmsItems(baseInput());
+
+      expect(result.items[0].status).toBe("failed");
+      expect(result.items[0].message).toMatch(/rate limit/i);
+      // The CMS read already succeeded before the AI call failed — the review
+      // UI must still be able to show the original content, not "(Trống)".
+      expect(result.items[0].sourceFields).toEqual({ title: "Neat Bar BYOD", productOverview: "Mo ta san pham" });
+      expect(result.items[0].sourceHash).toBeTruthy();
     });
   });
 

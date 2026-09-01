@@ -1,7 +1,7 @@
 import React from "react";
 import type { Metadata, ResolvingMetadata } from "next";
 import { notFound } from "next/navigation";
-import { getProductBySlug, getBrandById, getAllProducts, getActiveBrands } from "@/lib/services/wixCms";
+import { getProductBySlug, getBrandById, getAllProductsForPublicPage, getActiveBrandsForPublicPage } from "@/lib/services/wixCms";
 import { transformWixImageUrl } from "@/lib/utils";
 import { ProductHero } from "@/components/product/ProductHero";
 import { ProductOverview } from "@/components/product/ProductOverview";
@@ -88,11 +88,14 @@ export default async function ProductDetailPage(props: PageProps) {
     notFound();
   }
 
-  // Fetch all companion catalog items in parallel
+  // Fetch all companion catalog items in parallel. Deliberately the
+  // *PublicPage variants (ISR-cached) — the admin ones set `cache: "no-store"`
+  // on their fetches, which would force this whole route dynamic on every
+  // request and defeat `revalidate` below.
   const [brand, allProducts, brands] = await Promise.all([
     getBrandById(product.Brand),
-    getAllProducts(),
-    getActiveBrands()
+    getAllProductsForPublicPage(),
+    getActiveBrandsForPublicPage()
   ]);
 
   const brandName = brand?.name || "AV Brand";

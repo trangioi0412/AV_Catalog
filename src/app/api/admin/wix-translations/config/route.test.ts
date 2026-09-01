@@ -11,11 +11,13 @@ vi.mock("@/services/wix-translation/wix-multilingual.service", () => ({
 vi.mock("@/services/wix-translation/translation-provider.service", () => ({
   getTranslationProviderName: vi.fn(() => "gemini"),
   isTranslationProviderConfigured: vi.fn(),
+  listAvailableTranslationProviders: vi.fn(() => []),
+  listOllamaModels: vi.fn(async () => []),
 }));
 
 import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
 import { isWixConfigured } from "@/lib/wix/server-client";
-import { isTranslationProviderConfigured } from "@/services/wix-translation/translation-provider.service";
+import { isTranslationProviderConfigured, listAvailableTranslationProviders } from "@/services/wix-translation/translation-provider.service";
 import { GET } from "./route";
 
 function makeRequest() {
@@ -58,5 +60,39 @@ describe("GET /api/admin/wix-translations/config", () => {
     const text = JSON.stringify(await res.json());
 
     expect(text).not.toMatch(/WIX_API_KEY|apiKey|accessToken|siteSecret/i);
+  });
+
+  it("includes the list of selectable AI providers for the model picker", async () => {
+    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(isWixConfigured).mockReturnValue(false);
+    vi.mocked(isTranslationProviderConfigured).mockReturnValue(false);
+    vi.mocked(listAvailableTranslationProviders).mockReturnValue([
+      { kind: "ollama", label: "Ollama (self-hosted)", defaultModel: "translategemma:12b", configured: true },
+      { kind: "gpt", label: "GPT / OpenAI", defaultModel: "gpt-4o", configured: false },
+      { kind: "gemini", label: "Gemini", defaultModel: "gemini-2.5-pro", configured: false },
+    ]);
+
+    const res = await GET(makeRequest());
+    const json = await res.json();
+
+    expect(json.availableProviders).toEqual([
+      { kind: "ollama", label: "Ollama (self-hosted)", defaultModel: "translategemma:12b", configured: true },
+      { kind: "gpt", label: "GPT / OpenAI", defaultModel: "gpt-4o", configured: false },
+      { kind: "gemini", label: "Gemini", defaultModel: "gemini-2.5-pro", configured: false },
+    ]);
+  });
+
+  it("does not bother listing Ollama models when Ollama isn't a configured provider", async () => {
+    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(isWixConfigured).mockReturnValue(false);
+    vi.mocked(isTranslationProviderConfigured).mockReturnValue(false);
+    vi.mocked(listAvailableTranslationProviders).mockReturnValue([
+      { kind: "ollama", label: "Ollama (self-hosted)", defaultModel: "llama3.1", configured: false },
+    ]);
+
+    const res = await GET(makeRequest());
+    const json = await res.json();
+
+    expect(json.ollamaModels).toEqual([]);
   });
 });
