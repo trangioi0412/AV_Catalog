@@ -33,7 +33,9 @@ function toListItem(raw: Record<string, unknown>): WixCmsListItem {
 
 /**
  * Lists items from a Wix CMS collection with offset paging and an optional
- * free-text search across `title` / `product`. Bounded to `limit` per call.
+ * free-text search across `title` / `product` / the item's own `_id` (so
+ * pasting a product ID — e.g. one seen in a failed-translation result —
+ * filters straight to that item). Bounded to `limit` per call.
  */
 export async function getWixCmsItems(params: {
   collectionId: string;
@@ -44,11 +46,13 @@ export async function getWixCmsItems(params: {
   const { collectionId, page, limit, search } = params;
   const offset = Math.max(0, (page - 1) * limit);
 
-  const filter = search?.trim()
+  const trimmedSearch = search?.trim();
+  const filter = trimmedSearch
     ? {
         $or: [
-          { title: { $contains: search.trim() } },
-          { product: { $contains: search.trim() } },
+          { title: { $contains: trimmedSearch } },
+          { product: { $contains: trimmedSearch } },
+          { _id: { $eq: trimmedSearch } },
         ],
       }
     : undefined;

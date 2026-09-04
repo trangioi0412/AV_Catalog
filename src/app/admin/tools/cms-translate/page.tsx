@@ -400,6 +400,22 @@ export default function CmsTranslatePage() {
       if (!ok) {
         toast.error(json?.error || "Dịch thất bại.");
         succeeded = false;
+        // The request itself failed (not a per-item error) — every item still unprocessed
+        // (this chunk plus anything after it) is kept as its own "failed" result instead of
+        // silently vanishing, so it still shows up (with its ID) for a filtered retry below
+        // rather than forcing a full re-run of the whole selection.
+        const remaining = ids.slice(i);
+        const failedResults: ResultItem[] = remaining.map((itemId) => ({
+          itemId,
+          name: itemId,
+          status: "failed",
+          error: json?.error || "Dịch thất bại — yêu cầu tới server không thành công.",
+        }));
+        collected.push(...failedResults);
+        summary.total += failedResults.length;
+        summary.failed += failedResults.length;
+        setReviewItems([...collected]);
+        setPreviewSummary({ ...summary });
         break;
       }
 
@@ -416,6 +432,8 @@ export default function CmsTranslatePage() {
       toast.success(`Đã dịch xong: ${summary.translated} sản phẩm — hãy kiểm tra rồi bấm "Ghi vào CMS".`);
       setSetupCollapsed(true);
       setItemsCollapsed(true);
+    } else if (collected.length > 0) {
+      toast.info(`Đã giữ lại ${collected.length - summary.failed} kết quả dịch thành công trước đó — các sản phẩm còn lại có thể lọc theo ID để dịch lại.`);
     }
   };
 
@@ -463,6 +481,21 @@ export default function CmsTranslatePage() {
       if (!ok) {
         toast.error(json?.error || "Ghi vào CMS thất bại.");
         succeeded = false;
+        // Same reasoning as runPreview(): a whole-request failure shouldn't erase the items
+        // that already wrote successfully, and the ones left over (this chunk onward) still
+        // need to be visible — with their ID — so they can be filtered and retried.
+        const remaining = approvedItems.slice(i);
+        const failedResults: ResultItem[] = remaining.map((item) => ({
+          itemId: item.itemId,
+          name: item.name,
+          status: "failed",
+          error: json?.error || "Ghi vào CMS thất bại — yêu cầu tới server không thành công.",
+        }));
+        collected.push(...failedResults);
+        summary.total += failedResults.length;
+        summary.failed += failedResults.length;
+        setWriteItems([...collected]);
+        setWriteSummary({ ...summary });
         break;
       }
 
@@ -478,7 +511,19 @@ export default function CmsTranslatePage() {
     if (succeeded) {
       toast.success(`Đã ghi ${summary.updated} sản phẩm lên Wix CMS.`);
       setReviewCollapsed(true);
+    } else if (collected.length > 0) {
+      toast.info(`Đã giữ lại ${collected.length - summary.failed} kết quả ghi thành công trước đó — các sản phẩm còn lại có thể lọc theo ID để thử lại.`);
     }
+  };
+
+  // Lets the admin jump straight from a failed/skipped item to the item picker filtered to
+  // just that product ID — so a failure can be retried on its own instead of re-running (or
+  // re-searching by name for) the whole selection again.
+  const retryById = (itemId: string) => {
+    setSearch(itemId);
+    setPage(1);
+    setItemsCollapsed(false);
+    setSetupCollapsed(false);
   };
 
   const handlePreviewClick = () => void runPreview();
@@ -699,7 +744,7 @@ export default function CmsTranslatePage() {
           {!itemsCollapsed && (
           <CardContent className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-              <Input placeholder="Tìm theo tên hoặc model..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+              <Input placeholder="Tìm theo tên, model hoặc ID sản phẩm..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
               <label className="flex items-center gap-2 text-sm cursor-pointer select-none w-fit shrink-0">
                 <Checkbox checked={hideTranslated} onCheckedChange={(v) => setHideTranslated(Boolean(v))} disabled={validMappings.length === 0} />
                 Ẩn sản phẩm đã dịch đủ{hiddenCount > 0 ? ` (${hiddenCount})` : ""}
@@ -995,8 +1040,10 @@ export default function CmsTranslatePage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Sản phẩm</TableHead>
+                          <TableHead>ID sản phẩm</TableHead>
                           <TableHead>Trạng thái</TableHead>
                           <TableHead>Lý do</TableHead>
+                          <TableHead />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1005,6 +1052,7 @@ export default function CmsTranslatePage() {
                           return (
                             <TableRow key={item.itemId}>
                               <TableCell className="font-medium max-w-[220px] truncate" title={item.name}>{item.name}</TableCell>
+                              <TableCell className="font-mono text-[11px] text-muted-foreground max-w-[160px] truncate" title={item.itemId}>{item.itemId}</TableCell>
                               <TableCell>
                                 <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
                               </TableCell>
@@ -1014,6 +1062,16 @@ export default function CmsTranslatePage() {
                                 ) : (
                                   item.reason || "—"
                                 )}
+                              </TableCell>
+                              <TableCell>
+                                <button
+                                  type="button"
+                                  className="text-xs text-primary hover:underline font-semibold shrink-0 whitespace-nowrap"
+                                  onClick={() => retryById(item.itemId)}
+                                  title="Lọc danh sách sản phẩm phía trên theo ID này để dịch lại"
+                                >
+                                  Dịch lại
+                                </button>
                               </TableCell>
                             </TableRow>
                           );
@@ -1045,8 +1103,10 @@ export default function CmsTranslatePage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Sản phẩm</TableHead>
+                      <TableHead>ID sản phẩm</TableHead>
                       <TableHead>Trạng thái</TableHead>
                       <TableHead>Chi tiết</TableHead>
+                      {writeSummary && writeSummary.failed > 0 && <TableHead />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1055,6 +1115,7 @@ export default function CmsTranslatePage() {
                       return (
                         <TableRow key={item.itemId}>
                           <TableCell className="font-medium max-w-[220px] truncate" title={item.name}>{item.name}</TableCell>
+                          <TableCell className="font-mono text-[11px] text-muted-foreground max-w-[160px] truncate" title={item.itemId}>{item.itemId}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
                           </TableCell>
@@ -1069,6 +1130,20 @@ export default function CmsTranslatePage() {
                               "—"
                             )}
                           </TableCell>
+                          {writeSummary && writeSummary.failed > 0 && (
+                            <TableCell>
+                              {item.status === "failed" && (
+                                <button
+                                  type="button"
+                                  className="text-xs text-primary hover:underline font-semibold shrink-0 whitespace-nowrap"
+                                  onClick={() => retryById(item.itemId)}
+                                  title="Lọc danh sách sản phẩm phía trên theo ID này để dịch lại"
+                                >
+                                  Dịch lại
+                                </button>
+                              )}
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}
