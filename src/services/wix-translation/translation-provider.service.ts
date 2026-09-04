@@ -12,6 +12,7 @@ import {
   getTranslationProvider as getConfiguredProvider,
   getTranslationProviderKind,
   getActiveTranslationModelName,
+  getSafeConcurrency,
   isTranslationProviderConfigured as isAnyProviderConfigured,
   listAvailableTranslationProviders,
   listOllamaModels,
@@ -20,7 +21,7 @@ import {
   type TranslationProviderOverride,
 } from "@/lib/services/translationProvider";
 
-export { listAvailableTranslationProviders, listOllamaModels };
+export { listAvailableTranslationProviders, listOllamaModels, getTranslationProviderKind, getSafeConcurrency };
 export type { TranslationProviderKind, TranslationProviderOverride };
 
 export interface TranslationRequest {

@@ -11,7 +11,7 @@
 const WIX_DATA_API = "https://www.wixapis.com/wix-data/v2";
 const FETCH_TIMEOUT_MS = 15000;
 
-export type WixServerClientErrorCode = "NOT_CONFIGURED" | "TIMEOUT" | "NETWORK_ERROR" | "UPSTREAM_ERROR";
+export type WixServerClientErrorCode = "NOT_CONFIGURED" | "TIMEOUT" | "NETWORK_ERROR" | "RATE_LIMITED" | "UPSTREAM_ERROR";
 
 export class WixServerClientError extends Error {
   readonly status: number;
@@ -74,7 +74,10 @@ export async function wixDataFetch(subPath: string, body?: unknown, method: "GET
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new WixServerClientError(`Wix Data API error ${res.status} for ${subPath}: ${text}`, res.status, "UPSTREAM_ERROR");
+    // Wix's own per-minute quota (e.g. WDE0014) — distinct from a generic upstream failure
+    // so callers writing many items in a batch can retry it instead of giving up outright.
+    const code: WixServerClientErrorCode = res.status === 429 ? "RATE_LIMITED" : "UPSTREAM_ERROR";
+    throw new WixServerClientError(`Wix Data API error ${res.status} for ${subPath}: ${text}`, res.status, code);
   }
   return res.json();
 }

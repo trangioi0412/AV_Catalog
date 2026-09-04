@@ -48,6 +48,7 @@ export type WixMultilingualErrorCode =
   | "NOT_CONFIGURED"
   | "TIMEOUT"
   | "NETWORK_ERROR"
+  | "RATE_LIMITED"
   | "UPSTREAM_ERROR"
   | "SCHEMA_NOT_FOUND"
   | "LOCALE_NOT_AVAILABLE";
@@ -99,7 +100,8 @@ async function wixFetch(url: string, init: RequestInit): Promise<unknown> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new WixMultilingualError(`Wix API error ${res.status} for ${url}: ${text}`, res.status, "UPSTREAM_ERROR");
+    const code: WixMultilingualErrorCode = res.status === 429 ? "RATE_LIMITED" : "UPSTREAM_ERROR";
+    throw new WixMultilingualError(`Wix API error ${res.status} for ${url}: ${text}`, res.status, code);
   }
   if (res.status === 204) return null;
   return res.json();

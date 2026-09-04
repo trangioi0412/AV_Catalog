@@ -22,9 +22,16 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Languages, Loader2, Plus, RefreshCw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Languages, Loader2, Plus, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 
-type FieldType = "text" | "richText";
+type FieldType = "text" | "richText" | "json";
+
+/** "en-vi" = read English, write Vietnamese (default). "vi-en" = the reverse. */
+type Direction = "en-vi" | "vi-en";
+const DIRECTION_LOCALES: Record<Direction, { source: string; target: string }> = {
+  "en-vi": { source: "en", target: "vi" },
+  "vi-en": { source: "vi", target: "en" },
+};
 
 interface FieldMappingRow {
   sourceField: string;
@@ -89,9 +96,6 @@ const PAGE_SIZE = 20;
 // below intentionally exceeds it and is sent as multiple CHUNK_SIZE-sized requests instead.
 const MAX_BATCH_SELECT = 50;
 const CHUNK_SIZE = MAX_BATCH_SELECT;
-// Safety cap for "Chọn toàn bộ" — translating a whole large collection in one click still means
-// dozens of sequential AI-translation requests; this bounds how long a single run can run for.
-const SELECT_ALL_CAP = 300;
 
 async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
@@ -114,6 +118,15 @@ export default function CmsTranslatePage() {
 
   const [fieldMappings, setFieldMappings] = useState<FieldMappingRow[]>([EMPTY_MAPPING_ROW]);
   const [overwrite, setOverwrite] = useState(false);
+  const [direction, setDirection] = useState<Direction>("en-vi");
+  const { source: sourceLocale, target: targetLocale } = DIRECTION_LOCALES[direction];
+
+  /** Flips direction AND swaps every mapping row's source/target field — for reusing an
+   * already-configured EN→VI setup to run the same field pairs in reverse. */
+  const reverseDirection = () => {
+    setDirection((d) => (d === "en-vi" ? "vi-en" : "en-vi"));
+    setFieldMappings((prev) => prev.map((m) => ({ ...m, sourceField: m.targetField, targetField: m.sourceField })));
+  };
 
   // sourceField may equal targetField — an "in place" translation for a field with no
   // separate VI sibling (e.g. "Main Feature"). translateCmsEnglishToVietnamese() only
@@ -231,7 +244,8 @@ export default function CmsTranslatePage() {
   // Selects every item matching the current search + "hide translated" filter, across every
   // page — not just the current one — so the whole collection can be translated in one run.
   // Bypasses MAX_BATCH_SELECT (that cap is for manual checkbox clicks); runPreview/runWrite
-  // send this in CHUNK_SIZE-sized requests, so there's no per-request limit to respect here.
+  // send this in CHUNK_SIZE-sized requests, so there's no per-request limit or cap to respect here —
+  // this walks every page until the server reports no more.
   const selectAllMatching = async () => {
     if (!collectionKey || isSelectingAll) return;
     setIsSelectingAll(true);
@@ -240,7 +254,7 @@ export default function CmsTranslatePage() {
     try {
       let p = 1;
       let serverTotal = Infinity;
-      while (collected.length < SELECT_ALL_CAP && (p - 1) * FETCH_LIMIT < serverTotal) {
+      while ((p - 1) * FETCH_LIMIT < serverTotal) {
         const params = new URLSearchParams({
           collectionKey,
           page: String(p),
@@ -259,7 +273,6 @@ export default function CmsTranslatePage() {
         for (const it of pageItems) {
           if (hideTranslated && it.translated) continue;
           collected.push(it.itemId);
-          if (collected.length >= SELECT_ALL_CAP) break;
         }
         p++;
       }
@@ -268,11 +281,7 @@ export default function CmsTranslatePage() {
     }
 
     setSelectedIds(new Set(collected));
-    if (collected.length >= SELECT_ALL_CAP) {
-      toast.warning(`Đã chọn ${collected.length} sản phẩm — đây là giới hạn tối đa mỗi lần "Chọn toàn bộ". Dịch xong đợt này rồi lặp lại để xử lý phần còn lại.`);
-    } else {
-      toast.success(`Đã chọn ${collected.length} sản phẩm phù hợp.`);
-    }
+    toast.success(`Đã chọn ${collected.length} sản phẩm.`);
   };
 
   const updateMapping = (index: number, patch: Partial<FieldMappingRow>) => {
@@ -288,6 +297,13 @@ export default function CmsTranslatePage() {
   const fieldDisplayNameByKey = useMemo(
     () => Object.fromEntries(availableFields.map((f) => [f.key, f.displayName])),
     [availableFields]
+  );
+  // Preview results only carry target-field keys, not their type — looked up here from the
+  // mapping config that was in effect when this run started, so the review UI can show a
+  // taller/monospace box for "json" fields.
+  const fieldTypeByTargetKey = useMemo(
+    () => Object.fromEntries(validMappings.map((m) => [m.targetField.trim(), m.type])),
+    [validMappings]
   );
 
   // Per-item, per-field write inclusion — lets the admin exclude one field of
@@ -309,6 +325,14 @@ export default function CmsTranslatePage() {
       return next;
     });
   };
+
+  // Split preview results so review is one product at a time (Next/Prev) instead of one
+  // long scrolling list, and so items that errored or were skipped never show up in that
+  // browser — they land in their own list below instead, with the reason clearly stated.
+  const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
+  const translatedReviewItems = useMemo(() => reviewItems.filter((i) => i.status === "translated"), [reviewItems]);
+  const problemReviewItems = useMemo(() => reviewItems.filter((i) => i.status !== "translated"), [reviewItems]);
+  const currentReviewItem = translatedReviewItems[Math.min(currentReviewIndex, translatedReviewItems.length - 1)];
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const canPreview = selectedIds.size > 0 && validMappings.length > 0 && !isTranslating;
@@ -349,6 +373,7 @@ export default function CmsTranslatePage() {
     setWriteItems([]);
     setWriteSummary(null);
     setExcludedFieldKeys(new Set());
+    setCurrentReviewIndex(0);
 
     const ids = Array.from(selectedIds);
     setPreviewProgress({ done: 0, total: ids.length });
@@ -367,6 +392,8 @@ export default function CmsTranslatePage() {
           itemIds: chunk,
           fieldMappings: fieldMappingsPayload(),
           overwrite,
+          sourceLocale,
+          targetLocale,
         }),
       });
 
@@ -470,7 +497,7 @@ export default function CmsTranslatePage() {
             Dịch CMS Anh → Việt
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Đọc field tiếng Anh trực tiếp từ Wix CMS, dịch bằng AI để xem trước, rồi chỉ ghi vào field tiếng Việt sau khi bạn đã kiểm tra và duyệt — không dùng Wix Multilingual.
+            Đọc field trực tiếp từ Wix CMS, dịch bằng AI để xem trước, rồi chỉ ghi vào field còn lại sau khi bạn đã kiểm tra và duyệt — không dùng Wix Multilingual. Hỗ trợ cả 2 chiều Anh ↔ Việt.
           </p>
         </div>
 
@@ -504,11 +531,35 @@ export default function CmsTranslatePage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Chiều dịch</label>
+                <div className="flex items-center gap-2">
+                  <Select value={direction} onValueChange={(v) => setDirection(v as Direction)}>
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en-vi">Tiếng Anh → Tiếng Việt</SelectItem>
+                      <SelectItem value="vi-en">Tiếng Việt → Tiếng Anh</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={reverseDirection}
+                    title="Đảo chiều và đổi field nguồn/đích cho từng cặp đã chọn"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cặp field cần dịch (EN → VI)</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Cặp field cần dịch ({sourceLocale.toUpperCase()} → {targetLocale.toUpperCase()})
+                </p>
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={addMapping} disabled={availableFields.length === 0}>
                   <Plus className="w-3.5 h-3.5" />
                   Thêm field
@@ -535,10 +586,13 @@ export default function CmsTranslatePage() {
                       <div key={index} className="space-y-1.5">
                         <div className="flex items-center gap-2">
                           <Select value={mapping.sourceField} onValueChange={(v) => updateMapping(index, { sourceField: v })}>
-                            <SelectTrigger className="flex-1"><SelectValue placeholder="Field nguồn (EN)" /></SelectTrigger>
+                            <SelectTrigger className="flex-1"><SelectValue placeholder={`Field nguồn (${sourceLocale.toUpperCase()})`} /></SelectTrigger>
                             <SelectContent>
                               {availableFields.map((f) => (
-                                <SelectItem key={f.key} value={f.key}>{f.displayName}</SelectItem>
+                                <SelectItem key={f.key} value={f.key}>
+                                  {f.displayName}
+                                  <span className="text-muted-foreground text-[10px] ml-1">({f.key} · {f.type})</span>
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -558,10 +612,13 @@ export default function CmsTranslatePage() {
                             )}
                           </span>
                           <Select value={mapping.targetField} onValueChange={(v) => updateMapping(index, { targetField: v })}>
-                            <SelectTrigger className="flex-1"><SelectValue placeholder="Field đích (VI, hoặc chọn lại field nguồn để dịch tại chỗ)" /></SelectTrigger>
+                            <SelectTrigger className="flex-1"><SelectValue placeholder={`Field đích (${targetLocale.toUpperCase()}, hoặc chọn lại field nguồn để dịch tại chỗ)`} /></SelectTrigger>
                             <SelectContent>
                               {availableFields.map((f) => (
-                                <SelectItem key={f.key} value={f.key}>{f.displayName}</SelectItem>
+                                <SelectItem key={f.key} value={f.key}>
+                                  {f.displayName}
+                                  <span className="text-muted-foreground text-[10px] ml-1">({f.key} · {f.type})</span>
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -570,6 +627,7 @@ export default function CmsTranslatePage() {
                             <SelectContent>
                               <SelectItem value="text">text</SelectItem>
                               <SelectItem value="richText">richText</SelectItem>
+                              <SelectItem value="json">json (mảng/object)</SelectItem>
                             </SelectContent>
                           </Select>
                           <Button
@@ -585,8 +643,13 @@ export default function CmsTranslatePage() {
                         {isInPlace && (
                           <p className="text-[11px] text-amber-700 flex items-center gap-1.5 pl-1">
                             <AlertTriangle className="w-3 h-3 shrink-0" />
-                            Field này không có bản VI riêng — bản dịch sẽ GHI ĐÈ vĩnh viễn lên nội dung tiếng Anh gốc.
-                            {!overwrite && ' Cần bật "Ghi đè nội dung tiếng Việt hiện có" bên dưới, nếu không field này sẽ bị bỏ qua.'}
+                            Field này không có bản {targetLocale.toUpperCase()} riêng — bản dịch sẽ GHI ĐÈ vĩnh viễn lên nội dung {sourceLocale.toUpperCase()} gốc.
+                            {!overwrite && ' Cần bật "Ghi đè nội dung hiện có" bên dưới, nếu không field này sẽ bị bỏ qua.'}
+                          </p>
+                        )}
+                        {mapping.type === "json" && (
+                          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pl-1">
+                            Field này phải là mảng/object (VD: danh sách FAQ) — mọi chuỗi text bên trong sẽ được dịch, giữ nguyên cấu trúc. Ở bước duyệt, nội dung hiện dưới dạng JSON, sửa tay vẫn phải là JSON hợp lệ.
                           </p>
                         )}
                       </div>
@@ -601,7 +664,7 @@ export default function CmsTranslatePage() {
 
             <label className={cn("flex items-center gap-2 text-sm cursor-pointer select-none w-fit", hasInPlaceMapping && !overwrite && "text-amber-700 font-semibold")}>
               <Checkbox checked={overwrite} onCheckedChange={(v) => setOverwrite(Boolean(v))} />
-              Ghi đè nội dung tiếng Việt hiện có
+              Ghi đè nội dung {targetLocale.toUpperCase()} hiện có
             </label>
           </CardContent>
           )}
@@ -613,7 +676,7 @@ export default function CmsTranslatePage() {
               <CardTitle className="text-base">Sản phẩm trong CMS</CardTitle>
               <CardDescription>
                 {total > 0
-                  ? `Tổng ${total} sản phẩm trong collection — tick thủ công tối đa ${MAX_BATCH_SELECT} item, hoặc "Chọn toàn bộ" để dịch nhiều hơn (tối đa ${SELECT_ALL_CAP}).`
+                  ? `Tổng ${total} sản phẩm trong collection — tick thủ công tối đa ${MAX_BATCH_SELECT} item, hoặc "Chọn toàn bộ" để dịch cả collection (chạy tuần tự theo từng đợt ${CHUNK_SIZE} item).`
                   : "Chọn các item cần dịch."}
               </CardDescription>
             </div>
@@ -764,7 +827,7 @@ export default function CmsTranslatePage() {
                   onClick={() => void selectAllMatching()}
                   disabled={isSelectingAll || !collectionKey || itemsLoading}
                 >
-                  {isSelectingAll ? "Đang chọn toàn bộ..." : "Chọn toàn bộ sản phẩm phù hợp"}
+                  {isSelectingAll ? "Đang chọn toàn bộ..." : "Chọn toàn bộ sản phẩm"}
                 </button>
                 {selectedIds.size > 0 && (
                   <button type="button" className="text-xs text-muted-foreground hover:text-foreground underline shrink-0" onClick={() => setSelectedIds(new Set())}>
@@ -843,57 +906,123 @@ export default function CmsTranslatePage() {
                 </button>
               </div>
 
-              {reviewItems.map((item) => {
-                const status = STATUS_LABEL[item.status];
-                return (
-                  <div key={item.itemId} className="rounded-xl border p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-semibold text-sm">{item.name}</span>
-                      <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
-                    </div>
+              {translatedReviewItems.length > 1 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 px-3 py-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1.5"
+                    disabled={currentReviewIndex === 0}
+                    onClick={() => setCurrentReviewIndex((i) => Math.max(0, i - 1))}
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Sản phẩm trước
+                  </Button>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    Sản phẩm {currentReviewIndex + 1}/{translatedReviewItems.length}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1.5"
+                    disabled={currentReviewIndex >= translatedReviewItems.length - 1}
+                    onClick={() => setCurrentReviewIndex((i) => Math.min(translatedReviewItems.length - 1, i + 1))}
+                  >
+                    Sản phẩm tiếp theo
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
 
-                    {item.error && (
-                      <div className="text-xs rounded-lg px-3 py-2 border bg-red-500/5 border-red-500/20 text-red-600 flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                        {item.error}
-                      </div>
-                    )}
-                    {item.reason && !item.error && (
-                      <div className="text-xs rounded-lg px-3 py-2 border bg-amber-500/5 border-amber-500/20 text-amber-700">{item.reason}</div>
-                    )}
+              {currentReviewItem ? (
+                <div className="rounded-xl border p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-semibold text-sm">{currentReviewItem.name}</span>
+                    <Badge variant="outline" className={cn("text-[10px] font-bold", STATUS_LABEL[currentReviewItem.status].className)}>
+                      {STATUS_LABEL[currentReviewItem.status].label}
+                    </Badge>
+                  </div>
 
-                    {item.fieldValues &&
-                      Object.entries(item.fieldValues).map(([key, field]) => {
-                        const included = isFieldIncluded(item.itemId, key);
-                        return (
-                          <div key={key} className="space-y-1.5 rounded-lg border border-border/60 p-3">
-                            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                              <Checkbox checked={included} onCheckedChange={() => toggleFieldIncluded(item.itemId, key)} />
-                              Ghi field &quot;{fieldDisplayNameByKey[key] || key}&quot; cho sản phẩm này
-                            </label>
-                            <div className={cn("grid grid-cols-1 lg:grid-cols-2 gap-3", !included && "opacity-40")}>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{key} (gốc EN)</label>
-                                <div className="min-h-[70px] w-full p-2.5 text-xs rounded-lg border bg-muted/40 whitespace-pre-wrap">
-                                  {field.source || <span className="italic text-muted-foreground">(Trống)</span>}
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{key} (bản dịch VI — có thể sửa)</label>
-                                <textarea
-                                  value={field.translated}
-                                  onChange={(e) => handleEditTranslated(item.itemId, key, e.target.value)}
-                                  disabled={!included}
-                                  className="min-h-[70px] w-full p-2.5 text-xs rounded-lg border-2 border-primary/25 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 resize-y disabled:cursor-not-allowed"
-                                />
+                  {currentReviewItem.fieldValues &&
+                    Object.entries(currentReviewItem.fieldValues).map(([key, field]) => {
+                      const included = isFieldIncluded(currentReviewItem.itemId, key);
+                      const isJson = fieldTypeByTargetKey[key] === "json";
+                      const boxHeight = isJson ? "min-h-[160px]" : "min-h-[70px]";
+                      return (
+                        <div key={key} className="space-y-1.5 rounded-lg border border-border/60 p-3">
+                          <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+                            <Checkbox checked={included} onCheckedChange={() => toggleFieldIncluded(currentReviewItem.itemId, key)} />
+                            Ghi field &quot;{fieldDisplayNameByKey[key] || key}&quot; cho sản phẩm này
+                            {isJson && <span className="text-[10px] font-normal text-muted-foreground">(JSON)</span>}
+                          </label>
+                          <div className={cn("grid grid-cols-1 lg:grid-cols-2 gap-3", !included && "opacity-40")}>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{key} (gốc {sourceLocale.toUpperCase()})</label>
+                              <div className={cn(boxHeight, "w-full p-2.5 text-xs rounded-lg border bg-muted/40 whitespace-pre-wrap", isJson && "font-mono overflow-y-auto max-h-64")}>
+                                {field.source || <span className="italic text-muted-foreground">(Trống)</span>}
                               </div>
                             </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{key} (bản dịch {targetLocale.toUpperCase()} — có thể sửa)</label>
+                              <textarea
+                                value={field.translated}
+                                onChange={(e) => handleEditTranslated(currentReviewItem.itemId, key, e.target.value)}
+                                disabled={!included}
+                                className={cn(
+                                  boxHeight,
+                                  "w-full p-2.5 text-xs rounded-lg border-2 border-primary/25 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 resize-y disabled:cursor-not-allowed",
+                                  isJson && "font-mono"
+                                )}
+                              />
+                            </div>
                           </div>
-                        );
-                      })}
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic text-center py-6">Không có sản phẩm nào dịch thành công để duyệt.</p>
+              )}
+
+              {problemReviewItems.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {problemReviewItems.length} sản phẩm gặp lỗi hoặc bị bỏ qua — không cần duyệt, chỉ để bạn biết vì sao
+                  </p>
+                  <div className="border rounded-xl overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Sản phẩm</TableHead>
+                          <TableHead>Trạng thái</TableHead>
+                          <TableHead>Lý do</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {problemReviewItems.map((item) => {
+                          const status = STATUS_LABEL[item.status];
+                          return (
+                            <TableRow key={item.itemId}>
+                              <TableCell className="font-medium max-w-[220px] truncate" title={item.name}>{item.name}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground max-w-[420px]">
+                                {item.error ? (
+                                  <span className="text-red-600 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" />{item.error}</span>
+                                ) : (
+                                  item.reason || "—"
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </div>
-                );
-              })}
+                </div>
+              )}
             </CardContent>
             )}
           </Card>

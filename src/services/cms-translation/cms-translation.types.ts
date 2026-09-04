@@ -21,7 +21,13 @@
  *      again, so what gets written is what a human actually checked.
  */
 
-export type CmsFieldContentType = "text" | "richText";
+/**
+ * "json" is for a field whose value is an array or object (e.g. a FAQ list, a spec array of
+ * `{key, value}` objects) — every string leaf inside is translated, the array/object shape is
+ * preserved, and the review UI shows/edits it as pretty-printed JSON text (parsed back into the
+ * real array/object right before writing — see `translateOneItemWrite()`).
+ */
+export type CmsFieldContentType = "text" | "richText" | "json";
 
 export interface FieldMapping {
   sourceField: string;
@@ -59,6 +65,10 @@ export interface TranslateCmsOptions {
   overwrite?: boolean;
   /** Items processed per page (when itemIds isn't given) and read concurrency. Default 5, capped at 20. */
   batchSize?: number;
+  /** Language read from `sourceField`. Default "en". */
+  sourceLocale?: string;
+  /** Language written to `targetField`. Default "vi". */
+  targetLocale?: string;
 }
 
 export interface CmsTranslationFieldPreview {

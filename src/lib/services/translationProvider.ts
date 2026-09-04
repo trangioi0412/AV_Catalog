@@ -1,8 +1,9 @@
 /**
  * translationProvider.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Vietnamese → English text translation for AV product content, tuned for
- * professional Audio Visual System terminology. Three interchangeable providers:
+ * Vietnamese <-> English text translation (direction set per-request via
+ * `TranslationRequest.sourceLocale`/`targetLocale`) for AV product content,
+ * tuned for professional Audio Visual System terminology. Three interchangeable providers:
  *   - Gemini (GEMINI_API_KEY, @google/genai — see geminiEnricher.ts)
  *   - GPT / OpenAI (GPT_API_KEY, plain REST call — no SDK dependency added)
  *   - Ollama (OLLAMA_BASE_URL [+ optional OLLAMA_API_KEY, OLLAMA_MODEL] — a
@@ -46,11 +47,10 @@ export interface TranslationRequest {
   fields: Record<string, string>;
   context?: { brand?: string; category?: string; productName?: string };
   /**
-   * Locale codes (e.g. "vi", "en"). Only consulted by the Ollama provider's
-   * per-field prompt (`buildOllamaPrompt()`), which translates in whichever
-   * direction these say — including English -> Vietnamese. Gemini/GPT's
-   * shared `buildPrompt()` is still fixed to Vietnamese -> English regardless
-   * of these and ignores them; not in scope of this change.
+   * Locale codes (e.g. "vi", "en"). Every provider's prompt honors whichever
+   * direction these say — including English -> Vietnamese, not just the
+   * original Vietnamese -> English. Defaults to "vi" -> "en" when omitted,
+   * matching every existing caller that predates direction support.
    */
   sourceLocale?: string;
   targetLocale?: string;
@@ -78,7 +78,9 @@ export interface TranslationProvider {
 }
 
 function buildPrompt(input: TranslationRequest): string {
-  const { fields, context } = input;
+  const { fields, context, sourceLocale = "vi", targetLocale = "en" } = input;
+  const sourceName = englishLocaleName(sourceLocale);
+  const targetName = englishLocaleName(targetLocale);
   const contextLines = [
     context?.brand ? `Brand: ${context.brand}` : null,
     context?.category ? `Category: ${context.category}` : null,
@@ -86,7 +88,7 @@ function buildPrompt(input: TranslationRequest): string {
   ].filter(Boolean);
 
   return `You are a professional technical translator for the Audio Visual (AV) systems integration industry.
-Translate the following product content from Vietnamese to English.
+Translate the following product content from ${sourceName} to ${targetName}.
 
 THIS IS A TRANSLATION TASK, NOT A REWRITING, SUMMARIZING, OR MARKETING-COPY TASK. Your only job is to
 re-express the exact same meaning in the target language — nothing more, nothing less. Every sentence,
@@ -105,7 +107,7 @@ Rules:
 - Never translate brand names, model numbers, units, or these protocol/standard/product names — copy them verbatim wherever they appear: ${AV_PROTECTED_TERMS.join(", ")}.
 - Preserve any HTML tags, links, numbers, and formatting exactly as they appear in the source.
 - If a source field is an empty string, return it as an empty string. Do not fabricate content for it.
-- Return ONLY a JSON object with exactly the same field keys as the input, each mapped to its English translation.
+- Return ONLY a JSON object with exactly the same field keys as the input, each mapped to its ${targetName} translation.
 
 ${contextLines.length > 0 ? contextLines.join("\n") + "\n\n" : ""}Fields to translate (JSON):
 ${JSON.stringify(fields, null, 2)}`;
@@ -123,11 +125,11 @@ function ollamaLocaleFullName(locale: string): string {
   return OLLAMA_LOCALE_FULL_NAMES[locale.toLowerCase()] || locale.toUpperCase();
 }
 
-/** English display names for the locales TranslateGemma's (English-language) prompt template needs. */
-const TRANSLATEGEMMA_LOCALE_NAMES: Record<string, string> = { vi: "Vietnamese", en: "English" };
+/** English display names for locales — used by prompts written in English: buildPrompt() (Gemini/GPT) and TranslateGemma's required template. */
+const ENGLISH_LOCALE_NAMES: Record<string, string> = { vi: "Vietnamese", en: "English" };
 
-function translateGemmaLocaleName(locale: string): string {
-  return TRANSLATEGEMMA_LOCALE_NAMES[locale.toLowerCase()] || locale;
+function englishLocaleName(locale: string): string {
+  return ENGLISH_LOCALE_NAMES[locale.toLowerCase()] || locale;
 }
 
 /** True for any TranslateGemma variant/tag (e.g. "translategemma:12b", "translategemma3:12b-it-q4_K_M"). */
@@ -144,8 +146,8 @@ function isTranslateGemmaModel(model: string): boolean {
  * library page.
  */
 function buildTranslateGemmaPrompt(content: string, sourceLocale = "vi", targetLocale = "en"): string {
-  const sourceLang = translateGemmaLocaleName(sourceLocale);
-  const targetLang = translateGemmaLocaleName(targetLocale);
+  const sourceLang = englishLocaleName(sourceLocale);
+  const targetLang = englishLocaleName(targetLocale);
   const sourceCode = sourceLocale.toLowerCase();
   const targetCode = targetLocale.toLowerCase();
 
@@ -563,6 +565,22 @@ export function getTranslationProviderKind(): TranslationProviderKind | null {
 /** Whether any translation provider (Ollama, GPT, or Gemini) is configured. */
 export function isTranslationProviderConfigured(): boolean {
   return resolveProviderKind() !== null;
+}
+
+/**
+ * How many items a batch translation should process concurrently against `kind`. Cloud
+ * providers (Gemini/GPT) genuinely serve concurrent requests, so they keep whatever
+ * concurrency the caller asked for. A local/self-hosted Ollama server serves ONE
+ * generation at a time regardless — running several items against it concurrently
+ * doesn't translate any faster, it just queues requests behind each other until enough
+ * of them individually blow through the per-request timeout ("Translation request timed
+ * out.") even though the model itself was never stuck, just backed up. Forcing
+ * concurrency to 1 for Ollama makes each request's timeout budget apply to actual
+ * generation time again, instead of generation time PLUS however long several other
+ * items ahead of it in the queue take.
+ */
+export function getSafeConcurrency(requestedConcurrency: number, kind: TranslationProviderKind | null): number {
+  return kind === "ollama" ? 1 : requestedConcurrency;
 }
 
 /** The model name of the currently-active provider, or null if none is configured. */

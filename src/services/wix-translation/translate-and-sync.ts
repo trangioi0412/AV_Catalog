@@ -40,7 +40,7 @@ import {
   WixMultilingualError,
   type BulkContentInput,
 } from "./wix-multilingual.service";
-import { getWixTranslationProvider, TranslationProviderError } from "./translation-provider.service";
+import { getWixTranslationProvider, getSafeConcurrency, getTranslationProviderKind, TranslationProviderError } from "./translation-provider.service";
 import { computeSourceHash, sanitizeFieldKeys, sanitizeHtmlForPreview } from "./translation-mapper.service";
 import type {
   TranslateAndSyncWixCmsItemsInput,
@@ -213,7 +213,11 @@ async function runPreview(
   fieldKeys: string[],
   overwriteExisting: boolean
 ): Promise<TranslationItemResult[]> {
-  return mapWithConcurrency(input.itemIds, TRANSLATION_CONCURRENCY, async (itemId): Promise<TranslationItemResult> => {
+  // A local/self-hosted Ollama server can't usefully serve concurrent requests — see
+  // getSafeConcurrency(). Only the AI-calling step needs this; Wix reads/writes elsewhere
+  // in this file keep the configured TRANSLATION_CONCURRENCY.
+  const concurrency = getSafeConcurrency(TRANSLATION_CONCURRENCY, input.providerKind ?? getTranslationProviderKind());
+  return mapWithConcurrency(input.itemIds, concurrency, async (itemId): Promise<TranslationItemResult> => {
     // Populated as soon as the Wix CMS read succeeds, so that a later failure
     // (AI provider rate-limited, timed out, etc.) still lets the review UI show
     // the Vietnamese original instead of "(Trống)" — the original content was

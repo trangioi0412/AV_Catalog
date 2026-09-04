@@ -1,9 +1,11 @@
 /**
  * POST /api/admin/cms-translate
  * ─────────────────────────────────────────────────────────────────────────────
- * Two-step, human-in-the-loop translation of English field(s) on Wix CMS
- * item(s) into their sibling Vietnamese field(s) — see
- * `translateCmsEnglishToVietnamese()`.
+ * Two-step, human-in-the-loop translation of field(s) on Wix CMS item(s) into
+ * their sibling field(s) in the other language — see
+ * `translateCmsEnglishToVietnamese()`. `sourceLocale`/`targetLocale` pick the
+ * direction (default "en" -> "vi"); a field mapping's `type` can be "json" to
+ * translate the string content of an array/object field instead of plain text.
  *   - `mode: "preview"` (needs `itemIds`): AI-translates and returns the
  *     result for review. Never writes to Wix.
  *   - `mode: "write"` (needs `items`, the admin-approved/edited values from a
@@ -45,19 +47,26 @@ const fieldNameSchema = z
   .refine((v) => !SYSTEM_FIELD_DENYLIST.has(v), { message: "System fields cannot be used in a field mapping." });
 
 // sourceField may equal targetField — an "in place" translation for a field with no
-// separate VI sibling. translateCmsEnglishToVietnamese() only ever writes it when
-// `overwrite: true`, since source and target reading the same value otherwise makes
-// the field look "already filled in" and it gets skipped.
+// separate sibling in the other language. translateCmsEnglishToVietnamese() only ever
+// writes it when `overwrite: true`, since source and target reading the same value
+// otherwise makes the field look "already filled in" and it gets skipped.
+// type "json" is for a field whose value is an array/object (e.g. a FAQ list) — every
+// string leaf inside is translated, see flattenTranslatableLeaves() in the service.
 const fieldMappingSchema = z.object({
   sourceField: fieldNameSchema,
   targetField: fieldNameSchema,
-  type: z.enum(["text", "richText"]),
+  type: z.enum(["text", "richText", "json"]),
 });
 
 const itemInputSchema = z.object({
   itemId: z.string().min(1).max(100),
   fieldValues: z.record(z.string(), z.string().max(100000)),
 });
+
+// A plain locale code, e.g. "en" or "vi" — not validated against a fixed set here so the
+// AI provider layer's own locale-name fallback (locale.toUpperCase()) still applies to
+// anything unexpected, but bounded so it can't carry an oversized/malicious string.
+const localeSchema = z.string().min(2).max(20);
 
 const requestSchema = z
   .object({
@@ -68,6 +77,11 @@ const requestSchema = z
     items: z.array(itemInputSchema).min(1).max(MAX_ITEMS).optional(),
     overwrite: z.boolean().optional().default(false),
     batchSize: z.coerce.number().int().min(1).max(20).optional().default(5),
+    sourceLocale: localeSchema.optional().default("en"),
+    targetLocale: localeSchema.optional().default("vi"),
+  })
+  .refine((v) => v.sourceLocale !== v.targetLocale, {
+    message: "sourceLocale and targetLocale must differ.",
   })
   .refine((v) => v.mode !== "preview" || (v.itemIds && v.itemIds.length > 0), {
     message: 'itemIds is required for mode "preview".',

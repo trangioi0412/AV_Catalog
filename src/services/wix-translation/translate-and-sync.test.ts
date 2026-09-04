@@ -28,6 +28,8 @@ vi.mock("./wix-multilingual.service", () => ({
 
 vi.mock("./translation-provider.service", () => ({
   getWixTranslationProvider: vi.fn(),
+  getTranslationProviderKind: vi.fn(() => "gemini"),
+  getSafeConcurrency: vi.fn((requested: number) => requested),
   TranslationProviderError: class extends Error {
     code: string;
     constructor(message: string, code = "UPSTREAM_ERROR") {
@@ -47,7 +49,8 @@ import {
   bulkUpdateContentByKey,
   verifyTranslationContent,
 } from "./wix-multilingual.service";
-import { getWixTranslationProvider } from "./translation-provider.service";
+import { getWixTranslationProvider, getSafeConcurrency } from "./translation-provider.service";
+import { TRANSLATION_CONCURRENCY } from "@/config/wix-translation.config";
 import { translateAndSyncWixCmsItems } from "./translate-and-sync";
 import type { TranslateAndSyncWixCmsItemsInput } from "@/types/wix-translation";
 import type { TranslationContent, TranslationSchema, WixLocale } from "./wix-multilingual.service";
@@ -176,6 +179,19 @@ describe("translateAndSyncWixCmsItems", () => {
       expect(result.items[0].sourceHash).toBeTruthy();
       expect(bulkCreateContent).not.toHaveBeenCalled();
       expect(bulkUpdateContentByKey).not.toHaveBeenCalled();
+    });
+
+    it("computes AI-call concurrency via getSafeConcurrency, using the request's providerKind override when given, else the auto-resolved kind", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ title: "Neat Bar", productOverview: "Mo ta" });
+      vi.mocked(getWixTranslationProvider).mockReturnValue({
+        translate: vi.fn().mockResolvedValue({ fields: { title: "Neat Bar" }, provider: "gemini", translatedAt: "now", warnings: [] }),
+      });
+
+      await translateAndSyncWixCmsItems(baseInput());
+      expect(getSafeConcurrency).toHaveBeenLastCalledWith(TRANSLATION_CONCURRENCY, "gemini");
+
+      await translateAndSyncWixCmsItems(baseInput({ providerKind: "ollama" }));
+      expect(getSafeConcurrency).toHaveBeenLastCalledWith(TRANSLATION_CONCURRENCY, "ollama");
     });
 
     it("does not call the AI provider again for a field that already has a saved translation, unless overwriteExisting is set", async () => {

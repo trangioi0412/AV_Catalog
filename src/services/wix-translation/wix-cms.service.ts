@@ -11,6 +11,7 @@
 
 import { wixDataFetch, WixServerClientError } from "@/lib/wix/server-client";
 import { getRawCmsItem, findCollectionSchema, type TranslationSchema } from "@/lib/services/wixMultilingual";
+import { waitForWixWriteRateLimitSlot } from "@/lib/wix/rateLimiter";
 
 export interface WixCmsListItem {
   itemId: string;
@@ -112,18 +113,39 @@ export interface WixCmsUpdateResult {
   error?: string;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const WRITE_RATE_LIMIT_MAX_RETRIES = 3;
+// Wix's quota here (WDE0014) is per MINUTE, not per second — a short backoff wouldn't have
+// cleared it, so this starts at 3s and escalates (3s, 6s, 12s) instead of the sub-second
+// backoff that's enough for typical per-second rate limits elsewhere in this codebase.
+const WRITE_RATE_LIMIT_BASE_DELAY_MS = 3000;
+
 /**
  * Partially updates one or more plain fields on an existing CMS item (PATCH —
  * fields not listed here are left untouched). Used for collections that keep
  * separate physical fields per language on the same item (e.g. `title_EN` /
  * `title_VI`) rather than Wix Multilingual's translation-schema model —
  * that model still must go through the Translation Content API instead (see
- * `wix-multilingual.service.ts`).
+ * `wix-multilingual.service.ts`). A value may be a plain string or, for an
+ * array/object-typed field, the parsed array/object itself.
+ *
+ * Two layers of defense against Wix's own per-minute write quota (429 / e.g. "WDE0014:
+ * Requests per minute quota exceeded"), which a bulk translation run writing many items
+ * back to back can realistically hit:
+ *   1. Paced proactively (`waitForWixWriteRateLimitSlot()`) so writes don't fire faster
+ *      than the quota can plausibly absorb in the first place — concurrency limits alone
+ *      only cap how many are in flight at once, not how many happen per minute.
+ *   2. If a 429 slips through anyway, retried with escalating backoff — transient, not a
+ *      reason to fail that item. Any other error (validation, permissions, item not
+ *      found, ...) fails immediately, no retry.
  */
 export async function updateWixCmsItemFields(
   collectionId: string,
   itemId: string,
-  fields: Record<string, string>
+  fields: Record<string, unknown>
 ): Promise<WixCmsUpdateResult> {
   const fieldModifications = Object.entries(fields).map(([fieldPath, value]) => ({
     fieldPath,
@@ -132,15 +154,23 @@ export async function updateWixCmsItemFields(
   }));
   if (fieldModifications.length === 0) return { success: true };
 
-  try {
-    await wixDataFetch(
-      `items/${encodeURIComponent(itemId)}`,
-      { dataCollectionId: collectionId, patch: { fieldModifications } },
-      "PATCH"
-    );
-    return { success: true };
-  } catch (err) {
-    if (err instanceof WixServerClientError) return { success: false, error: err.message };
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await waitForWixWriteRateLimitSlot();
+      await wixDataFetch(
+        `items/${encodeURIComponent(itemId)}`,
+        { dataCollectionId: collectionId, patch: { fieldModifications } },
+        "PATCH"
+      );
+      return { success: true };
+    } catch (err) {
+      const rateLimited = err instanceof WixServerClientError && err.code === "RATE_LIMITED";
+      if (rateLimited && attempt < WRITE_RATE_LIMIT_MAX_RETRIES) {
+        await sleep(WRITE_RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt);
+        continue;
+      }
+      if (err instanceof WixServerClientError) return { success: false, error: err.message };
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 }
