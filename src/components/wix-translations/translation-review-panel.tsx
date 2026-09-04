@@ -263,12 +263,19 @@ export function TranslationReviewPanel(props: TranslationReviewPanelProps) {
       if (successCount > 0) {
         toast.success(`Đã lưu ${successCount} bản dịch vào Wix Multilingual${mode === "publish" ? " và xuất bản" : " (bản nháp)"}.`);
         hasEditsRef.current = false;
-        onSaved();
       }
       if (failedCount > 0) toast.warning(`${failedCount} mục gặp lỗi khi lưu.`);
+
       if (needsOverwrite.length > 0 && overwriteIds.length === 0) {
+        // Some items still need an explicit overwrite confirmation (the AlertDialog below) —
+        // onSaved() must wait until that's resolved. The caller (the page) may respond to
+        // onSaved by closing/remounting this panel (e.g. to advance a multi-batch run), which
+        // would otherwise take this pending confirmation dialog down with it before the admin
+        // ever saw it.
         setPendingMode(mode);
         setPendingOverwriteIds(needsOverwrite);
+      } else if (successCount > 0) {
+        onSaved();
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Lỗi kết nối khi lưu bản dịch.");

@@ -21,14 +21,18 @@
  *
  * Two-step, human-in-the-loop flow — see `CmsTranslationMode`:
  *   - mode "preview": AI-translates the selected fields and returns them;
- *     never writes to Wix. Records each successfully-translated item's
- *     timestamp (`translation-timestamp-store.ts`) and skips it on a later
- *     preview run within `RECENTLY_TRANSLATED_COOLDOWN_MS` — a rerun (e.g. of
- *     "Chọn toàn bộ") shouldn't re-translate items a prior run just handled.
+ *     never writes to Wix.
  *   - mode "write": writes back exactly the admin-approved (possibly
  *     hand-edited) values submitted from that preview — never calls the AI
  *     provider again, so a stray/incorrect AI answer can't reach the CMS
- *     without a person having looked at it first.
+ *     without a person having looked at it first. Records each successfully
+ *     WRITTEN field's timestamp (`translation-timestamp-store.ts`) and skips
+ *     re-translating it on a later preview run within
+ *     `RECENTLY_TRANSLATED_COOLDOWN_MS` — a rerun (e.g. of "Chọn toàn bộ")
+ *     shouldn't re-translate fields a prior run already landed in Wix CMS.
+ *     Deliberately NOT recorded on a mere preview: a translation the admin
+ *     never approved (or that failed to write) must stay eligible for an
+ *     immediate retry, not get cooled down as if it had already succeeded.
  *
  * Reuses the project's existing building blocks rather than introducing a
  * parallel stack:
@@ -362,13 +366,10 @@ async function translateOneItemPreview(
       sourcePreviewByTargetKey[targetKey] = fieldsToTranslate[targetKey];
     }
 
-    // Recorded per FIELD, only once its translation actually succeeded — a failed/skipped
-    // field should still be eligible for a retry on the next run, not silently cooled down
-    // too, and a field that was never touched this run keeps its own independent cooldown.
-    for (const targetKey of Object.keys(translatedFieldValues)) {
-      recordTranslated(collectionId, itemId, targetKey);
-    }
-
+    // Cooldown is recorded on WRITE (translateOneItemWrite), not here — an AI preview that
+    // never gets approved/written (admin rejects it, the write fails, or they just navigate
+    // away) must not block a retry preview of the same field, only a field actually written
+    // to Wix CMS counts as "just translated".
     const fieldValues = Object.fromEntries(
       Object.entries(translatedFieldValues).map(([key, translated]) => [key, { source: sourcePreviewByTargetKey[key], translated }])
     );
@@ -444,6 +445,14 @@ async function translateOneItemWrite(
     if (!writeResult.success) {
       return { itemId: item.itemId, name, status: "failed", error: writeResult.error || "Wix CMS update failed." };
     }
+
+    // Cooldown starts here, per FIELD, only now that it's actually landed in Wix CMS — a
+    // preview the admin never approved (or a write that failed) must not count as "just
+    // translated" and block a retry preview of the same field.
+    for (const key of Object.keys(fieldsToWrite)) {
+      recordTranslated(collectionId, item.itemId, key);
+    }
+
     return { itemId: item.itemId, name, status: "updated", translatedFields: Object.keys(fieldsToWrite) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -342,7 +342,7 @@ describe("translateCmsEnglishToVietnamese", () => {
       expect(result.items[0].status).toBe("translated");
     });
 
-    it("records the translation timestamp only after a successful translation, not for a skipped/failed item", async () => {
+    it("never records a translation timestamp from a preview, even on a successful translation — only a real write to Wix CMS should start the cooldown", async () => {
       vi.mocked(getWixCmsItemById).mockResolvedValue({ title_EN: "Neat Bar" });
       vi.mocked(getTranslationProvider).mockReturnValue({
         translate: vi.fn().mockResolvedValue({ fields: { title_VI: "Bàn Neat" }, warnings: [] }),
@@ -351,14 +351,6 @@ describe("translateCmsEnglishToVietnamese", () => {
       await translateCmsEnglishToVietnamese(
         previewOptions({ fieldMappings: [{ sourceField: "title_EN", targetField: "title_VI", type: "text" }] })
       );
-
-      expect(recordTranslated).toHaveBeenCalledWith("Import1", "item-1", "title_VI");
-    });
-
-    it("does not record a timestamp for an item with nothing to translate", async () => {
-      vi.mocked(getWixCmsItemById).mockResolvedValue({}); // no source content at all
-
-      await translateCmsEnglishToVietnamese(previewOptions());
 
       expect(recordTranslated).not.toHaveBeenCalled();
     });
@@ -574,6 +566,32 @@ describe("translateCmsEnglishToVietnamese", () => {
       const result = await translateCmsEnglishToVietnamese(writeOptions());
 
       expect(result.items[0]).toMatchObject({ status: "failed", error: "Wix API 409 conflict" });
+    });
+
+    it("records the translation timestamp once a field is actually written to Wix CMS", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ title_EN: "Neat Bar", title_VI: "" });
+      vi.mocked(updateWixCmsItemFields).mockResolvedValue({ success: true });
+
+      await translateCmsEnglishToVietnamese(writeOptions());
+
+      expect(recordTranslated).toHaveBeenCalledWith("Import1", "item-1", "title_VI");
+    });
+
+    it("does not record a timestamp when the Wix CMS write fails — a failed write must stay eligible for an immediate retry", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ title_EN: "Neat Bar", title_VI: "" });
+      vi.mocked(updateWixCmsItemFields).mockResolvedValue({ success: false, error: "Wix API 409 conflict" });
+
+      await translateCmsEnglishToVietnamese(writeOptions());
+
+      expect(recordTranslated).not.toHaveBeenCalled();
+    });
+
+    it("does not record a timestamp when there's nothing approved to write (skipped)", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ title_EN: "Neat Bar", title_VI: "" });
+
+      await translateCmsEnglishToVietnamese(writeOptions({ items: [{ itemId: "item-1", fieldValues: { title_VI: "   " } }] }));
+
+      expect(recordTranslated).not.toHaveBeenCalled();
     });
 
     it("isolates one item's write failure from the rest of the batch", async () => {

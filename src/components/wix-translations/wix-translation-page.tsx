@@ -15,6 +15,9 @@ import { TranslatedContentViewer } from "@/components/wix-translations/translate
 import type { CmsTranslationStatus, WixTranslationConfigResponse, WixTranslationListItem } from "@/types/wix-translation";
 
 const PAGE_SIZE = 20;
+// Must match MAX_TRANSLATION_BATCH_SIZE in @/config/wix-translation.config — the server hard-caps
+// both /preview's itemIds and /save's items at this many per request (not importable here: that
+// config module also reads server-only env vars that shouldn't end up in the client bundle).
 const MAX_BATCH_SELECT = 20;
 
 const STATUS_LABEL: Record<CmsTranslationStatus, { label: string; className: string }> = {
@@ -52,9 +55,20 @@ export function WixTranslationPage() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // "Chọn toàn bộ" can select items well beyond the current page, so their display name isn't
+  // in `items` (only the current page's 20 rows) — collected alongside itemId there so the
+  // review panel can still show a real product name for every item in the batch queue below.
+  const [selectedNamesById, setSelectedNamesById] = useState<Record<string, string>>({});
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
 
   const [reviewOpen, setReviewOpen] = useState(false);
   const [viewingItemId, setViewingItemId] = useState<string | null>(null);
+  // Selecting more than MAX_BATCH_SELECT items chunks them into successive batches of
+  // MAX_BATCH_SELECT (the server's hard per-request cap) run one after another through the
+  // SAME review panel — each batch still gets a full human preview/edit/save step, just
+  // auto-advancing to the next batch instead of making the admin reselect items each time.
+  const [batchQueue, setBatchQueue] = useState<string[][]>([]);
+  const [batchIndex, setBatchIndex] = useState(0);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fieldsCollectionRef = useRef<string>("");
@@ -174,6 +188,44 @@ export function WixTranslationPage() {
     });
   };
 
+  // Selects every item matching the current search across the WHOLE collection, not just the
+  // current page — bypasses MAX_BATCH_SELECT (that cap is for manual checkbox clicks only).
+  // "Dịch các mục đã chọn" below then runs this selection through the review panel in
+  // successive MAX_BATCH_SELECT-sized batches instead of one oversized request.
+  const selectAllMatching = async () => {
+    if (!collectionKey || !targetLocale || isSelectingAll) return;
+    setIsSelectingAll(true);
+    const collectedIds: string[] = [];
+    const collectedNames: Record<string, string> = {};
+    const FETCH_LIMIT = 50; // fewer round trips than the display page size
+    try {
+      let p = 1;
+      let serverTotal = Infinity;
+      while ((p - 1) * FETCH_LIMIT < serverTotal) {
+        const params = new URLSearchParams({ collectionKey, targetLocale, page: String(p), limit: String(FETCH_LIMIT), search });
+        const { ok, json } = await fetchJson(`/api/admin/wix-translations/items?${params.toString()}`);
+        if (!ok) {
+          toast.error(json?.error || "Không thể tải danh sách sản phẩm.");
+          break;
+        }
+        const pageItems = (json.items || []) as WixTranslationListItem[];
+        serverTotal = json.total ?? 0;
+        if (pageItems.length === 0) break;
+        for (const it of pageItems) {
+          collectedIds.push(it.itemId);
+          collectedNames[it.itemId] = it.name;
+        }
+        p++;
+      }
+    } finally {
+      setIsSelectingAll(false);
+    }
+
+    setSelectedIds(new Set(collectedIds));
+    setSelectedNamesById(collectedNames);
+    toast.success(`Đã chọn ${collectedIds.length} sản phẩm.`);
+  };
+
   const toggleField = (key: string) => {
     setSelectedFieldKeys((prev) => {
       const next = new Set(prev);
@@ -183,7 +235,12 @@ export function WixTranslationPage() {
     });
   };
 
-  const itemNamesById = useMemo(() => Object.fromEntries(items.map((i) => [i.itemId, i.name])), [items]);
+  // Current page's names take priority (freshest), falling back to whatever selectAllMatching()
+  // collected for ids that are outside the current page.
+  const itemNamesById = useMemo(
+    () => ({ ...selectedNamesById, ...Object.fromEntries(items.map((i) => [i.itemId, i.name])) }),
+    [items, selectedNamesById]
+  );
   const selectedFieldDefs = useMemo(
     () => (config?.fields || []).filter((f) => selectedFieldKeys.has(f.key)).map((f) => ({ key: f.key, displayName: f.displayName, type: f.type })),
     [config, selectedFieldKeys]
@@ -208,6 +265,21 @@ export function WixTranslationPage() {
     Boolean(config?.wixConfigured) &&
     Boolean(config?.multilingualReady) &&
     selectedProviderConfigured;
+
+  // Splits the current selection into MAX_BATCH_SELECT-sized batches and opens the review
+  // panel on the first one; onSaved (below) advances through the rest automatically.
+  const startTranslateSelected = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += MAX_BATCH_SELECT) chunks.push(ids.slice(i, i + MAX_BATCH_SELECT));
+    setBatchQueue(chunks);
+    setBatchIndex(0);
+    setReviewOpen(true);
+  };
+
+  const currentBatchIds = batchQueue[batchIndex] || [];
+  const isBatchedRun = batchQueue.length > 1;
 
   if (configLoading) {
     return (
@@ -363,7 +435,11 @@ export function WixTranslationPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="text-base">Sản phẩm trong CMS</CardTitle>
-            <CardDescription>Chọn tối đa {MAX_BATCH_SELECT} sản phẩm mỗi lần dịch.</CardDescription>
+            <CardDescription>
+              {total > 0
+                ? `Tổng ${total} sản phẩm — tick thủ công tối đa ${MAX_BATCH_SELECT} item, hoặc "Chọn toàn bộ" để dịch cả collection (chạy tuần tự theo từng đợt ${MAX_BATCH_SELECT} item).`
+                : `Chọn tối đa ${MAX_BATCH_SELECT} sản phẩm mỗi lần tick, hoặc "Chọn toàn bộ" để dịch cả collection theo từng đợt.`}
+            </CardDescription>
           </div>
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => loadItems()} disabled={itemsLoading}>
             <RefreshCw className={cn("w-3.5 h-3.5", itemsLoading && "animate-spin")} />
@@ -382,19 +458,43 @@ export function WixTranslationPage() {
                 className="w-full pl-9 pr-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>
-            {selectedIds.size > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-primary">Đã chọn {selectedIds.size} sản phẩm</span>
-                <Button size="sm" className="h-8 text-xs gap-1.5" disabled={!canTranslate} onClick={() => setReviewOpen(true)}>
-                  <Languages className="w-3.5 h-3.5" />
-                  Dịch các mục đã chọn
-                </Button>
-                <button className="text-xs text-muted-foreground hover:text-foreground underline" onClick={() => setSelectedIds(new Set())}>
-                  Bỏ chọn
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline font-semibold disabled:opacity-50 disabled:no-underline shrink-0"
+                onClick={() => void selectAllMatching()}
+                disabled={isSelectingAll || !collectionKey || !targetLocale || itemsLoading}
+              >
+                {isSelectingAll ? "Đang chọn toàn bộ..." : "Chọn toàn bộ sản phẩm"}
+              </button>
+              {selectedIds.size > 0 && (
+                <>
+                  <span className="text-xs font-semibold text-primary">Đã chọn {selectedIds.size} sản phẩm</span>
+                  <Button size="sm" className="h-8 text-xs gap-1.5" disabled={!canTranslate} onClick={startTranslateSelected}>
+                    <Languages className="w-3.5 h-3.5" />
+                    Dịch các mục đã chọn
+                    {selectedIds.size > MAX_BATCH_SELECT ? ` (${Math.ceil(selectedIds.size / MAX_BATCH_SELECT)} đợt)` : ""}
+                  </Button>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => {
+                      setSelectedIds(new Set());
+                      setSelectedNamesById({});
+                    }}
+                  >
+                    Bỏ chọn
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {isBatchedRun && reviewOpen && (
+            <div className="flex items-center gap-2 rounded-lg border bg-primary/5 border-primary/20 px-3 py-2 text-xs font-semibold text-primary">
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+              Đang dịch theo đợt — Đợt {batchIndex + 1}/{batchQueue.length} ({currentBatchIds.length} sản phẩm/đợt). Lưu xong một đợt sẽ tự động mở đợt tiếp theo.
+            </div>
+          )}
 
           {itemsError && <Alert message={itemsError} onRetry={loadItems} />}
 
@@ -517,10 +617,14 @@ export function WixTranslationPage() {
         />
       )}
 
-      {reviewOpen && config && (
+      {reviewOpen && config && currentBatchIds.length > 0 && (
         <TranslationReviewPanel
+          // Remounts the panel fresh for each batch — it only ever runs its AI preview once per
+          // mount (see startedRef in TranslationReviewPanel), so a new itemIds array for the next
+          // batch needs a new instance, not a prop update on the same one.
+          key={batchIndex}
           open={reviewOpen}
-          itemIds={Array.from(selectedIds)}
+          itemIds={currentBatchIds}
           itemNamesById={itemNamesById}
           fields={selectedFieldDefs}
           collectionKey={collectionKey}
@@ -529,11 +633,24 @@ export function WixTranslationPage() {
           overwriteExisting={overwriteMode === "overwrite"}
           providerKind={providerKind || undefined}
           providerModel={providerKind === "ollama" ? effectiveOllamaModel || undefined : undefined}
-          onClose={() => setReviewOpen(false)}
-          onSaved={() => {
+          onClose={() => {
             setReviewOpen(false);
-            setSelectedIds(new Set());
-            void loadItems();
+            setBatchQueue([]);
+            setBatchIndex(0);
+          }}
+          onSaved={() => {
+            const nextIndex = batchIndex + 1;
+            if (nextIndex < batchQueue.length) {
+              setBatchIndex(nextIndex);
+              void loadItems();
+            } else {
+              setReviewOpen(false);
+              setBatchQueue([]);
+              setBatchIndex(0);
+              setSelectedIds(new Set());
+              setSelectedNamesById({});
+              void loadItems();
+            }
           }}
         />
       )}
