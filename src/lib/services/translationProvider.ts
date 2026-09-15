@@ -31,11 +31,21 @@
 import { GoogleGenAI } from "@google/genai";
 import { AV_GLOSSARY_TERMS } from "@/config/translation-glossary";
 
-const GEMINI_MODEL = "gemini-2.5-pro";
+// gemini-2.5-pro was retired ("no longer available to new users" per the API's own
+// 404 response) — verified live that gemini-3.1-pro-preview is Google's current
+// replacement (resolves; gemini-2.5-pro 404s with this exact suggestion).
+const GEMINI_MODEL = "gemini-3.1-pro-preview";
 const GPT_MODEL = process.env.GPT_MODEL || "gpt-4o";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1";
-const TRANSLATE_TIMEOUT_MS = 30000;
+// A "json" field mapping (e.g. a long FAQ/spec list) flattens every string leaf into ONE
+// request, and Gemini 2.5 Pro's schema-constrained JSON mode can take a while on a large
+// payload — 30s, then 60s, both still tripped "Translation request timed out." on legitimate,
+// still-in-progress calls. Callers also retry transient TIMEOUT errors (see
+// translateWithRetry() in translate-cms.service.ts / translate-and-sync.ts), so this is the
+// per-attempt budget, not the total time before giving up. Env-overridable in case a
+// particular collection's content still needs more.
+const TRANSLATE_TIMEOUT_MS = Number(process.env.TRANSLATE_TIMEOUT_MS) || 120000;
 // Local/self-hosted model inference is typically much slower than a cloud API.
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 120000;
 

@@ -16,6 +16,12 @@ export interface EnrichInput {
   Category?: string;
 }
 
+/** A citation the Google Search-grounded research step relied on — surfaced so a human can verify the enrichment/fix before trusting it. */
+export interface GroundingSource {
+  title: string;
+  url: string;
+}
+
 export interface EnrichedProductOutput {
   Category: string;
   Product: string;
@@ -28,6 +34,26 @@ export interface EnrichedProductOutput {
   image: string;
   Brand: string;
   Datasheet: string;
+  /** Web sources the research step (Google Search grounding) cited — see extractGroundingSources(). */
+  sources: GroundingSource[];
+}
+
+/**
+ * Pulls the web citations Gemini's Google Search grounding actually used out of
+ * the research response, deduped by URL. Lets a human verify a fix/enrichment
+ * traces back to real manufacturer sources instead of trusting the model blind.
+ */
+function extractGroundingSources(response: Awaited<ReturnType<GoogleGenAI["models"]["generateContent"]>>): GroundingSource[] {
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  const seen = new Set<string>();
+  const sources: GroundingSource[] = [];
+  for (const chunk of chunks) {
+    const url = chunk.web?.uri;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    sources.push({ title: chunk.web?.title || url, url });
+  }
+  return sources;
 }
 
 /**
@@ -162,7 +188,7 @@ Present your research findings clearly. Include the exact URL links for the imag
 
   console.log("[Gemini Agent] Running Step 1: Research with Search Grounding...");
   const researchResponse = await ai.models.generateContent({
-    model: "gemini-2.5-pro",
+    model: "gemini-3.1-pro-preview",
     contents: researchPrompt,
     config: {
       tools: [
@@ -177,7 +203,8 @@ Present your research findings clearly. Include the exact URL links for the imag
   if (!researchText) {
     throw new Error("Research Agent failed to return any content.");
   }
-  console.log("[Gemini Agent] Step 1 finished. Received research findings.");
+  const sources = extractGroundingSources(researchResponse);
+  console.log(`[Gemini Agent] Step 1 finished. Received research findings with ${sources.length} cited source(s).`);
 
   // ==========================================
   // STEP 2: Parser Agent (JSON Schema Enforcement)
@@ -202,7 +229,7 @@ Guidelines:
 
   console.log("[Gemini Agent] Running Step 2: Parsing into Structured JSON...");
   const parserResponse = await ai.models.generateContent({
-    model: "gemini-2.5-pro",
+    model: "gemini-3.1-pro-preview",
     contents: parserPrompt,
     config: {
       responseMimeType: "application/json",
@@ -322,6 +349,7 @@ Guidelines:
     image: parserData.image,
     Brand: parserData.Brand,
     Datasheet: parserData.Datasheet,
+    sources,
   };
 
   // ==========================================
@@ -405,7 +433,7 @@ Do NOT attempt to search for specifications, images, datasheets, or overviews in
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-pro",
+    model: "gemini-3.1-pro-preview",
     contents: discoveryPrompt,
     config: {
       tools: [

@@ -91,11 +91,14 @@ const STATUS_LABEL: Record<ItemStatus, { label: string; className: string }> = {
 
 const EMPTY_MAPPING_ROW: FieldMappingRow = { sourceField: "", targetField: "", type: "text" };
 const PAGE_SIZE = 20;
-// Matches MAX_ITEMS in /api/admin/cms-translate — the most one preview/write request can carry.
-// Manual (checkbox) selection stays capped here to keep that the ordinary path; "Chọn toàn bộ"
-// below intentionally exceeds it and is sent as multiple CHUNK_SIZE-sized requests instead.
+// The most a manual (checkbox) selection can carry in one go — also matches MAX_ITEMS in
+// /api/admin/cms-translate. "Chọn toàn bộ" intentionally exceeds it and is sent as multiple
+// CHUNK_SIZE-sized requests instead.
 const MAX_BATCH_SELECT = 50;
-const CHUNK_SIZE = MAX_BATCH_SELECT;
+// Deliberately smaller than MAX_ITEMS (50) — every chunk this size or smaller is one request,
+// so the progress counter, review list, and "last processed" name all update every ~10 items
+// instead of jumping in blocks of 50, making a long "Chọn toàn bộ" run visibly keep moving.
+const CHUNK_SIZE = 10;
 
 async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
@@ -149,15 +152,18 @@ export default function CmsTranslatePage() {
   const [isTranslating, setIsTranslating] = useState(false);
   const [reviewItems, setReviewItems] = useState<ResultItem[]>([]);
   const [previewSummary, setPreviewSummary] = useState<RunSummary | null>(null);
-  const [previewProgress, setPreviewProgress] = useState({ done: 0, total: 0 });
+  const [previewProgress, setPreviewProgress] = useState({ done: 0, total: 0, batch: 0, totalBatches: 0, lastItemName: "" });
 
   const [isWriting, setIsWriting] = useState(false);
   const [writeItems, setWriteItems] = useState<ResultItem[]>([]);
   const [writeSummary, setWriteSummary] = useState<RunSummary | null>(null);
-  const [writeProgress, setWriteProgress] = useState({ done: 0, total: 0 });
+  const [writeProgress, setWriteProgress] = useState({ done: 0, total: 0, batch: 0, totalBatches: 0, lastItemName: "" });
   const [confirmWrite, setConfirmWrite] = useState(false);
 
   const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [isSelectingRange, setIsSelectingRange] = useState(false);
 
   // Each step auto-collapses once it's done, to keep the page tidy — the chevron in its
   // header always lets it be re-opened (e.g. to change field mappings and re-run Step 1).
@@ -284,6 +290,65 @@ export default function CmsTranslatePage() {
     toast.success(`Đã chọn ${collected.length} sản phẩm.`);
   };
 
+  // Selects the sub-range [from, to] (1-based, inclusive) of the CURRENT search-filtered
+  // listing's order — e.g. "100 -> 200" picks the 100th through 200th product in the same
+  // order "Chọn toàn bộ" would enumerate them. Jumps straight to the page containing `from`
+  // instead of walking from page 1, since every earlier page is guaranteed full (FETCH_LIMIT
+  // items) once the server has reported a total that big.
+  const selectRange = async () => {
+    if (!collectionKey || isSelectingRange) return;
+    const from = Number.parseInt(rangeFrom, 10);
+    const to = Number.parseInt(rangeTo, 10);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from < 1 || to < from) {
+      toast.error('Nhập khoảng thứ tự hợp lệ, ví dụ "Từ 100 đến 200".');
+      return;
+    }
+
+    setIsSelectingRange(true);
+    const collected: string[] = [];
+    const FETCH_LIMIT = 50;
+    const startPage = Math.floor((from - 1) / FETCH_LIMIT) + 1;
+    try {
+      let p = startPage;
+      let serverTotal = Infinity;
+      let index = (startPage - 1) * FETCH_LIMIT; // count of items on every page before startPage
+      while (index < to && (p - 1) * FETCH_LIMIT < serverTotal) {
+        const params = new URLSearchParams({
+          collectionKey,
+          page: String(p),
+          limit: String(FETCH_LIMIT),
+          search,
+          targetFields: targetFieldsKey,
+        });
+        const { ok, json } = await fetchJson(`/api/admin/cms-translate/items?${params.toString()}`);
+        if (!ok) {
+          toast.error(json?.error || "Không thể tải danh sách sản phẩm.");
+          break;
+        }
+        const pageItems = (json.items || []) as ListItem[];
+        serverTotal = json.total ?? 0;
+        if (pageItems.length === 0) break;
+        for (const it of pageItems) {
+          index++;
+          if (index < from) continue;
+          if (index > to) break;
+          if (hideTranslated && it.translated) continue;
+          collected.push(it.itemId);
+        }
+        p++;
+      }
+    } finally {
+      setIsSelectingRange(false);
+    }
+
+    if (collected.length === 0) {
+      toast.warning(`Không có sản phẩm nào ở thứ tự ${from}–${to} (kiểm tra lại tổng số sản phẩm đang có).`);
+      return;
+    }
+    setSelectedIds(new Set(collected));
+    toast.success(`Đã chọn ${collected.length} sản phẩm (thứ tự ${from}–${to}).`);
+  };
+
   const updateMapping = (index: number, patch: Partial<FieldMappingRow>) => {
     setFieldMappings((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)));
   };
@@ -365,6 +430,9 @@ export default function CmsTranslatePage() {
   // (MAX_ITEMS server-side), so this always runs in CHUNK_SIZE-sized requests, one at a
   // time, updating reviewItems/previewSummary/previewProgress incrementally as each
   // chunk comes back — a single click still translates everything selected.
+  // A chunk failing (timeout, network blip, rate limit) never aborts the whole run: it's
+  // recorded as failed and the loop moves on to the next chunk, so "Chọn toàn bộ" always
+  // keeps going until every selected product has been attempted, not just the first chunk.
   const runPreview = async () => {
     if (!canPreview) return;
     setIsTranslating(true);
@@ -376,12 +444,15 @@ export default function CmsTranslatePage() {
     setCurrentReviewIndex(0);
 
     const ids = Array.from(selectedIds);
-    setPreviewProgress({ done: 0, total: ids.length });
+    const totalBatches = Math.ceil(ids.length / CHUNK_SIZE);
+    setPreviewProgress({ done: 0, total: ids.length, batch: 0, totalBatches, lastItemName: "" });
     const collected: ResultItem[] = [];
     const summary = emptySummary();
-    let succeeded = true;
+    let failedBatches = 0;
 
     for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const batchNumber = i / CHUNK_SIZE + 1;
+      setPreviewProgress((p) => ({ ...p, batch: batchNumber }));
       const chunk = ids.slice(i, i + CHUNK_SIZE);
       const { ok, json } = await fetchJson("/api/admin/cms-translate", {
         method: "POST",
@@ -397,43 +468,47 @@ export default function CmsTranslatePage() {
         }),
       });
 
+      let chunkResults: ResultItem[];
       if (!ok) {
-        toast.error(json?.error || "Dịch thất bại.");
-        succeeded = false;
-        // The request itself failed (not a per-item error) — every item still unprocessed
-        // (this chunk plus anything after it) is kept as its own "failed" result instead of
-        // silently vanishing, so it still shows up (with its ID) for a filtered retry below
-        // rather than forcing a full re-run of the whole selection.
-        const remaining = ids.slice(i);
-        const failedResults: ResultItem[] = remaining.map((itemId) => ({
+        failedBatches++;
+        toast.error(
+          `Đợt ${batchNumber}/${totalBatches} thất bại — ${json?.error || "yêu cầu tới server không thành công"}. Đang tiếp tục đợt tiếp theo...`
+        );
+        // Only THIS chunk's items are marked failed — every other chunk (already done or
+        // still ahead) is unaffected, so a single bad batch never stops the rest of the run.
+        chunkResults = chunk.map((itemId) => ({
           itemId,
           name: itemId,
           status: "failed",
           error: json?.error || "Dịch thất bại — yêu cầu tới server không thành công.",
         }));
-        collected.push(...failedResults);
-        summary.total += failedResults.length;
-        summary.failed += failedResults.length;
-        setReviewItems([...collected]);
-        setPreviewSummary({ ...summary });
-        break;
+        collected.push(...chunkResults);
+        summary.total += chunkResults.length;
+        summary.failed += chunkResults.length;
+      } else {
+        chunkResults = json.items || [];
+        collected.push(...chunkResults);
+        addSummary(summary, json.summary);
       }
 
-      collected.push(...(json.items || []));
-      addSummary(summary, json.summary);
       setReviewItems([...collected]);
       setPreviewSummary({ ...summary });
-      setPreviewProgress((p) => ({ done: Math.min(p.total, p.done + chunk.length), total: p.total }));
+      const lastName = chunkResults.length > 0 ? chunkResults[chunkResults.length - 1].name : "";
+      setPreviewProgress((p) => ({ ...p, done: Math.min(p.total, p.done + chunk.length), lastItemName: lastName || p.lastItemName }));
     }
 
     setIsTranslating(false);
 
-    if (succeeded) {
-      toast.success(`Đã dịch xong: ${summary.translated} sản phẩm — hãy kiểm tra rồi bấm "Ghi vào CMS".`);
+    if (failedBatches === 0) {
+      toast.success(`Đã dịch xong toàn bộ ${ids.length} sản phẩm đã chọn: ${summary.translated} sản phẩm — hãy kiểm tra rồi bấm "Ghi vào CMS".`);
       setSetupCollapsed(true);
       setItemsCollapsed(true);
-    } else if (collected.length > 0) {
-      toast.info(`Đã giữ lại ${collected.length - summary.failed} kết quả dịch thành công trước đó — các sản phẩm còn lại có thể lọc theo ID để dịch lại.`);
+    } else {
+      toast.info(
+        `Đã dịch xong toàn bộ ${ids.length} sản phẩm đã chọn (${failedBatches}/${totalBatches} đợt gặp lỗi — ${summary.failed} sản phẩm cần dịch lại, có thể lọc theo ID bên dưới).`
+      );
+      setSetupCollapsed(true);
+      setItemsCollapsed(true);
     }
   };
 
@@ -446,18 +521,24 @@ export default function CmsTranslatePage() {
     );
   };
 
+  // Same continue-through-failures behavior as runPreview(): a batch that fails to write
+  // (timeout, network blip, Wix rate limit) is recorded as failed but never stops the run —
+  // every remaining batch of approved items still gets attempted.
   const runWrite = async () => {
     if (approvedItems.length === 0) return;
     setIsWriting(true);
     setWriteItems([]);
     setWriteSummary(null);
-    setWriteProgress({ done: 0, total: approvedItems.length });
+    const totalBatches = Math.ceil(approvedItems.length / CHUNK_SIZE);
+    setWriteProgress({ done: 0, total: approvedItems.length, batch: 0, totalBatches, lastItemName: "" });
 
     const collected: ResultItem[] = [];
     const summary = emptySummary();
-    let succeeded = true;
+    let failedBatches = 0;
 
     for (let i = 0; i < approvedItems.length; i += CHUNK_SIZE) {
+      const batchNumber = i / CHUNK_SIZE + 1;
+      setWriteProgress((p) => ({ ...p, batch: batchNumber }));
       const chunk = approvedItems.slice(i, i + CHUNK_SIZE);
       const { ok, json } = await fetchJson("/api/admin/cms-translate", {
         method: "POST",
@@ -478,41 +559,45 @@ export default function CmsTranslatePage() {
         }),
       });
 
+      let chunkResults: ResultItem[];
       if (!ok) {
-        toast.error(json?.error || "Ghi vào CMS thất bại.");
-        succeeded = false;
-        // Same reasoning as runPreview(): a whole-request failure shouldn't erase the items
-        // that already wrote successfully, and the ones left over (this chunk onward) still
-        // need to be visible — with their ID — so they can be filtered and retried.
-        const remaining = approvedItems.slice(i);
-        const failedResults: ResultItem[] = remaining.map((item) => ({
+        failedBatches++;
+        toast.error(
+          `Đợt ${batchNumber}/${totalBatches} ghi thất bại — ${json?.error || "yêu cầu tới server không thành công"}. Đang tiếp tục đợt tiếp theo...`
+        );
+        // Only THIS chunk's items are marked failed — batches already written, or still
+        // ahead, are unaffected, so a single bad batch never stops the rest of the write.
+        chunkResults = chunk.map((item) => ({
           itemId: item.itemId,
           name: item.name,
           status: "failed",
           error: json?.error || "Ghi vào CMS thất bại — yêu cầu tới server không thành công.",
         }));
-        collected.push(...failedResults);
-        summary.total += failedResults.length;
-        summary.failed += failedResults.length;
-        setWriteItems([...collected]);
-        setWriteSummary({ ...summary });
-        break;
+        collected.push(...chunkResults);
+        summary.total += chunkResults.length;
+        summary.failed += chunkResults.length;
+      } else {
+        chunkResults = json.items || [];
+        collected.push(...chunkResults);
+        addSummary(summary, json.summary);
       }
 
-      collected.push(...(json.items || []));
-      addSummary(summary, json.summary);
       setWriteItems([...collected]);
       setWriteSummary({ ...summary });
-      setWriteProgress((p) => ({ done: Math.min(p.total, p.done + chunk.length), total: p.total }));
+      const lastName = chunkResults.length > 0 ? chunkResults[chunkResults.length - 1].name : "";
+      setWriteProgress((p) => ({ ...p, done: Math.min(p.total, p.done + chunk.length), lastItemName: lastName || p.lastItemName }));
     }
 
     setIsWriting(false);
 
-    if (succeeded) {
-      toast.success(`Đã ghi ${summary.updated} sản phẩm lên Wix CMS.`);
+    if (failedBatches === 0) {
+      toast.success(`Đã ghi xong toàn bộ: ${summary.updated} sản phẩm lên Wix CMS.`);
       setReviewCollapsed(true);
-    } else if (collected.length > 0) {
-      toast.info(`Đã giữ lại ${collected.length - summary.failed} kết quả ghi thành công trước đó — các sản phẩm còn lại có thể lọc theo ID để thử lại.`);
+    } else {
+      toast.info(
+        `Đã ghi xong toàn bộ ${approvedItems.length} sản phẩm đã duyệt (${failedBatches}/${totalBatches} đợt gặp lỗi — ${summary.failed} sản phẩm cần thử lại, có thể lọc theo ID bên dưới).`
+      );
+      setReviewCollapsed(true);
     }
   };
 
@@ -856,10 +941,19 @@ export default function CmsTranslatePage() {
             {isTranslating && previewProgress.total > 0 && (
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                  <span>Đang dịch với AI...</span>
-                  <span>{previewProgress.done}/{previewProgress.total}</span>
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Đang dịch với AI
+                    {previewProgress.totalBatches > 1 ? ` — đợt ${previewProgress.batch}/${previewProgress.totalBatches}, đang tiếp tục tự động...` : "..."}
+                  </span>
+                  <span>{previewProgress.done}/{previewProgress.total} sản phẩm</span>
                 </div>
                 <Progress value={(previewProgress.done / Math.max(1, previewProgress.total)) * 100} />
+                {previewProgress.lastItemName && (
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    Vừa xử lý xong: <span className="font-medium text-foreground">{previewProgress.lastItemName}</span>
+                  </p>
+                )}
               </div>
             )}
 
@@ -874,6 +968,34 @@ export default function CmsTranslatePage() {
                 >
                   {isSelectingAll ? "Đang chọn toàn bộ..." : "Chọn toàn bộ sản phẩm"}
                 </button>
+                <div className="flex items-center gap-1.5 shrink-0" title="Chọn theo thứ tự sản phẩm trong danh sách hiện tại (vd. Từ 100 đến 200 = sản phẩm thứ 100 tới thứ 200)">
+                  <span className="text-xs text-muted-foreground">Chọn theo thứ tự:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Từ"
+                    value={rangeFrom}
+                    onChange={(e) => setRangeFrom(e.target.value)}
+                    className="w-16 h-7 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  />
+                  <span className="text-xs text-muted-foreground">→</span>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Đến"
+                    value={rangeTo}
+                    onChange={(e) => setRangeTo(e.target.value)}
+                    className="w-16 h-7 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  />
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline font-semibold disabled:opacity-50 disabled:no-underline shrink-0"
+                    onClick={() => void selectRange()}
+                    disabled={isSelectingRange || !collectionKey || itemsLoading || !rangeFrom || !rangeTo}
+                  >
+                    {isSelectingRange ? "Đang chọn..." : "Chọn"}
+                  </button>
+                </div>
                 {selectedIds.size > 0 && (
                   <button type="button" className="text-xs text-muted-foreground hover:text-foreground underline shrink-0" onClick={() => setSelectedIds(new Set())}>
                     Bỏ chọn tất cả
@@ -919,10 +1041,19 @@ export default function CmsTranslatePage() {
             {isWriting && writeProgress.total > 0 && (
               <div className="px-6 -mt-2 pb-2 space-y-1.5">
                 <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                  <span>Đang ghi vào Wix CMS...</span>
-                  <span>{writeProgress.done}/{writeProgress.total}</span>
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Đang ghi vào Wix CMS
+                    {writeProgress.totalBatches > 1 ? ` — đợt ${writeProgress.batch}/${writeProgress.totalBatches}, đang tiếp tục tự động...` : "..."}
+                  </span>
+                  <span>{writeProgress.done}/{writeProgress.total} sản phẩm</span>
                 </div>
                 <Progress value={(writeProgress.done / Math.max(1, writeProgress.total)) * 100} />
+                {writeProgress.lastItemName && (
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    Vừa ghi xong: <span className="font-medium text-foreground">{writeProgress.lastItemName}</span>
+                  </p>
+                )}
               </div>
             )}
             {!reviewCollapsed && (
@@ -1154,6 +1285,45 @@ export default function CmsTranslatePage() {
           </Card>
         )}
       </div>
+
+      {/* Always-visible progress banner — pinned to the viewport so it stays in sight no
+          matter where the admin has scrolled to, answering "how many products has this run
+          through so far" without hunting for the inline progress bar above. */}
+      {(isTranslating || isWriting) && (
+        <div className="fixed bottom-0 inset-x-0 z-50 border-t bg-background/95 backdrop-blur shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+          <div className="max-w-6xl mx-auto px-4 py-3 space-y-1.5">
+            {(() => {
+              const progress = isWriting ? writeProgress : previewProgress;
+              const label = isWriting ? "Đang ghi vào Wix CMS" : "Đang dịch với AI";
+              const lastLabel = isWriting ? "Vừa ghi xong" : "Vừa dịch xong";
+              return (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      {label}
+                      {progress.totalBatches > 1 && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          (đợt {progress.batch}/{progress.totalBatches})
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-sm font-bold tabular-nums">
+                      {progress.done}/{progress.total} sản phẩm
+                    </span>
+                  </div>
+                  <Progress value={(progress.done / Math.max(1, progress.total)) * 100} />
+                  {progress.lastItemName && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {lastLabel}: <span className="font-medium text-foreground">{progress.lastItemName}</span> — vẫn đang tự động tiếp tục, không cần thao tác gì thêm.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       <AlertDialog open={confirmWrite} onOpenChange={setConfirmWrite}>
         <AlertDialogContent>

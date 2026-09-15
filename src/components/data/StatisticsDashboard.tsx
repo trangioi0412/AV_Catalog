@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { exportWarningsToExcel, exportValidToExcel } from "@/lib/utils/exportUtils";
 
 export function StatisticsDashboard() {
-  const { stats, sheets, fileName, activeSheetIndex, deleteRowsWithIssues } = useDataStore();
+  const { stats, sheets, fileName, deleteRowsWithIssues } = useDataStore();
 
   const items = [
     {
@@ -131,8 +131,10 @@ export function StatisticsDashboard() {
                       className="h-6 text-[10px] px-2 py-0 cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Delete all rows containing validation errors or warnings from the active sheet?`)) {
-                          deleteRowsWithIssues(activeSheetIndex);
+                        // stats.validationErrors is a global count across every sheet, so
+                        // clearing it must clear issues from every sheet, not just the active one.
+                        if (confirm(`Delete all rows containing validation errors or warnings across every sheet?`)) {
+                          sheets.forEach((_, sIdx) => deleteRowsWithIssues(sIdx));
                           toast.success("Deleted all rows with validation issues");
                         }
                       }}

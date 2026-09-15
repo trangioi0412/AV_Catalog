@@ -69,7 +69,7 @@ describe("GET /api/admin/wix-translations/config", () => {
     vi.mocked(listAvailableTranslationProviders).mockReturnValue([
       { kind: "ollama", label: "Ollama (self-hosted)", defaultModel: "translategemma:12b", configured: true },
       { kind: "gpt", label: "GPT / OpenAI", defaultModel: "gpt-4o", configured: false },
-      { kind: "gemini", label: "Gemini", defaultModel: "gemini-2.5-pro", configured: false },
+      { kind: "gemini", label: "Gemini", defaultModel: "gemini-3.1-pro-preview", configured: false },
     ]);
 
     const res = await GET(makeRequest());
@@ -78,7 +78,7 @@ describe("GET /api/admin/wix-translations/config", () => {
     expect(json.availableProviders).toEqual([
       { kind: "ollama", label: "Ollama (self-hosted)", defaultModel: "translategemma:12b", configured: true },
       { kind: "gpt", label: "GPT / OpenAI", defaultModel: "gpt-4o", configured: false },
-      { kind: "gemini", label: "Gemini", defaultModel: "gemini-2.5-pro", configured: false },
+      { kind: "gemini", label: "Gemini", defaultModel: "gemini-3.1-pro-preview", configured: false },
     ]);
   });
 

@@ -40,7 +40,15 @@ import {
   WixMultilingualError,
   type BulkContentInput,
 } from "./wix-multilingual.service";
-import { getWixTranslationProvider, getSafeConcurrency, getTranslationProviderKind, TranslationProviderError } from "./translation-provider.service";
+import {
+  getWixTranslationProvider,
+  getSafeConcurrency,
+  getTranslationProviderKind,
+  TranslationProviderError,
+  type TranslationProvider,
+  type TranslationRequest,
+  type TranslationResult,
+} from "./translation-provider.service";
 import { computeSourceHash, sanitizeFieldKeys, sanitizeHtmlForPreview } from "./translation-mapper.service";
 import type {
   TranslateAndSyncWixCmsItemsInput,
@@ -65,6 +73,34 @@ export class TranslateAndSyncError extends Error {
     this.code = code;
     this.status = status;
   }
+}
+
+const RETRY_MAX_ATTEMPTS = 2;
+const RETRY_BASE_DELAY_MS = 800;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Retries a translation call on transient provider errors only — never on NOT_CONFIGURED/INVALID_RESPONSE, and never more than `maxRetries` times. Mirrors translateWithRetry() in translate-cms.service.ts. */
+async function translateWithRetry(
+  provider: TranslationProvider,
+  request: TranslationRequest,
+  maxRetries = RETRY_MAX_ATTEMPTS,
+  baseDelayMs = RETRY_BASE_DELAY_MS
+): Promise<TranslationResult> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await provider.translate(request);
+    } catch (err) {
+      lastErr = err;
+      const retryable = err instanceof TranslationProviderError && (err.code === "TIMEOUT" || err.code === "RATE_LIMITED" || err.code === "UPSTREAM_ERROR");
+      if (!retryable || attempt === maxRetries) throw err;
+      await sleep(baseDelayMs * 2 ** attempt);
+    }
+  }
+  throw lastErr;
 }
 
 function extractSourceFields(rawItem: Record<string, unknown>, fieldKeys: string[]): Record<string, string> {
@@ -262,7 +298,7 @@ async function runPreview(
         const toTranslate: Record<string, string> = {};
         for (const key of keysNeedingTranslation) toTranslate[key] = sourceFields[key];
 
-        const result = await provider.translate({
+        const result = await translateWithRetry(provider, {
           sourceLocale: input.sourceLocale,
           targetLocale: input.targetLocale,
           fields: toTranslate,

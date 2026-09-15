@@ -1,23 +1,55 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { Languages, Search, ChevronLeft, ChevronRight, AlertTriangle, Loader2, RefreshCw, Info } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Languages,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Search,
+  UploadCloud,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { TranslationReviewPanel } from "@/components/wix-translations/translation-review-panel";
 import { TranslatedContentViewer } from "@/components/wix-translations/translated-content-viewer";
-import type { CmsTranslationStatus, WixTranslationConfigResponse, WixTranslationListItem } from "@/types/wix-translation";
+import type {
+  CmsTranslationStatus,
+  TranslationItemResult,
+  WixTranslationConfigResponse,
+  WixTranslationListItem,
+} from "@/types/wix-translation";
 
 const PAGE_SIZE = 20;
 // Must match MAX_TRANSLATION_BATCH_SIZE in @/config/wix-translation.config — the server hard-caps
 // both /preview's itemIds and /save's items at this many per request (not importable here: that
 // config module also reads server-only env vars that shouldn't end up in the client bundle).
+// Only bounds manual (checkbox) selection now — every network call below sends exactly one item
+// at a time, so it's well under this cap regardless of how many are selected.
 const MAX_BATCH_SELECT = 20;
 
 const STATUS_LABEL: Record<CmsTranslationStatus, { label: string; className: string }> = {
@@ -25,6 +57,22 @@ const STATUS_LABEL: Record<CmsTranslationStatus, { label: string; className: str
   draft: { label: "Nháp", className: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
   published: { label: "Đã xuất bản", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
 };
+
+type ReviewItemStatus = "pending" | "translating" | "translated" | "failed" | "saving" | "saved" | "skipped";
+
+interface ReviewItemState {
+  itemId: string;
+  itemName: string;
+  status: ReviewItemStatus;
+  message?: string;
+  sourceFields: Record<string, string>;
+  translatedFields: Record<string, string>;
+  initialTranslatedFields: Record<string, string>;
+  sourceHash?: string;
+}
+
+/** Bước 1 (chọn sản phẩm) -> Bước 2 (tiến độ dịch, chạy tự động) -> Bước 3 (duyệt & đẩy lên Wix). */
+type FlowStep = "select" | "translating" | "review";
 
 async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
@@ -56,19 +104,39 @@ export function WixTranslationPage() {
   const [searchInput, setSearchInput] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // "Chọn toàn bộ" can select items well beyond the current page, so their display name isn't
-  // in `items` (only the current page's 20 rows) — collected alongside itemId there so the
-  // review panel can still show a real product name for every item in the batch queue below.
+  // in `items` (only the current page's 20 rows) — collected alongside itemId there so Bước 2/3
+  // can still show a real product name for every item, not just the ones on the visible page.
   const [selectedNamesById, setSelectedNamesById] = useState<Record<string, string>>({});
   const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [isSelectingRange, setIsSelectingRange] = useState(false);
 
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [viewingItemId, setViewingItemId] = useState<string | null>(null);
-  // Selecting more than MAX_BATCH_SELECT items chunks them into successive batches of
-  // MAX_BATCH_SELECT (the server's hard per-request cap) run one after another through the
-  // SAME review panel — each batch still gets a full human preview/edit/save step, just
-  // auto-advancing to the next batch instead of making the admin reselect items each time.
-  const [batchQueue, setBatchQueue] = useState<string[][]>([]);
-  const [batchIndex, setBatchIndex] = useState(0);
+
+  // Each step auto-collapses once it's done, to keep the page tidy — the chevron in its
+  // header always lets it be re-opened.
+  const [setupCollapsed, setSetupCollapsed] = useState(false);
+  const [itemsCollapsed, setItemsCollapsed] = useState(false);
+  const [translateCollapsed, setTranslateCollapsed] = useState(false);
+
+  const [flowStep, setFlowStep] = useState<FlowStep>("select");
+  const [orderedItemIds, setOrderedItemIds] = useState<string[]>([]);
+  const [itemsState, setItemsState] = useState<Record<string, ReviewItemState>>({});
+
+  // Bước 2 — one Wix API call per single product, so this ticks up one-by-one instead of
+  // jumping in batches: as soon as a product finishes translating, it's reflected here.
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translateProgress, setTranslateProgress] = useState({ done: 0, total: 0, lastItemName: "" });
+
+  // Bước 3 — same one-at-a-time behavior for saving/publishing to Wix.
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0, lastItemName: "" });
+  const [pendingOverwriteIds, setPendingOverwriteIds] = useState<string[] | null>(null);
+  const [pendingMode, setPendingMode] = useState<"draft" | "publish">("draft");
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
+  const hasEditsRef = useRef(false);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fieldsCollectionRef = useRef<string>("");
@@ -163,7 +231,7 @@ export function WixTranslationPage() {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else if (next.size < MAX_BATCH_SELECT) next.add(id);
-      else toast.warning(`Chỉ được chọn tối đa ${MAX_BATCH_SELECT} sản phẩm mỗi lần dịch.`);
+      else toast.warning(`Chỉ được chọn tối đa ${MAX_BATCH_SELECT} sản phẩm mỗi lần tick.`);
       return next;
     });
   };
@@ -178,7 +246,7 @@ export function WixTranslationPage() {
       } else {
         for (const id of pageIds) {
           if (next.size >= MAX_BATCH_SELECT) {
-            toast.warning(`Chỉ được chọn tối đa ${MAX_BATCH_SELECT} sản phẩm mỗi lần dịch.`);
+            toast.warning(`Chỉ được chọn tối đa ${MAX_BATCH_SELECT} sản phẩm mỗi lần tick.`);
             break;
           }
           next.add(id);
@@ -189,9 +257,8 @@ export function WixTranslationPage() {
   };
 
   // Selects every item matching the current search across the WHOLE collection, not just the
-  // current page — bypasses MAX_BATCH_SELECT (that cap is for manual checkbox clicks only).
-  // "Dịch các mục đã chọn" below then runs this selection through the review panel in
-  // successive MAX_BATCH_SELECT-sized batches instead of one oversized request.
+  // current page — no cap here (MAX_BATCH_SELECT is for manual checkbox clicks only), since
+  // Bước 2 below processes the selection one product at a time regardless of how many there are.
   const selectAllMatching = async () => {
     if (!collectionKey || !targetLocale || isSelectingAll) return;
     setIsSelectingAll(true);
@@ -224,6 +291,61 @@ export function WixTranslationPage() {
     setSelectedIds(new Set(collectedIds));
     setSelectedNamesById(collectedNames);
     toast.success(`Đã chọn ${collectedIds.length} sản phẩm.`);
+  };
+
+  // Selects the sub-range [from, to] (1-based, inclusive) of the CURRENT search-filtered
+  // listing's order — e.g. "100 -> 200" picks the 100th through 200th product in the same
+  // order "Chọn toàn bộ" would enumerate them. Jumps straight to the page containing `from`
+  // instead of walking from page 1, since every earlier page is guaranteed full (FETCH_LIMIT
+  // items) once the server has reported a total that big.
+  const selectRange = async () => {
+    if (!collectionKey || !targetLocale || isSelectingRange) return;
+    const from = Number.parseInt(rangeFrom, 10);
+    const to = Number.parseInt(rangeTo, 10);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from < 1 || to < from) {
+      toast.error('Nhập khoảng thứ tự hợp lệ, ví dụ "Từ 100 đến 200".');
+      return;
+    }
+
+    setIsSelectingRange(true);
+    const collectedIds: string[] = [];
+    const collectedNames: Record<string, string> = {};
+    const FETCH_LIMIT = 50;
+    const startPage = Math.floor((from - 1) / FETCH_LIMIT) + 1;
+    try {
+      let p = startPage;
+      let serverTotal = Infinity;
+      let index = (startPage - 1) * FETCH_LIMIT; // count of items on every page before startPage
+      while (index < to && (p - 1) * FETCH_LIMIT < serverTotal) {
+        const params = new URLSearchParams({ collectionKey, targetLocale, page: String(p), limit: String(FETCH_LIMIT), search });
+        const { ok, json } = await fetchJson(`/api/admin/wix-translations/items?${params.toString()}`);
+        if (!ok) {
+          toast.error(json?.error || "Không thể tải danh sách sản phẩm.");
+          break;
+        }
+        const pageItems = (json.items || []) as WixTranslationListItem[];
+        serverTotal = json.total ?? 0;
+        if (pageItems.length === 0) break;
+        for (const it of pageItems) {
+          index++;
+          if (index < from) continue;
+          if (index > to) break;
+          collectedIds.push(it.itemId);
+          collectedNames[it.itemId] = it.name;
+        }
+        p++;
+      }
+    } finally {
+      setIsSelectingRange(false);
+    }
+
+    if (collectedIds.length === 0) {
+      toast.warning(`Không có sản phẩm nào ở thứ tự ${from}–${to} (kiểm tra lại tổng số sản phẩm đang có).`);
+      return;
+    }
+    setSelectedIds(new Set(collectedIds));
+    setSelectedNamesById(collectedNames);
+    toast.success(`Đã chọn ${collectedIds.length} sản phẩm (thứ tự ${from}–${to}).`);
   };
 
   const toggleField = (key: string) => {
@@ -264,22 +386,258 @@ export function WixTranslationPage() {
     sourceLocale !== targetLocale &&
     Boolean(config?.wixConfigured) &&
     Boolean(config?.multilingualReady) &&
-    selectedProviderConfigured;
+    selectedProviderConfigured &&
+    !isTranslating;
 
-  // Splits the current selection into MAX_BATCH_SELECT-sized batches and opens the review
-  // panel on the first one; onSaved (below) advances through the rest automatically.
-  const startTranslateSelected = () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    const chunks: string[][] = [];
-    for (let i = 0; i < ids.length; i += MAX_BATCH_SELECT) chunks.push(ids.slice(i, i + MAX_BATCH_SELECT));
-    setBatchQueue(chunks);
-    setBatchIndex(0);
-    setReviewOpen(true);
+  function resetToSelect() {
+    setFlowStep("select");
+    setItemsState({});
+    setOrderedItemIds([]);
+    setCurrentReviewIndex(0);
+    setSetupCollapsed(false);
+    setItemsCollapsed(false);
+    setTranslateCollapsed(false);
+    setSelectedIds(new Set());
+    setSelectedNamesById({});
+    hasEditsRef.current = false;
+    void loadItems();
+  }
+
+  const handleResetClick = () => {
+    if (hasEditsRef.current) setConfirmReset(true);
+    else resetToSelect();
   };
 
-  const currentBatchIds = batchQueue[batchIndex] || [];
-  const isBatchedRun = batchQueue.length > 1;
+  // Bước 2 · Tiến độ dịch — one /preview call per single product, updating itemsState and
+  // translateProgress right after each one comes back, so the run visibly advances one product
+  // at a time instead of jumping in blocks. A failed item never stops the run — it's marked
+  // "failed" and the loop moves straight on to the next selected product.
+  const startTranslate = async () => {
+    if (!canTranslate) return;
+    const ids = Array.from(selectedIds);
+    const names = itemNamesById;
+
+    const initial: Record<string, ReviewItemState> = {};
+    for (const id of ids) {
+      initial[id] = { itemId: id, itemName: names[id] || id, status: "pending", sourceFields: {}, translatedFields: {}, initialTranslatedFields: {} };
+    }
+    setItemsState(initial);
+    setOrderedItemIds(ids);
+    setCurrentReviewIndex(0);
+    hasEditsRef.current = false;
+    setFlowStep("translating");
+    setSetupCollapsed(true);
+    setItemsCollapsed(true);
+    setTranslateCollapsed(false);
+    setIsTranslating(true);
+    setTranslateProgress({ done: 0, total: ids.length, lastItemName: "" });
+
+    const fieldKeys = selectedFieldDefs.map((f) => f.key);
+
+    for (const id of ids) {
+      const name = names[id] || id;
+      setItemsState((prev) => ({ ...prev, [id]: { ...prev[id], status: "translating" } }));
+
+      const { ok, json } = await fetchJson("/api/admin/wix-translations/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collectionKey,
+          itemIds: [id],
+          sourceLocale,
+          targetLocale,
+          fieldKeys,
+          overwriteExisting: overwriteMode === "overwrite",
+          providerKind: providerKind || undefined,
+          providerModel: providerKind === "ollama" ? effectiveOllamaModel || undefined : undefined,
+        }),
+      });
+
+      if (!ok) {
+        setItemsState((prev) => ({ ...prev, [id]: { ...prev[id], status: "failed", message: json?.error || "Dịch thất bại." } }));
+      } else {
+        const result = (json.items || [])[0] as TranslationItemResult | undefined;
+        if (!result) {
+          setItemsState((prev) => ({ ...prev, [id]: { ...prev[id], status: "failed", message: "Không nhận được kết quả dịch." } }));
+        } else {
+          const translated = result.translatedFields || {};
+          setItemsState((prev) => ({
+            ...prev,
+            [id]: {
+              itemId: id,
+              itemName: result.itemName || name,
+              status: result.status === "success" ? "translated" : result.status === "skipped" ? "skipped" : "failed",
+              message: result.message,
+              sourceFields: result.sourceFields || {},
+              translatedFields: { ...translated },
+              initialTranslatedFields: { ...translated },
+              sourceHash: result.sourceHash,
+            },
+          }));
+        }
+      }
+
+      setTranslateProgress((p) => ({ done: p.done + 1, total: p.total, lastItemName: name }));
+    }
+
+    setIsTranslating(false);
+    setFlowStep("review");
+    setTranslateCollapsed(true);
+  };
+
+  const retryTranslateOne = async (itemId: string) => {
+    if (isTranslating) return;
+    const name = itemsState[itemId]?.itemName || itemId;
+    setItemsState((prev) => ({ ...prev, [itemId]: { ...prev[itemId], status: "translating" } }));
+    const { ok, json } = await fetchJson("/api/admin/wix-translations/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        collectionKey,
+        itemIds: [itemId],
+        sourceLocale,
+        targetLocale,
+        fieldKeys: selectedFieldDefs.map((f) => f.key),
+        overwriteExisting: true,
+        providerKind: providerKind || undefined,
+        providerModel: providerKind === "ollama" ? effectiveOllamaModel || undefined : undefined,
+      }),
+    });
+    if (!ok) {
+      setItemsState((prev) => ({ ...prev, [itemId]: { ...prev[itemId], status: "failed", message: json?.error || "Dịch thất bại." } }));
+      return;
+    }
+    const result = (json.items || [])[0] as TranslationItemResult | undefined;
+    if (!result) {
+      setItemsState((prev) => ({ ...prev, [itemId]: { ...prev[itemId], status: "failed", message: "Không nhận được kết quả dịch." } }));
+      return;
+    }
+    const translated = result.translatedFields || {};
+    setItemsState((prev) => ({
+      ...prev,
+      [itemId]: {
+        itemId,
+        itemName: result.itemName || name,
+        status: result.status === "success" ? "translated" : result.status === "skipped" ? "skipped" : "failed",
+        message: result.message,
+        sourceFields: result.sourceFields || {},
+        translatedFields: { ...translated },
+        initialTranslatedFields: { ...translated },
+        sourceHash: result.sourceHash,
+      },
+    }));
+  };
+
+  const handleFieldEdit = (itemId: string, key: string, value: string) => {
+    hasEditsRef.current = true;
+    setItemsState((prev) => {
+      const item = prev[itemId];
+      if (!item) return prev;
+      return { ...prev, [itemId]: { ...item, translatedFields: { ...item.translatedFields, [key]: value } } };
+    });
+  };
+
+  const handleRestore = (itemId: string) => {
+    setItemsState((prev) => {
+      const item = prev[itemId];
+      if (!item) return prev;
+      return { ...prev, [itemId]: { ...item, translatedFields: { ...item.initialTranslatedFields } } };
+    });
+  };
+
+  // Bước 3 · Duyệt và đẩy lên Wix — same one-item-per-request behavior as Bước 2: every product
+  // is written with its own /save call, and saveProgress advances by exactly one as soon as
+  // THAT product lands in Wix — never waiting for a whole batch before showing anything moved.
+  const runSave = async (mode: "draft" | "publish", forceOverwriteIds: string[] = []) => {
+    const isRetry = forceOverwriteIds.length > 0;
+    const idsToSave = isRetry
+      ? forceOverwriteIds
+      : orderedItemIds.filter((id) => {
+          const it = itemsState[id];
+          return it && (it.status === "translated" || it.status === "skipped");
+        });
+
+    if (idsToSave.length === 0) {
+      toast.info("Chưa có mục nào được dịch xong để lưu.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveProgress({ done: 0, total: idsToSave.length, lastItemName: "" });
+    setItemsState((prev) => {
+      const next = { ...prev };
+      for (const id of idsToSave) next[id] = { ...next[id], status: "saving" };
+      return next;
+    });
+
+    const needsOverwrite: string[] = [];
+    let successCount = 0;
+    let failedCount = 0;
+    const fieldKeys = selectedFieldDefs.map((f) => f.key);
+
+    for (const id of idsToSave) {
+      const it = itemsState[id];
+      const name = it?.itemName || id;
+      const { ok, json } = await fetchJson("/api/admin/wix-translations/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collectionKey,
+          sourceLocale,
+          targetLocale,
+          fieldKeys,
+          mode,
+          overwriteExisting: isRetry ? true : overwriteMode === "overwrite",
+          items: [{ itemId: id, fieldValues: it?.translatedFields || {}, sourceHash: it?.sourceHash }],
+        }),
+      });
+
+      if (!ok) {
+        failedCount++;
+        setItemsState((prev) => ({ ...prev, [id]: { ...prev[id], status: "failed", message: json?.error || "Lưu thất bại." } }));
+      } else {
+        const result = (json.items || [])[0] as TranslationItemResult | undefined;
+        if (result?.status === "skipped" && /ghi đè|overwrite/i.test(result.message || "")) {
+          needsOverwrite.push(id);
+          setItemsState((prev) => ({ ...prev, [id]: { ...prev[id], status: "skipped", message: result.message } }));
+        } else if (result?.status === "success") {
+          successCount++;
+          setItemsState((prev) => ({ ...prev, [id]: { ...prev[id], status: "saved", message: undefined } }));
+        } else {
+          failedCount++;
+          setItemsState((prev) => ({ ...prev, [id]: { ...prev[id], status: "failed", message: result?.message || json?.error } }));
+        }
+      }
+
+      setSaveProgress((p) => ({ done: p.done + 1, total: p.total, lastItemName: name }));
+    }
+
+    setIsSaving(false);
+
+    if (successCount > 0) {
+      toast.success(`Đã lưu ${successCount} bản dịch vào Wix Multilingual${mode === "publish" ? " và xuất bản" : " (bản nháp)"}.`);
+      hasEditsRef.current = false;
+    }
+    if (failedCount > 0) toast.warning(`${failedCount} mục gặp lỗi khi lưu.`);
+
+    if (needsOverwrite.length > 0 && !isRetry) {
+      setPendingMode(mode);
+      setPendingOverwriteIds(needsOverwrite);
+    }
+  };
+
+  const handleConfirmOverwrite = () => {
+    const ids = pendingOverwriteIds || [];
+    setPendingOverwriteIds(null);
+    void runSave(pendingMode, ids);
+  };
+
+  const itemsList = orderedItemIds.map((id) => itemsState[id]).filter((it): it is ReviewItemState => Boolean(it));
+  const translatedReviewItems = useMemo(() => itemsList.filter((it) => it.status === "translated" || it.status === "saved"), [itemsList]);
+  const problemReviewItems = useMemo(() => itemsList.filter((it) => it.status === "failed" || it.status === "skipped"), [itemsList]);
+  const savedCount = itemsList.filter((it) => it.status === "saved").length;
+  const currentReviewItem = translatedReviewItems[Math.min(currentReviewIndex, translatedReviewItems.length - 1)];
+  const canSave = itemsList.some((it) => it.status === "translated" || it.status === "skipped") && !isSaving;
 
   if (configLoading) {
     return (
@@ -302,9 +660,7 @@ export function WixTranslationPage() {
         </p>
       </div>
 
-      {configError && (
-        <Alert message={configError} onRetry={loadConfig} />
-      )}
+      {configError && <Alert message={configError} onRetry={loadConfig} />}
 
       {config && config.warnings.length > 0 && (
         <Card className="border-amber-500/30 bg-amber-500/5">
@@ -323,10 +679,22 @@ export function WixTranslationPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Thiết lập</CardTitle>
-          <CardDescription>Chọn collection, ngôn ngữ, và các field cần dịch.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="text-base">Thiết lập</CardTitle>
+            <CardDescription>Chọn collection, ngôn ngữ, và các field cần dịch.</CardDescription>
+          </div>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className="shrink-0 text-muted-foreground"
+            onClick={() => setSetupCollapsed((v) => !v)}
+            title={setupCollapsed ? "Mở rộng" : "Thu gọn"}
+          >
+            <ChevronDown className={cn("w-4 h-4 transition-transform", setupCollapsed && "-rotate-90")} />
+          </Button>
         </CardHeader>
+        {!setupCollapsed && (
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Collection">
@@ -429,23 +797,36 @@ export function WixTranslationPage() {
             </div>
           </div>
         </CardContent>
+        )}
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <div>
-            <CardTitle className="text-base">Sản phẩm trong CMS</CardTitle>
+            <CardTitle className="text-base">Bước 1 · Chọn sản phẩm cần dịch</CardTitle>
             <CardDescription>
               {total > 0
-                ? `Tổng ${total} sản phẩm — tick thủ công tối đa ${MAX_BATCH_SELECT} item, hoặc "Chọn toàn bộ" để dịch cả collection (chạy tuần tự theo từng đợt ${MAX_BATCH_SELECT} item).`
-                : `Chọn tối đa ${MAX_BATCH_SELECT} sản phẩm mỗi lần tick, hoặc "Chọn toàn bộ" để dịch cả collection theo từng đợt.`}
+                ? `Tổng ${total} sản phẩm — tick thủ công tối đa ${MAX_BATCH_SELECT} item, hoặc "Chọn toàn bộ" để dịch cả collection.`
+                : `Chọn tối đa ${MAX_BATCH_SELECT} sản phẩm mỗi lần tick, hoặc "Chọn toàn bộ" để dịch cả collection.`}
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => loadItems()} disabled={itemsLoading}>
-            <RefreshCw className={cn("w-3.5 h-3.5", itemsLoading && "animate-spin")} />
-            Tải lại
-          </Button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => loadItems()} disabled={itemsLoading}>
+              <RefreshCw className={cn("w-3.5 h-3.5", itemsLoading && "animate-spin")} />
+              Tải lại
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => setItemsCollapsed((v) => !v)}
+              title={itemsCollapsed ? "Mở rộng" : "Thu gọn"}
+            >
+              <ChevronDown className={cn("w-4 h-4 transition-transform", itemsCollapsed && "-rotate-90")} />
+            </Button>
+          </div>
         </CardHeader>
+        {!itemsCollapsed && (
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
             <div className="relative w-full sm:w-72">
@@ -467,13 +848,40 @@ export function WixTranslationPage() {
               >
                 {isSelectingAll ? "Đang chọn toàn bộ..." : "Chọn toàn bộ sản phẩm"}
               </button>
+              <div className="flex items-center gap-1.5 shrink-0" title="Chọn theo thứ tự sản phẩm trong danh sách hiện tại (vd. Từ 100 đến 200 = sản phẩm thứ 100 tới thứ 200)">
+                <span className="text-xs text-muted-foreground">Chọn theo thứ tự:</span>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Từ"
+                  value={rangeFrom}
+                  onChange={(e) => setRangeFrom(e.target.value)}
+                  className="w-16 h-7 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+                <span className="text-xs text-muted-foreground">→</span>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Đến"
+                  value={rangeTo}
+                  onChange={(e) => setRangeTo(e.target.value)}
+                  className="w-16 h-7 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline font-semibold disabled:opacity-50 disabled:no-underline shrink-0"
+                  onClick={() => void selectRange()}
+                  disabled={isSelectingRange || !collectionKey || !targetLocale || itemsLoading || !rangeFrom || !rangeTo}
+                >
+                  {isSelectingRange ? "Đang chọn..." : "Chọn"}
+                </button>
+              </div>
               {selectedIds.size > 0 && (
                 <>
                   <span className="text-xs font-semibold text-primary">Đã chọn {selectedIds.size} sản phẩm</span>
-                  <Button size="sm" className="h-8 text-xs gap-1.5" disabled={!canTranslate} onClick={startTranslateSelected}>
-                    <Languages className="w-3.5 h-3.5" />
-                    Dịch các mục đã chọn
-                    {selectedIds.size > MAX_BATCH_SELECT ? ` (${Math.ceil(selectedIds.size / MAX_BATCH_SELECT)} đợt)` : ""}
+                  <Button size="sm" className="h-8 text-xs gap-1.5" disabled={!canTranslate} onClick={() => void startTranslate()}>
+                    {isTranslating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Languages className="w-3.5 h-3.5" />}
+                    Bước 2 · Bắt đầu dịch
                   </Button>
                   <button
                     className="text-xs text-muted-foreground hover:text-foreground underline"
@@ -488,13 +896,6 @@ export function WixTranslationPage() {
               )}
             </div>
           </div>
-
-          {isBatchedRun && reviewOpen && (
-            <div className="flex items-center gap-2 rounded-lg border bg-primary/5 border-primary/20 px-3 py-2 text-xs font-semibold text-primary">
-              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-              Đang dịch theo đợt — Đợt {batchIndex + 1}/{batchQueue.length} ({currentBatchIds.length} sản phẩm/đợt). Lưu xong một đợt sẽ tự động mở đợt tiếp theo.
-            </div>
-          )}
 
           {itemsError && <Alert message={itemsError} onRetry={loadItems} />}
 
@@ -598,12 +999,310 @@ export function WixTranslationPage() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
-      {!canTranslate && selectedIds.size > 0 && (
+      {!canTranslate && selectedIds.size > 0 && !isTranslating && (
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
           <Info className="w-3.5 h-3.5" />
           Kiểm tra lại: đã chọn field, ngôn ngữ nguồn/đích khác nhau, và cấu hình Wix/translation provider ở trên.
+        </div>
+      )}
+
+      {(flowStep === "translating" || flowStep === "review") && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+            <div>
+              <CardTitle className="text-base">Bước 2 · Tiến độ dịch</CardTitle>
+              <CardDescription>
+                {isTranslating
+                  ? "Đang dịch từng sản phẩm một bằng AI — xong sản phẩm nào hiện kết quả sản phẩm đó."
+                  : `Đã dịch xong: ${translatedReviewItems.length + itemsList.filter((i) => i.status === "skipped").length} thành công, ${problemReviewItems.filter((i) => i.status === "failed").length} thất bại — kiểm tra ở Bước 3 bên dưới.`}
+              </CardDescription>
+            </div>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => setTranslateCollapsed((v) => !v)}
+              title={translateCollapsed ? "Mở rộng" : "Thu gọn"}
+            >
+              <ChevronDown className={cn("w-4 h-4 transition-transform", translateCollapsed && "-rotate-90")} />
+            </Button>
+          </CardHeader>
+          {!translateCollapsed && (
+            <CardContent className="space-y-1.5">
+              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  {isTranslating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {isTranslating ? "Đang dịch với AI..." : "Hoàn tất"}
+                </span>
+                <span>{translateProgress.done}/{translateProgress.total} sản phẩm</span>
+              </div>
+              <Progress value={(translateProgress.done / Math.max(1, translateProgress.total)) * 100} />
+              {translateProgress.lastItemName && (
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {isTranslating ? "Vừa dịch xong" : "Sản phẩm cuối"}: <span className="font-medium text-foreground">{translateProgress.lastItemName}</span>
+                </p>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      {flowStep === "review" && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+            <div>
+              <CardTitle className="text-base">Bước 3 · Duyệt và đẩy lên Wix</CardTitle>
+              <CardDescription>
+                {translatedReviewItems.length}/{itemsList.length} sản phẩm sẵn sàng ({savedCount} đã đẩy lên Wix) — có thể sửa trực tiếp bản dịch trước khi lưu.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button type="button" className="text-xs text-muted-foreground hover:text-foreground underline shrink-0" onClick={handleResetClick}>
+                Chọn sản phẩm khác
+              </button>
+              <Button variant="outline" className="h-8 text-xs gap-1.5" disabled={!canSave} onClick={() => void runSave("draft")}>
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Lưu bản nháp
+              </Button>
+              <Button className="h-8 text-xs gap-1.5" disabled={!canSave} onClick={() => void runSave("publish")}>
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                Xuất bản lên Wix
+              </Button>
+            </div>
+          </CardHeader>
+
+          {isSaving && saveProgress.total > 0 && (
+            <div className="px-6 -mt-2 pb-2 space-y-1.5">
+              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Đang đẩy từng sản phẩm lên Wix...
+                </span>
+                <span>{saveProgress.done}/{saveProgress.total} sản phẩm</span>
+              </div>
+              <Progress value={(saveProgress.done / Math.max(1, saveProgress.total)) * 100} />
+              {saveProgress.lastItemName && (
+                <p className="text-[11px] text-muted-foreground truncate">
+                  Vừa đẩy xong: <span className="font-medium text-foreground">{saveProgress.lastItemName}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          <CardContent className="space-y-4">
+            {translatedReviewItems.length > 1 && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 px-3 py-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1.5"
+                  disabled={currentReviewIndex === 0}
+                  onClick={() => setCurrentReviewIndex((i) => Math.max(0, i - 1))}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Sản phẩm trước
+                </Button>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Sản phẩm {currentReviewIndex + 1}/{translatedReviewItems.length}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1.5"
+                  disabled={currentReviewIndex >= translatedReviewItems.length - 1}
+                  onClick={() => setCurrentReviewIndex((i) => Math.min(translatedReviewItems.length - 1, i + 1))}
+                >
+                  Sản phẩm tiếp theo
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+
+            {currentReviewItem ? (
+              <div className="rounded-xl border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <StatusIcon status={currentReviewItem.status} />
+                    <span className="font-semibold text-sm">{currentReviewItem.itemName}</span>
+                    {currentReviewItem.status === "saved" && (
+                      <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                        Đã đẩy lên Wix
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1.5"
+                      disabled={isTranslating || isSaving}
+                      onClick={() => handleRestore(currentReviewItem.itemId)}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Khôi phục
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1.5"
+                      disabled={isTranslating || isSaving}
+                      onClick={() => void retryTranslateOne(currentReviewItem.itemId)}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Dịch lại
+                    </Button>
+                  </div>
+                </div>
+
+                {currentReviewItem.message && (
+                  <div className="text-xs rounded-lg px-3 py-2 border bg-amber-500/5 border-amber-500/20 text-amber-600">
+                    {currentReviewItem.message}
+                  </div>
+                )}
+
+                {selectedFieldDefs.map((field) => {
+                  const original = currentReviewItem.sourceFields[field.key] || "";
+                  const translated = currentReviewItem.translatedFields[field.key] ?? "";
+                  const isHtml = field.type === "HTML";
+                  const isStacked = isHtml;
+                  return (
+                    <div key={field.key} className="rounded-xl border bg-card/40 p-4">
+                      <p className="text-xs font-bold text-foreground mb-3">{field.displayName}</p>
+                      <div className={cn("grid gap-4", isStacked ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2")}>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {sourceLocale.toUpperCase()} · gốc (chỉ đọc)
+                          </label>
+                          <div
+                            className={cn(
+                              "w-full p-3 text-sm leading-relaxed rounded-lg border bg-muted/50 text-foreground overflow-y-auto",
+                              isStacked ? "min-h-[110px] max-h-[320px]" : "min-h-[90px] max-h-[240px]"
+                            )}
+                          >
+                            {!original ? (
+                              <span className="italic text-muted-foreground">(Trống)</span>
+                            ) : isHtml ? (
+                              <div
+                                className="[&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-1 [&_strong]:font-semibold [&_a]:underline [&_a]:text-primary"
+                                dangerouslySetInnerHTML={{ __html: original }}
+                              />
+                            ) : (
+                              <div className="whitespace-pre-wrap">{original}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                            <span>{targetLocale.toUpperCase()} · bản dịch (có thể sửa)</span>
+                            <span className="normal-case font-medium text-muted-foreground/70">{translated.length} ký tự</span>
+                          </label>
+                          <textarea
+                            value={translated}
+                            onChange={(e) => handleFieldEdit(currentReviewItem.itemId, field.key, e.target.value)}
+                            disabled={isSaving}
+                            className={cn(
+                              "w-full p-3 text-sm leading-relaxed rounded-lg border-2 border-primary/25 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/60 resize-y",
+                              isStacked ? "min-h-[110px]" : "min-h-[90px]"
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic text-center py-6">Không có sản phẩm nào dịch thành công để duyệt.</p>
+            )}
+
+            {problemReviewItems.length > 0 && (
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {problemReviewItems.length} sản phẩm gặp lỗi hoặc bị bỏ qua
+                </p>
+                <div className="border rounded-xl overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sản phẩm</TableHead>
+                        <TableHead>Trạng thái</TableHead>
+                        <TableHead>Lý do</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {problemReviewItems.map((item) => (
+                        <TableRow key={item.itemId}>
+                          <TableCell className="font-medium max-w-[220px] truncate" title={item.itemName}>{item.itemName}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] font-bold",
+                                item.status === "failed"
+                                  ? "bg-red-500/10 text-red-600 border-red-500/20"
+                                  : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                              )}
+                            >
+                              {item.status === "failed" ? "Thất bại" : "Bỏ qua"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[420px]">{item.message || "—"}</TableCell>
+                          <TableCell>
+                            <button
+                              type="button"
+                              className="text-xs text-primary hover:underline font-semibold shrink-0 whitespace-nowrap"
+                              onClick={() => void retryTranslateOne(item.itemId)}
+                              disabled={isTranslating || isSaving}
+                            >
+                              Dịch lại
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Always-visible progress banner — pinned to the viewport so it stays in sight no matter
+          where the admin has scrolled to. */}
+      {(isTranslating || isSaving) && (
+        <div className="fixed bottom-0 inset-x-0 z-50 border-t bg-background/95 backdrop-blur shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+          <div className="max-w-6xl mx-auto px-4 py-3 space-y-1.5">
+            {(() => {
+              const progress = isSaving ? saveProgress : translateProgress;
+              const label = isSaving ? "Đang đẩy lên Wix" : "Đang dịch với AI";
+              const lastLabel = isSaving ? "Vừa đẩy xong" : "Vừa dịch xong";
+              return (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      {label}
+                    </span>
+                    <span className="text-sm font-bold tabular-nums">
+                      {progress.done}/{progress.total} sản phẩm
+                    </span>
+                  </div>
+                  <Progress value={(progress.done / Math.max(1, progress.total)) * 100} />
+                  {progress.lastItemName && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {lastLabel}: <span className="font-medium text-foreground">{progress.lastItemName}</span> — đang tự động dịch từng sản phẩm, không cần thao tác gì thêm.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
+          </div>
         </div>
       )}
 
@@ -617,43 +1316,40 @@ export function WixTranslationPage() {
         />
       )}
 
-      {reviewOpen && config && currentBatchIds.length > 0 && (
-        <TranslationReviewPanel
-          // Remounts the panel fresh for each batch — it only ever runs its AI preview once per
-          // mount (see startedRef in TranslationReviewPanel), so a new itemIds array for the next
-          // batch needs a new instance, not a prop update on the same one.
-          key={batchIndex}
-          open={reviewOpen}
-          itemIds={currentBatchIds}
-          itemNamesById={itemNamesById}
-          fields={selectedFieldDefs}
-          collectionKey={collectionKey}
-          sourceLocale={sourceLocale}
-          targetLocale={targetLocale}
-          overwriteExisting={overwriteMode === "overwrite"}
-          providerKind={providerKind || undefined}
-          providerModel={providerKind === "ollama" ? effectiveOllamaModel || undefined : undefined}
-          onClose={() => {
-            setReviewOpen(false);
-            setBatchQueue([]);
-            setBatchIndex(0);
-          }}
-          onSaved={() => {
-            const nextIndex = batchIndex + 1;
-            if (nextIndex < batchQueue.length) {
-              setBatchIndex(nextIndex);
-              void loadItems();
-            } else {
-              setReviewOpen(false);
-              setBatchQueue([]);
-              setBatchIndex(0);
-              setSelectedIds(new Set());
-              setSelectedNamesById({});
-              void loadItems();
-            }
-          }}
-        />
-      )}
+      <AlertDialog open={!!pendingOverwriteIds} onOpenChange={(v) => !v && setPendingOverwriteIds(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ghi đè bản dịch đã tồn tại?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingOverwriteIds?.length} sản phẩm đã có bản dịch trong Wix Multilingual. Tiếp tục sẽ ghi đè nội dung hiện tại bằng bản dịch mới.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy bỏ</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmOverwrite}>Ghi đè</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Chọn sản phẩm khác mà không lưu?</AlertDialogTitle>
+            <AlertDialogDescription>Bạn có thay đổi chưa lưu trong bản dịch. Quay lại bước chọn sản phẩm sẽ mất các thay đổi này.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Tiếp tục chỉnh sửa</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmReset(false);
+                resetToSelect();
+              }}
+            >
+              Bỏ thay đổi, chọn lại
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -674,4 +1370,22 @@ function Alert({ message, onRetry }: { message: string; onRetry: () => void }) {
       <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={onRetry}>Thử lại</Button>
     </div>
   );
+}
+
+function StatusIcon({ status }: { status: ReviewItemStatus }) {
+  switch (status) {
+    case "translating":
+    case "saving":
+      return <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />;
+    case "translated":
+      return <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />;
+    case "saved":
+      return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
+    case "failed":
+      return <XCircle className="w-4 h-4 text-red-500 shrink-0" />;
+    case "skipped":
+      return <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />;
+    default:
+      return <Loader2 className="w-4 h-4 text-muted-foreground shrink-0" />;
+  }
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { runProductDiscovery, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
-import { getActiveBrands, getAllProducts, insertProduct, WixProduct, isValidProductImageFormat, isProductImageAccessible } from "@/lib/services/wixCms";
+import { getActiveBrands, getAllProducts, insertProduct, WixProduct, isValidProductImageFormat, isProductImageAccessible, compareProductWithCms, CmsCompareResult, updateCmsProductFields } from "@/lib/services/wixCms";
 import { getProductDocumentEntries, hasProductDocument } from "@/lib/utils/documentFields";
 
 export interface DashboardStats {
@@ -361,6 +361,49 @@ export async function uploadCatalogToWixAction(products: any[]) {
       success: false,
       error: error.message
     };
+  }
+}
+
+/**
+ * Compares a Catalog Upload row against its matching Wix CMS record (if any),
+ * field by field — used by the "So sánh với CMS" action to show what's
+ * missing or different before deciding whether to push a fix. Read-only.
+ */
+export async function compareProductWithCmsAction(local: {
+  Category?: string;
+  Product?: string;
+  Title?: string;
+  Series?: string;
+  MainFeature?: string;
+  ProductOverview?: string;
+  TechnicalSpecifications?: string;
+  Brand?: string;
+}): Promise<CmsCompareResult> {
+  try {
+    return await compareProductWithCms(local);
+  } catch (err) {
+    console.error("[compareProductWithCmsAction] Failed:", err);
+    return { found: false, diffs: [] };
+  }
+}
+
+/**
+ * Writes a human-approved set of fields (e.g. a corrected translation) onto
+ * the existing Wix CMS record for `modelName`, leaving every other field
+ * untouched. Never creates a new record. This is the write counterpart to
+ * compareProductWithCmsAction — call that first to decide what's worth
+ * pushing, then this to actually push it once approved.
+ */
+export async function updateCmsProductFieldsAction(
+  modelName: string,
+  fields: Partial<Record<"Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications", string>>
+): Promise<{ found: boolean; success: boolean; error?: string }> {
+  try {
+    const result = await updateCmsProductFields(modelName, fields);
+    return { found: result.found, success: result.success, error: result.error };
+  } catch (err) {
+    console.error("[updateCmsProductFieldsAction] Failed:", err);
+    return { found: false, success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

@@ -1,8 +1,11 @@
 import { create } from "zustand";
-import { AppState, SheetData, ProductRow, Specification, ParsingError } from "@/types";
+import { AppState, SheetData, ProductRow, Specification, ParsingError, AiReviewFinding, AiFixSuggestion, AiAppliedFix, AiAppliedFixEngine } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 import { parseSpecifications } from "@/lib/parser/parser";
 import { textToTechnicalSpecs } from "@/lib/utils/specsTranslator";
+
+/** Sentinel activeSheetIndex meaning "show every sheet/brand combined". */
+export const ALL_SHEETS_INDEX = -1;
 
 interface DataActions {
   setFileData: (fileName: string, fileType: "xlsx" | "csv", sheets: SheetData[]) => void;
@@ -18,6 +21,9 @@ interface DataActions {
   resetChanges: () => void;
   calculateStats: () => void;
   convertSpecs: () => void;
+  setAiReviewFindings: (sheetIndex: number, rowIndex: number, findings: AiReviewFinding[]) => void;
+  setAiFixSuggestion: (sheetIndex: number, rowIndex: number, suggestion: AiFixSuggestion | undefined) => void;
+  applyAiFix: (sheetIndex: number, rowIndex: number, updates: Partial<ProductRow>, fieldChanges: { field: string; oldValue: string; newValue: string }[], engine: AiAppliedFixEngine) => void;
 }
 
 function validateSpecifications(specs: Specification[]): ParsingError[] {
@@ -72,7 +78,7 @@ function validateProductRow(row: ProductRow): ParsingError[] {
   const errors = validateSpecifications(row.transformedSpecifications);
 
   Object.entries(row).forEach(([key, val]) => {
-    if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified"].includes(key)) return;
+    if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified", "aiReviewFindings", "aiFixSuggestion", "aiAppliedFixes"].includes(key)) return;
     if (String(val || "").toUpperCase().includes("CẦN VERIFY")) {
       errors.push({
         field: key,
@@ -81,6 +87,12 @@ function validateProductRow(row: ProductRow): ParsingError[] {
       });
     }
   });
+
+  if (Array.isArray(row.aiReviewFindings)) {
+    row.aiReviewFindings.forEach((finding) => {
+      errors.push({ field: "AI Review", message: finding.message, severity: "warning" });
+    });
+  }
 
   return errors;
 }
@@ -135,6 +147,38 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
     get().calculateStats();
   },
 
+  // Same effect as updateProductRow, but also appends an audit-trail entry per
+  // changed field to aiAppliedFixes — so "what did AI actually change" can be
+  // viewed/exported later, distinct from ordinary manual-edit tracking.
+  applyAiFix: (sheetIndex, rowIndex, updates, fieldChanges, engine) => {
+    set((state) => {
+      const newSheets = [...state.sheets];
+      const sheet = { ...newSheets[sheetIndex] };
+      const rows = [...sheet.rows];
+      const row = { ...rows[rowIndex], ...updates };
+
+      if (!row.originalValues) {
+        row.originalValues = JSON.parse(JSON.stringify(rows[rowIndex]));
+      }
+
+      const appliedAt = Date.now();
+      const newFixes: AiAppliedFix[] = fieldChanges.map((c) => ({ ...c, engine, appliedAt }));
+      row.aiAppliedFixes = [...(row.aiAppliedFixes || []), ...newFixes];
+
+      const errors = validateProductRow(row);
+      row.parsingErrors = errors;
+      row.validationState = errors.some(e => e.severity === "error") ? "error" : (errors.length > 0 ? "warning" : "valid");
+      row.isEdited = true;
+      row.lastModified = appliedAt;
+
+      rows[rowIndex] = row;
+      sheet.rows = rows;
+      newSheets[sheetIndex] = sheet;
+      return { sheets: newSheets };
+    });
+    get().calculateStats();
+  },
+
   deleteProductRows: (sheetIndex, rowIds) => {
     set((state) => {
       const newSheets = [...state.sheets];
@@ -145,6 +189,49 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
       return { sheets: newSheets };
     });
     get().calculateStats();
+  },
+
+  // Records AI catalog review findings on a row without marking it as manually
+  // edited (unlike updateProductRow, which would set isEdited/originalValues).
+  // Called with [] for a row that was scanned and came back clean — see the
+  // AiReviewDashboard, which distinguishes "not yet scanned" (undefined) from
+  // "scanned, no issues" ([]) to report accurate coverage.
+  setAiReviewFindings: (sheetIndex, rowIndex, findings) => {
+    set((state) => {
+      const newSheets = [...state.sheets];
+      if (sheetIndex < 0 || sheetIndex >= newSheets.length) return state;
+      const sheet = { ...newSheets[sheetIndex] };
+      const rows = [...sheet.rows];
+      if (rowIndex < 0 || rowIndex >= rows.length) return state;
+      const row = { ...rows[rowIndex], aiReviewFindings: findings };
+
+      const errors = validateProductRow(row);
+      row.parsingErrors = errors;
+      row.validationState = errors.some(e => e.severity === "error") ? "error" : (errors.length > 0 ? "warning" : "valid");
+
+      rows[rowIndex] = row;
+      sheet.rows = rows;
+      newSheets[sheetIndex] = sheet;
+      return { sheets: newSheets };
+    });
+    get().calculateStats();
+  },
+
+  // Stores an AI-proposed fix (see AiFixReviewModal) without applying it or
+  // touching validation/isEdited — it's just a suggestion until the user
+  // reviews and confirms it via updateProductRow.
+  setAiFixSuggestion: (sheetIndex, rowIndex, suggestion) => {
+    set((state) => {
+      const newSheets = [...state.sheets];
+      if (sheetIndex < 0 || sheetIndex >= newSheets.length) return state;
+      const sheet = { ...newSheets[sheetIndex] };
+      const rows = [...sheet.rows];
+      if (rowIndex < 0 || rowIndex >= rows.length) return state;
+      rows[rowIndex] = { ...rows[rowIndex], aiFixSuggestion: suggestion };
+      sheet.rows = rows;
+      newSheets[sheetIndex] = sheet;
+      return { sheets: newSheets };
+    });
   },
 
   deleteRowsWithIssues: (sheetIndex) => {
@@ -362,7 +449,7 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
 
             // Re-run warning verification for CẦN VERIFY
             Object.entries(rawRow).forEach(([key, val]) => {
-              if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified", "originalRawRow"].includes(key)) return;
+              if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified", "originalRawRow", "aiReviewFindings", "aiFixSuggestion", "aiAppliedFixes"].includes(key)) return;
               if (String(val || "").toUpperCase().includes("CẦN VERIFY")) {
                 errors.push({
                   field: key,
@@ -371,6 +458,13 @@ export const useDataStore = create<AppState & DataActions>((set, get) => ({
                 });
               }
             });
+
+            // Preserve AI review findings (see setAiReviewFindings) across a spec re-conversion.
+            if (Array.isArray(row.aiReviewFindings)) {
+              row.aiReviewFindings.forEach((finding) => {
+                errors.push({ field: "AI Review", message: finding.message, severity: "warning" });
+              });
+            }
 
             const updatedRow = { ...row };
             updatedRow[techSpecsKey] = JSON.stringify(specifications, null, 2);

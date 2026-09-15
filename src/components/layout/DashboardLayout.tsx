@@ -18,11 +18,12 @@ import {
   Languages,
   FileText,
   HardDrive,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useDataStore } from "@/store/useDataStore";
+import { useDataStore, ALL_SHEETS_INDEX } from "@/store/useDataStore";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useNavLoading } from "@/components/layout/NavigationLoadingProvider";
@@ -262,6 +263,29 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 Sheets / Brands
               </p>
               <div className="space-y-0.5">
+                <button
+                  onClick={() => setActiveSheet(ALL_SHEETS_INDEX)}
+                  className={cn(
+                    "flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 text-left",
+                    activeSheetIndex === ALL_SHEETS_INDEX
+                      ? "nav-active"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  )}
+                >
+                  <Layers
+                    className={cn(
+                      "w-3.5 h-3.5 shrink-0",
+                      activeSheetIndex === ALL_SHEETS_INDEX && "text-primary"
+                    )}
+                  />
+                  <span className="truncate flex-1">All Products</span>
+                  <Badge
+                    variant="outline"
+                    className="ml-auto text-[10px] px-1.5 py-0 h-4 shrink-0"
+                  >
+                    {sheets.reduce((acc, sheet) => acc + sheet.rows.length, 0)}
+                  </Badge>
+                </button>
                 {sheets.map((sheet, index) => (
                   <button
                     key={index}

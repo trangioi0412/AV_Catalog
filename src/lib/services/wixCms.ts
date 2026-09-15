@@ -481,6 +481,157 @@ export async function findExistingProductByModel(modelName: string): Promise<any
   }
 }
 
+export interface CmsFieldDiff {
+  field: string;
+  localValue: string;
+  cmsValue: string;
+  status: "same" | "different" | "missing_in_cms" | "missing_locally";
+}
+
+export interface CmsCompareResult {
+  found: boolean;
+  cmsItemId?: string;
+  diffs: CmsFieldDiff[];
+}
+
+/**
+ * Compares a Catalog Upload row's fields against its matching Wix CMS record
+ * (looked up by Product/model name, same match used by insertProduct's
+ * upsert). Read-only — never writes anything. Used by the "So sánh với CMS"
+ * action so a reviewer can see what's missing/different before deciding
+ * whether to push a fix.
+ */
+export async function compareProductWithCms(local: {
+  Category?: string;
+  Product?: string;
+  Title?: string;
+  Series?: string;
+  MainFeature?: string;
+  ProductOverview?: string;
+  TechnicalSpecifications?: string;
+  Brand?: string;
+}): Promise<CmsCompareResult> {
+  const modelName = local.Product || "";
+  if (!modelName) return { found: false, diffs: [] };
+
+  const existingItem = await findExistingProductByModel(modelName);
+  if (!existingItem) return { found: false, diffs: [] };
+
+  const cmsItemId = existingItem._id || existingItem.id || existingItem.dataItem?._id || existingItem.dataItem?.id;
+  const cmsData: Record<string, any> = existingItem.data || existingItem.dataItem?.data || existingItem;
+
+  const getCms = (upperKey: string, lowerKey: string): any => cmsData[upperKey] ?? cmsData[lowerKey];
+
+  // Brand is stored in CMS as a Brand collection reference ID, not a name —
+  // resolve it back to a name so it's comparable to the local Brand string.
+  let cmsBrandName = "";
+  const cmsBrandId = getCms("Brand", "brand");
+  if (cmsBrandId && typeof cmsBrandId === "string") {
+    try {
+      const brands = await getActiveBrands();
+      cmsBrandName = brands.find((b) => b._id === cmsBrandId)?.name || cmsBrandId;
+    } catch {
+      cmsBrandName = cmsBrandId;
+    }
+  }
+
+  const stringifyMaybeJson = (val: unknown): string => {
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return String(val);
+    }
+  };
+
+  const fieldsToCompare: { field: string; local: string; cms: string }[] = [
+    { field: "Category", local: local.Category || "", cms: String(getCms("Category", "category") || "") },
+    { field: "Title", local: local.Title || "", cms: String(getCms("Title", "title") || "") },
+    { field: "Series", local: local.Series || "", cms: String(getCms("Series", "series") || "") },
+    { field: "Main Feature", local: local.MainFeature || "", cms: String(getCms("MainFeature", "mainFeature") || "") },
+    { field: "Product Overview", local: local.ProductOverview || "", cms: String(getCms("ProductOverview", "productOverview") || "") },
+    {
+      field: "Technical Specifications",
+      local: local.TechnicalSpecifications || "",
+      cms: stringifyMaybeJson(getCms("TechnicalSpecifications", "technicalSpecifications")),
+    },
+    { field: "Brand", local: local.Brand || "", cms: cmsBrandName },
+  ];
+
+  const diffs: CmsFieldDiff[] = fieldsToCompare.map(({ field, local: localValue, cms: cmsValue }) => {
+    let status: CmsFieldDiff["status"];
+    if (!cmsValue && localValue) status = "missing_in_cms";
+    else if (!localValue && cmsValue) status = "missing_locally";
+    else if (localValue.trim() === cmsValue.trim()) status = "same";
+    else status = "different";
+    return { field, localValue, cmsValue, status };
+  });
+
+  return { found: true, cmsItemId, diffs };
+}
+
+/**
+ * Writes a small, specific set of fields directly onto an EXISTING Wix CMS
+ * product record (matched by model name) — a partial update that leaves
+ * every other field untouched. Never creates a new record (returns `found:
+ * false` if there's no match). Used to push a human-approved value (e.g. a
+ * corrected translation) back to CMS after compareProductWithCms flags it as
+ * different — this is the write counterpart to that read-only comparison.
+ */
+export async function updateCmsProductFields(
+  modelName: string,
+  fields: Partial<Pick<WixProduct, "Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications">>
+): Promise<{ found: boolean; success: boolean; itemId?: string; error?: string }> {
+  const headers = getWixHeaders();
+  if (!headers) return { found: false, success: false, error: "Wix credentials not configured." };
+
+  const existingItem = await findExistingProductByModel(modelName);
+  if (!existingItem) return { found: false, success: false, error: `Không tìm thấy "${modelName}" trên CMS.` };
+
+  const itemId = existingItem._id || existingItem.id || existingItem.dataItem?._id || existingItem.dataItem?.id;
+  const existingData: Record<string, any> = existingItem.data || existingItem.dataItem?.data || existingItem;
+
+  const cmsKeysMap: Record<string, string> = {
+    Category: "category",
+    Title: "title",
+    Series: "series",
+    MainFeature: "mainFeature",
+    ProductOverview: "productOverview",
+    TechnicalSpecifications: "technicalSpecifications",
+  };
+
+  const data: Record<string, any> = {};
+  Object.entries(fields).forEach(([prop, val]) => {
+    if (val === undefined) return;
+    const standardKey = cmsKeysMap[prop] || prop;
+    // Match the collection's existing casing for this field, same approach as buildCmsData.
+    const targetKey = Object.prototype.hasOwnProperty.call(existingData, prop) ? prop : standardKey;
+    data[targetKey] = val;
+  });
+
+  if (Object.keys(data).length === 0) {
+    return { found: true, success: false, itemId, error: "No fields to update." };
+  }
+
+  try {
+    const url = `https://www.wixapis.com/wix-data/v2/items/${itemId}`;
+    const response = await fetch(url, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ dataCollectionId: "Import1", dataItem: { id: itemId, data } }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      return { found: true, success: false, itemId, error: `${response.statusText} (${text})` };
+    }
+    console.log(`[Wix CMS] Updated field(s) [${Object.keys(data).join(", ")}] on product: ${modelName}`);
+    return { found: true, success: true, itemId };
+  } catch (err) {
+    return { found: true, success: false, itemId, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 async function buildCmsData(product: WixProduct, existingItemData?: any): Promise<Record<string, any>> {
   const data: Record<string, any> = {};
   

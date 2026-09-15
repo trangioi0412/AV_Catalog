@@ -5,7 +5,12 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { FileUpload } from "@/components/data/FileUpload";
 import { DataTable } from "@/components/data/DataTable";
 import { StatisticsDashboard } from "@/components/data/StatisticsDashboard";
-import { useDataStore } from "@/store/useDataStore";
+import { AiReviewDashboard } from "@/components/data/AiReviewDashboard";
+import { AiFixDashboard } from "@/components/data/AiFixDashboard";
+import { CmsSyncDashboard } from "@/components/data/CmsSyncDashboard";
+import { useDataStore, ALL_SHEETS_INDEX } from "@/store/useDataStore";
+import type { AiReviewFinding } from "@/types";
+import { collectPendingAiFixChanges } from "@/lib/utils/aiFixUtils";
 import { Button } from "@/components/ui/button";
 import { 
   Download, 
@@ -20,7 +25,9 @@ import {
   CloudUpload,
   Loader2,
   Search,
-  Sparkles
+  Sparkles,
+  Bot,
+  Wrench
 } from "lucide-react";
 import { uploadCatalogToWixAction } from "@/app/actions/discovery";
 import { 
@@ -31,7 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
-import { exportToExcel, exportToCSV, exportToJSON, exportWarningsToExcel, exportValidToExcel } from "@/lib/utils/exportUtils";
+import { exportToExcel, exportToCSV, exportToJSON, exportWarningsToExcel, exportValidToExcel, exportAiFixesToExcel, exportAiFixSuggestionsToExcel } from "@/lib/utils/exportUtils";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { motion, AnimatePresence } from "framer-motion";
@@ -58,19 +65,242 @@ import { Input } from "@/components/ui/input";
 
 
 export default function DashboardPage() {
-  const { 
-    fileName, 
-    sheets, 
-    activeSheetIndex, 
-    resetChanges, 
+  const {
+    fileName,
+    sheets,
+    activeSheetIndex,
+    resetChanges,
     setFileData,
-    convertSpecs
+    convertSpecs,
+    setAiReviewFindings,
+    setAiFixSuggestion
   } = useDataStore();
 
   const handleConvertSpecs = () => {
     convertSpecs();
     toast.success("Đã chuyển đổi thành công tất cả thông số kỹ thuật thô sang dạng cấu trúc mảng!");
   };
+
+  const [isAiReviewing, setIsAiReviewing] = React.useState(false);
+  const [aiReviewProgress, setAiReviewProgress] = React.useState({ done: 0, total: 0 });
+
+  const handleAiReview = async () => {
+    if (!sheets || sheets.length === 0) {
+      toast.error("No product data loaded to review.");
+      return;
+    }
+
+    // Resolve each product's owning (sheetIndex, rowIndex) up front so AI findings
+    // can be written back to the right row regardless of which sheet it lives in.
+    const locationById = new Map<string, { sheetIndex: number; rowIndex: number }>();
+    const items: { id: string; fields: Record<string, string> }[] = [];
+    sheets.forEach((sheet, sheetIndex) => {
+      sheet.rows.forEach((row, rowIndex) => {
+        locationById.set(row.id, { sheetIndex, rowIndex });
+        const specsText = Array.isArray(row.transformedSpecifications)
+          ? row.transformedSpecifications.map((s) => `${s.label}: ${s.value}`).join("; ")
+          : "";
+        items.push({
+          id: row.id,
+          fields: {
+            Category: String(row.Category ?? row.category ?? "").slice(0, 200),
+            Brand: String(row.Brand ?? row.brand ?? sheet.brandName ?? "").slice(0, 100),
+            Product: String(row.Product ?? row.product ?? row.Title ?? row.title ?? "").slice(0, 200),
+            Title: String(row.Title ?? row.title ?? "").slice(0, 300),
+            // Category has to be judged against what the product actually does, not
+            // just its name — without these, the AI can only catch a mismatch when
+            // the product name itself gives it away.
+            "Main Feature": String(row["Main Feature"] ?? row.MainFeature ?? "").slice(0, 500),
+            "Product Overview": String(row["Product Overview"] ?? row.ProductOverview ?? "").slice(0, 1000),
+            "Technical Specifications": specsText.slice(0, 1500),
+          },
+        });
+      });
+    });
+
+    if (items.length === 0) {
+      toast.error("No products found across any sheet.");
+      return;
+    }
+
+    const batchSize = 10;
+    const batches: (typeof items)[] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      batches.push(items.slice(i, i + batchSize));
+    }
+
+    setIsAiReviewing(true);
+    setAiReviewProgress({ done: 0, total: items.length });
+
+    let flaggedCount = 0;
+    let failedBatches = 0;
+
+    for (const batch of batches) {
+      try {
+        const res = await fetch("/api/catalog-upload/ai-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: batch }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json?.error || `Request failed (${res.status})`);
+        }
+        const results: { id: string; findings: AiReviewFinding[] }[] = json.results || [];
+        const resultById = new Map(results.map((r) => [r.id, r.findings]));
+
+        // Mark every item in the batch as scanned — flagged ones get their AI
+        // findings, clean ones get [] — so the AI Review dashboard can tell
+        // "not yet scanned" (undefined) apart from "scanned, nothing found" ([]).
+        for (const item of batch) {
+          const location = locationById.get(item.id);
+          if (!location) continue;
+          const findings = resultById.get(item.id) || [];
+          setAiReviewFindings(location.sheetIndex, location.rowIndex, findings);
+          if (findings.length > 0) flaggedCount++;
+        }
+      } catch (err) {
+        failedBatches++;
+        console.error("[AI Review] Batch failed:", err);
+      }
+      setAiReviewProgress((prev) => ({ done: Math.min(prev.done + batch.length, items.length), total: items.length }));
+    }
+
+    setIsAiReviewing(false);
+
+    if (failedBatches > 0) {
+      toast.warning(`AI review hoàn tất với ${failedBatches} lô bị lỗi. Đã phát hiện vấn đề ở ${flaggedCount} sản phẩm.`);
+    } else if (flaggedCount > 0) {
+      toast.success(`AI review đã phát hiện vấn đề ở ${flaggedCount}/${items.length} sản phẩm.`);
+    } else {
+      toast.success(`AI review hoàn tất — không phát hiện vấn đề nào trong ${items.length} sản phẩm.`);
+    }
+  };
+
+  const [isAiFixing, setIsAiFixing] = React.useState(false);
+  const [aiFixProgress, setAiFixProgress] = React.useState({ done: 0, total: 0 });
+
+  const flaggedCount = React.useMemo(
+    () => sheets.reduce((acc, sheet) => acc + sheet.rows.filter((r) => (r.aiReviewFindings?.length ?? 0) > 0).length, 0),
+    [sheets]
+  );
+
+  // Runs after "Kiểm tra AI" — proposes fixes for every AI-flagged product using a
+  // local Ollama model (qwen3.5:9b) instead of Gemini's grounded search, since it
+  // has no internet access it can only clean up existing data (see
+  // catalogAiFixOllama.ts), never invent specs it wasn't given. Suggestions are
+  // stored per-row and only applied once reviewed in AiFixReviewModal.
+  const handleAiFixAll = async () => {
+    const locationById = new Map<string, { sheetIndex: number; rowIndex: number }>();
+    // The "no change suggested" fallback for Technical Specifications must be the
+    // same JSON-array-string shape AiFixReviewModal's parseSpecsJson expects
+    // (matching what the Gemini path always returns) — NOT the compact "label:
+    // value; ..." summary sent to the model, which isn't valid JSON and would
+    // make an untouched field look like the AI deliberately cleared the specs.
+    const currentSpecsJsonById = new Map<string, string>();
+    const items: { id: string; fields: Record<string, string>; issues: string[] }[] = [];
+
+    sheets.forEach((sheet, sheetIndex) => {
+      sheet.rows.forEach((row, rowIndex) => {
+        if (!row.aiReviewFindings || row.aiReviewFindings.length === 0) return;
+        locationById.set(row.id, { sheetIndex, rowIndex });
+        const specsArray = Array.isArray(row.transformedSpecifications) ? row.transformedSpecifications : [];
+        currentSpecsJsonById.set(row.id, JSON.stringify(specsArray));
+        const specsText = specsArray.map((s) => `${s.label}: ${s.value}`).join("; ");
+        items.push({
+          id: row.id,
+          fields: {
+            Category: String(row.Category ?? row.category ?? "").slice(0, 200),
+            Brand: String(row.Brand ?? row.brand ?? sheet.brandName ?? "").slice(0, 100),
+            Product: String(row.Product ?? row.product ?? "").slice(0, 200),
+            Title: String(row.Title ?? row.title ?? "").slice(0, 300),
+            Series: String(row.Series ?? "").slice(0, 200),
+            MainFeature: String(row["Main Feature"] ?? row.MainFeature ?? "").slice(0, 500),
+            ProductOverview: String(row["Product Overview"] ?? row.ProductOverview ?? "").slice(0, 1000),
+            TechnicalSpecifications: specsText.slice(0, 1500),
+          },
+          issues: row.aiReviewFindings.map((f) => f.message),
+        });
+      });
+    });
+
+    if (items.length === 0) {
+      toast.error("Chưa có sản phẩm nào bị AI gắn cờ — chạy \"Kiểm tra AI\" trước.");
+      return;
+    }
+
+    const batchSize = 8;
+    const batches: (typeof items)[] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      batches.push(items.slice(i, i + batchSize));
+    }
+
+    setIsAiFixing(true);
+    setAiFixProgress({ done: 0, total: items.length });
+
+    let fixedCount = 0;
+    let failedBatches = 0;
+
+    for (const batch of batches) {
+      try {
+        const res = await fetch("/api/catalog-upload/ai-fix-ollama", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: batch }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json?.error || `Request failed (${res.status})`);
+        }
+        const results: { id: string; fields: Record<string, string>; note: string }[] = json.results || [];
+        const resultById = new Map(results.map((r) => [r.id, r]));
+
+        for (const item of batch) {
+          const result = resultById.get(item.id);
+          if (!result) continue;
+          const f = result.fields;
+          setAiFixSuggestion(locationById.get(item.id)!.sheetIndex, locationById.get(item.id)!.rowIndex, {
+            Category: f.Category ?? item.fields.Category,
+            Product: f.Product ?? item.fields.Product,
+            Title: f.Title ?? item.fields.Title,
+            "product (item)": "",
+            Series: f.Series ?? item.fields.Series,
+            "Main Feature": f.MainFeature ?? item.fields.MainFeature,
+            "Product Overview": f.ProductOverview ?? item.fields.ProductOverview,
+            "Technical Specifications": f.TechnicalSpecifications ?? currentSpecsJsonById.get(item.id) ?? "[]",
+            image: "",
+            Brand: f.Brand ?? item.fields.Brand,
+            Datasheet: "",
+            sources: [],
+            engine: "ollama",
+            note: result.note,
+          });
+          if (Object.keys(f).length > 0) fixedCount++;
+        }
+      } catch (err) {
+        failedBatches++;
+        console.error("[AI Fix] Batch failed:", err);
+      }
+      setAiFixProgress((prev) => ({ done: Math.min(prev.done + batch.length, items.length), total: items.length }));
+    }
+
+    setIsAiFixing(false);
+
+    const nextStepHint = ` Xem và duyệt trong "Duyệt đề xuất AI Fix" bên dưới, hoặc Export → "Đề xuất AI (chưa áp dụng)" để tải file xem trước.`;
+    if (failedBatches > 0) {
+      toast.warning(`AI fix hoàn tất với ${failedBatches} lô bị lỗi. Đã đề xuất sửa cho ${fixedCount} sản phẩm.${nextStepHint}`);
+    } else {
+      toast.success(`AI (qwen3.5:9b) đã đề xuất sửa cho ${fixedCount}/${items.length} sản phẩm.${nextStepHint}`);
+    }
+  };
+
+  // Real, appliable pending changes only — a row can have an aiFixSuggestion
+  // object where AI declined every field (a legitimate outcome for messy/
+  // ambiguous data, not a bug), which must NOT count here or the export/
+  // count below would look actionable while doing nothing.
+  const pendingAiFixSuggestionsCount = React.useMemo(() => {
+    return collectPendingAiFixChanges(sheets).productCount;
+  }, [sheets]);
 
   const [isUploadingToWix, setIsUploadingToWix] = React.useState(false);
   const [uploadReport, setUploadReport] = React.useState<{
@@ -82,20 +312,24 @@ export default function DashboardPage() {
   const [isReportOpen, setIsReportOpen] = React.useState(false);
   const [errorSearchQuery, setErrorSearchQuery] = React.useState("");
 
-  const handleUploadToWix = async () => {
+  // `uploadCatalogToWixAction` already upserts (looks up each product by
+  // model name and updates the existing CMS record instead of duplicating —
+  // see insertProduct in wixCms.ts), so pushing a filtered subset here is
+  // just as safe as the full-catalog upload below, only scoped to fewer rows.
+  const handleUploadToWix = async (productsOverride?: any[], loadingLabel?: string) => {
     if (!sheets || sheets.length === 0) {
       toast.error("No product data loaded to upload.");
       return;
     }
 
-    const allProducts = sheets.flatMap((sheet) => sheet.rows);
+    const allProducts = productsOverride ?? sheets.flatMap((sheet) => sheet.rows);
     if (allProducts.length === 0) {
       toast.error("No products found across any sheet.");
       return;
     }
 
     setIsUploadingToWix(true);
-    const uploadToastId = toast.loading(`Uploading all ${allProducts.length} products to Wix Studio Import1...`);
+    const uploadToastId = toast.loading(loadingLabel || `Uploading all ${allProducts.length} products to Wix Studio Import1...`);
 
     try {
       const result = await uploadCatalogToWixAction(allProducts);
@@ -126,16 +360,31 @@ export default function DashboardPage() {
     }
   };
 
+  const handleUploadAiFixedToWix = () => {
+    const aiFixedProducts = sheets.flatMap((sheet) => sheet.rows.filter((r) => (r.aiAppliedFixes?.length ?? 0) > 0));
+    if (aiFixedProducts.length === 0) {
+      toast.error("Chưa có sản phẩm nào được AI sửa để đẩy lên CMS.");
+      return;
+    }
+    handleUploadToWix(aiFixedProducts, `Đang đẩy ${aiFixedProducts.length} sản phẩm đã AI sửa lên Wix Studio...`);
+  };
+
   // Log loaded product catalog and device data for admin inspection
   React.useEffect(() => {
     if (sheets && sheets.length > 0) {
       console.log("[Dashboard] Loaded sheets data:", sheets);
-      console.log("[Dashboard] Active sheet rows (devices):", sheets[activeSheetIndex]?.rows || []);
+      const activeRows = activeSheetIndex === ALL_SHEETS_INDEX
+        ? sheets.flatMap((s) => s.rows)
+        : sheets[activeSheetIndex]?.rows || [];
+      console.log("[Dashboard] Active sheet rows (devices):", activeRows);
     }
   }, [sheets, activeSheetIndex]);
 
   const [showResetDialog, setShowResetDialog] = React.useState(false);
   const [showClearDialog, setShowClearDialog] = React.useState(false);
+  // While a CMS comparison is active, the comparison table takes over in
+  // place of the regular "Catalog Data" table — see CmsSyncDashboard.
+  const [isCmsSyncActive, setIsCmsSyncActive] = React.useState(false);
 
   const totalWarningsCount = React.useMemo(() => {
     return sheets.reduce((acc, sheet) => {
@@ -149,14 +398,32 @@ export default function DashboardPage() {
     }, 0);
   }, [sheets]);
 
-  const handleExport = async (type: "xlsx" | "csv" | "json" | "warnings" | "valid") => {
+  const totalAiFixesCount = React.useMemo(() => {
+    return sheets.reduce((acc, sheet) => {
+      return acc + sheet.rows.reduce((rowAcc, r) => rowAcc + (r.aiAppliedFixes?.length ?? 0), 0);
+    }, 0);
+  }, [sheets]);
+
+  const aiFixedProductsCount = React.useMemo(() => {
+    return sheets.reduce((acc, sheet) => acc + sheet.rows.filter((r) => (r.aiAppliedFixes?.length ?? 0) > 0).length, 0);
+  }, [sheets]);
+
+  const handleExport = async (type: "xlsx" | "csv" | "json" | "warnings" | "valid" | "ai-fixes" | "ai-suggestions") => {
     if (sheets.length === 0) return;
     const exportFileName = fileName || "catalog";
 
     if (type === "xlsx") {
       await exportToExcel(sheets, exportFileName);
     } else if (type === "csv") {
-      exportToCSV(sheets[activeSheetIndex], exportFileName);
+      const csvSheet = activeSheetIndex === ALL_SHEETS_INDEX
+        ? {
+            sheetName: "All Products",
+            brandName: "All Products",
+            columns: Array.from(new Set(sheets.flatMap((s) => s.columns))),
+            rows: sheets.flatMap((s) => s.rows),
+          }
+        : sheets[activeSheetIndex];
+      exportToCSV(csvSheet, exportFileName);
     } else if (type === "json") {
       exportToJSON(sheets, exportFileName);
     } else if (type === "warnings") {
@@ -172,6 +439,20 @@ export default function DashboardPage() {
         toast.success("Exported all valid rows across all sheets!");
       } else {
         toast.error("No valid rows found to export.");
+      }
+    } else if (type === "ai-fixes") {
+      const success = await exportAiFixesToExcel(sheets, exportFileName);
+      if (success) {
+        toast.success("Đã xuất báo cáo các thay đổi AI đã sửa!");
+      } else {
+        toast.error("Chưa có thay đổi nào từ AI để xuất.");
+      }
+    } else if (type === "ai-suggestions") {
+      const success = await exportAiFixSuggestionsToExcel(sheets, exportFileName);
+      if (success) {
+        toast.success("Đã xuất file đề xuất AI (chưa áp dụng)!");
+      } else {
+        toast.error("Chưa có đề xuất AI nào — chạy \"Sửa bằng AI (qwen3.5:9b)\" trước.");
       }
     }
   };
@@ -218,6 +499,35 @@ export default function DashboardPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="gap-1.5 text-violet-600 hover:bg-violet-500/10 hover:text-violet-600 dark:text-violet-400 h-7 px-2.5"
+                    onClick={handleAiReview}
+                    disabled={isAiReviewing}
+                  >
+                    {isAiReviewing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Bot className="w-3.5 h-3.5" />
+                    )}
+                    {isAiReviewing ? `Đang kiểm tra AI (${aiReviewProgress.done}/${aiReviewProgress.total})` : "Kiểm tra AI"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-violet-600 hover:bg-violet-500/10 hover:text-violet-600 dark:text-violet-400 h-7 px-2.5"
+                    onClick={handleAiFixAll}
+                    disabled={isAiFixing || flaggedCount === 0}
+                    title={flaggedCount === 0 ? "Chạy \"Kiểm tra AI\" trước để có sản phẩm cần sửa" : `Sửa ${flaggedCount} sản phẩm bị gắn cờ bằng qwen3.5:9b (local, không tra cứu internet)`}
+                  >
+                    {isAiFixing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Wrench className="w-3.5 h-3.5" />
+                    )}
+                    {isAiFixing ? `Đang sửa (${aiFixProgress.done}/${aiFixProgress.total})` : `Sửa bằng AI (qwen3.5:9b)${flaggedCount > 0 ? ` (${flaggedCount})` : ""}`}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     className="gap-1.5 h-7 px-2.5"
                     onClick={handleReset}
                   >
@@ -240,7 +550,7 @@ export default function DashboardPage() {
                   variant="default"
                   size="sm"
                   className="gap-2 shadow-md shadow-primary/25"
-                  onClick={handleUploadToWix}
+                  onClick={() => handleUploadToWix()}
                   disabled={isUploadingToWix}
                 >
                   {isUploadingToWix ? (
@@ -249,6 +559,18 @@ export default function DashboardPage() {
                     <CloudUpload className="w-4 h-4" />
                   )}
                   Upload to Wix
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-violet-500/30 text-violet-600 hover:bg-violet-500/10 dark:text-violet-400"
+                  onClick={handleUploadAiFixedToWix}
+                  disabled={isUploadingToWix || aiFixedProductsCount === 0}
+                  title={aiFixedProductsCount === 0 ? "Chưa có sản phẩm nào được AI sửa" : "Chỉ đẩy các sản phẩm đã AI sửa lên CMS (không đẩy toàn bộ catalog)"}
+                >
+                  {isUploadingToWix ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                  Đẩy sản phẩm AI đã sửa lên CMS{aiFixedProductsCount > 0 ? ` (${aiFixedProductsCount})` : ""}
                 </Button>
 
                 <DropdownMenu>
@@ -290,6 +612,22 @@ export default function DashboardPage() {
                       <FileCheck className="w-4 h-4 text-green-600" />
                       All Valid Rows ({totalValidCount})
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleExport("ai-suggestions")}
+                      className="gap-2"
+                      disabled={pendingAiFixSuggestionsCount === 0}
+                    >
+                      <Bot className="w-4 h-4 text-cyan-500" />
+                      Đề xuất AI, chưa áp dụng ({pendingAiFixSuggestionsCount})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleExport("ai-fixes")}
+                      className="gap-2"
+                      disabled={totalAiFixesCount === 0}
+                    >
+                      <Bot className="w-4 h-4 text-violet-500" />
+                      Báo cáo AI đã sửa ({totalAiFixesCount})
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -321,27 +659,35 @@ export default function DashboardPage() {
             >
               <StatisticsDashboard />
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <FileCheck className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                    <h2 className="text-lg font-bold">Catalog Data</h2>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => toast.info("Add Product feature coming soon")}
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    Add Product
-                  </Button>
-                </div>
+              <AiReviewDashboard />
 
-                <DataTable />
-              </div>
+              <AiFixDashboard />
+
+              <CmsSyncDashboard onActiveChange={setIsCmsSyncActive} />
+
+              {!isCmsSyncActive && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <FileCheck className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      <h2 className="text-lg font-bold">Catalog Data</h2>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => toast.info("Add Product feature coming soon")}
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      Add Product
+                    </Button>
+                  </div>
+
+                  <DataTable />
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

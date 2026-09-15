@@ -18,9 +18,15 @@ import {
   ChevronRight,
   Eye,
   Settings2,
-  FileJson
+  FileJson,
+  Bot,
+  Languages,
+  GitCompare
 } from "lucide-react";
 import { exportSelectedToExcel } from "@/lib/utils/exportUtils";
+import { AiFixReviewModal } from "./AiFixReviewModal";
+import { TranslateMixedLanguageModal } from "./TranslateMixedLanguageModal";
+import { CmsCompareModal } from "./CmsCompareModal";
 import { 
   Table, 
   TableBody, 
@@ -61,8 +67,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useDataStore } from "@/store/useDataStore";
-import { ProductRow } from "@/types";
+import { useDataStore, ALL_SHEETS_INDEX } from "@/store/useDataStore";
+import { ProductRow, SheetData } from "@/types";
 import { SpecEditor } from "./SpecEditor";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -114,12 +120,47 @@ function getColumnValue(row: any, col: string): any {
   return row[col];
 }
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
+/** Sentinel page size meaning "show every filtered row on one page" — see the pageSize state below. */
+const SHOW_ALL = -1;
 
 export function DataTable() {
-  const { sheets, activeSheetIndex, deleteProductRows, deleteRowsWithIssues } = useDataStore();
-  const activeSheet = sheets[activeSheetIndex];
-  
+  const { sheets, activeSheetIndex, setActiveSheet, deleteProductRows, deleteRowsWithIssues, applyAiFix } = useDataStore();
+  const isAllSheets = activeSheetIndex === ALL_SHEETS_INDEX;
+
+  // When "All Products" is selected, present every sheet's rows combined so users
+  // aren't limited to browsing one brand sheet (~30-40 rows) at a time out of the
+  // full catalog (which can span hundreds of rows across many brand sheets).
+  const activeSheet = useMemo<SheetData | undefined>(() => {
+    if (!isAllSheets) return sheets[activeSheetIndex];
+    if (sheets.length === 0) return undefined;
+    return {
+      sheetName: "All Products",
+      brandName: "All Products",
+      columns: Array.from(new Set(sheets.flatMap((s) => s.columns))),
+      rows: sheets.flatMap((s) => s.rows),
+    };
+  }, [sheets, activeSheetIndex, isAllSheets]);
+
+  // Row mutation actions (delete/edit spec) require the row's real (sheetIndex, rowIndex)
+  // within its owning sheet — not its position in a filtered/sorted/paginated/combined
+  // view. This map resolves that regardless of which mode is active.
+  const rowLocationById = useMemo(() => {
+    const map = new Map<string, { sheetIndex: number; rowIndex: number }>();
+    sheets.forEach((sheet, sIdx) => {
+      sheet.rows.forEach((row, rIdx) => {
+        map.set(row.id, { sheetIndex: sIdx, rowIndex: rIdx });
+      });
+    });
+    return map;
+  }, [sheets]);
+
+  const getRowById = (id: string): ProductRow | null => {
+    const location = rowLocationById.get(id);
+    if (!location) return null;
+    return sheets[location.sheetIndex]?.rows[location.rowIndex] ?? null;
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
@@ -129,6 +170,10 @@ export function DataTable() {
   const [filterColumn, setFilterColumn] = useState<string>("all");
   const [dataTypeFilter, setDataTypeFilter] = useState<"all" | "number" | "text" | "empty">("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0]);
+  const [aiFixTargetId, setAiFixTargetId] = useState<string | null>(null);
+  const [translateTargetId, setTranslateTargetId] = useState<string | null>(null);
+  const [cmsCompareTargetId, setCmsCompareTargetId] = useState<string | null>(null);
 
   const hasValidationIssues = useMemo(() => {
     if (!activeSheet) return false;
@@ -230,16 +275,18 @@ export function DataTable() {
     return filtered;
   }, [activeSheet, searchTerm, statusFilter, filterColumn, dataTypeFilter, sortConfig]);
 
-  // Reset to page 1 whenever filters change
+  // Reset to page 1 whenever filters (or the page size itself) change.
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, filterColumn, dataTypeFilter]);
+  }, [searchTerm, statusFilter, filterColumn, dataTypeFilter, pageSize]);
 
-  const totalPages = Math.max(1, Math.ceil(processedData.length / PAGE_SIZE));
+  const isShowingAll = pageSize === SHOW_ALL;
+  const totalPages = isShowingAll ? 1 : Math.max(1, Math.ceil(processedData.length / pageSize));
   const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return processedData.slice(start, start + PAGE_SIZE);
-  }, [processedData, currentPage]);
+    if (isShowingAll) return processedData;
+    const start = (currentPage - 1) * pageSize;
+    return processedData.slice(start, start + pageSize);
+  }, [processedData, currentPage, pageSize, isShowingAll]);
 
   const toggleExpand = (id: string) => {
     const newExpanded = new Set(expandedRows);
@@ -263,6 +310,19 @@ export function DataTable() {
     }
   };
 
+  // Groups row ids by their owning sheet before deleting, since ids selected while
+  // browsing "All Products" can span multiple sheets but deleteProductRows only
+  // accepts a single sheetIndex at a time.
+  const deleteRowIdsAcrossSheets = (ids: string[]) => {
+    const idsBySheet = new Map<number, string[]>();
+    ids.forEach((id) => {
+      const sheetIndex = rowLocationById.get(id)?.sheetIndex ?? activeSheetIndex;
+      if (!idsBySheet.has(sheetIndex)) idsBySheet.set(sheetIndex, []);
+      idsBySheet.get(sheetIndex)!.push(id);
+    });
+    idsBySheet.forEach((sheetIds, sheetIndex) => deleteProductRows(sheetIndex, sheetIds));
+  };
+
   const copyAsJson = (row: ProductRow) => {
     navigator.clipboard.writeText(JSON.stringify(row.transformedSpecifications, null, 2));
     toast.success("Copied specifications as JSON");
@@ -272,6 +332,52 @@ export function DataTable() {
 
   return (
     <div className="space-y-4">
+      {/* Sheet / Brand switcher — always visible here regardless of sidebar/viewport,
+          since the sidebar list is hidden below the md breakpoint. */}
+      {sheets.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-xl border bg-muted/30">
+          <button
+            onClick={() => setActiveSheet(ALL_SHEETS_INDEX)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+              isAllSheets ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-background hover:text-foreground"
+            )}
+          >
+            All Products
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px] px-1.5 py-0 h-4",
+                isAllSheets ? "border-primary-foreground/30 text-primary-foreground" : ""
+              )}
+            >
+              {sheets.reduce((acc, s) => acc + s.rows.length, 0)}
+            </Badge>
+          </button>
+          {sheets.map((sheet, index) => (
+            <button
+              key={index}
+              onClick={() => setActiveSheet(index)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                activeSheetIndex === index ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-background hover:text-foreground"
+              )}
+            >
+              {sheet.brandName}
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] px-1.5 py-0 h-4",
+                  activeSheetIndex === index ? "border-primary-foreground/30 text-primary-foreground" : ""
+                )}
+              >
+                {sheet.rows.length}
+              </Badge>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Table Actions */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
@@ -475,7 +581,9 @@ export function DataTable() {
           </TableHeader>
           <TableBody>
             <AnimatePresence>
-              {paginatedData.map((row, index) => (
+              {paginatedData.map((row, index) => {
+                const location = rowLocationById.get(row.id) ?? { sheetIndex: activeSheetIndex, rowIndex: index };
+                return (
                 <React.Fragment key={row.id}>
                   <TableRow 
                     className={cn(
@@ -548,6 +656,11 @@ export function DataTable() {
                             Edited
                           </Badge>
                         )}
+                        {(row.aiAppliedFixes?.length ?? 0) > 0 && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-violet-500/30 text-violet-600 dark:text-violet-400">
+                            AI đã sửa ({row.aiAppliedFixes!.length})
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
 
@@ -598,8 +711,20 @@ export function DataTable() {
                               <FileJson className="w-4 h-4 mr-2" />
                               Copy as JSON
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setAiFixTargetId(row.id)} className="text-violet-600 dark:text-violet-400">
+                              <Bot className="w-4 h-4 mr-2" />
+                              AI Sửa (tra cứu theo hãng)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setTranslateTargetId(row.id)} className="text-cyan-600 dark:text-cyan-400">
+                              <Languages className="w-4 h-4 mr-2" />
+                              Dịch đồng nhất (lẫn Anh/Việt)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setCmsCompareTargetId(row.id)} className="text-blue-600 dark:text-blue-400">
+                              <GitCompare className="w-4 h-4 mr-2" />
+                              So sánh với CMS
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={() => setDeleteTarget({ type: "single", rowId: row.id })}
                             >
@@ -627,6 +752,15 @@ export function DataTable() {
                             <div className="flex items-center justify-between">
                               <h3 className="text-lg font-bold">Data Transformation</h3>
                               <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-2 border-violet-500/30 text-violet-600 hover:bg-violet-500/10 dark:text-violet-400"
+                                  onClick={() => setAiFixTargetId(row.id)}
+                                >
+                                  <Bot className="w-3.5 h-3.5" />
+                                  AI Sửa
+                                </Button>
                                 <Button variant="outline" size="sm" className="gap-2" onClick={() => copyAsJson(row)}>
                                   <Copy className="w-3.5 h-3.5" />
                                   Copy JSON
@@ -640,7 +774,7 @@ export function DataTable() {
                                 <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Raw Product Data</Label>
                                 <div className="p-4 rounded-xl border bg-background/50 font-mono text-[11px] space-y-2 max-h-[400px] overflow-auto">
                                   {Object.entries(row).map(([key, val]) => {
-                                    if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified"].includes(key)) return null;
+                                    if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified", "aiReviewFindings", "aiFixSuggestion", "aiAppliedFixes"].includes(key)) return null;
                                     return (
                                       <div key={key} className="flex gap-4 border-b border-border/50 pb-1 last:border-0">
                                         <span className="text-primary/70 min-w-[120px] shrink-0">{key}:</span>
@@ -654,9 +788,9 @@ export function DataTable() {
                               {/* Right side: Interactive Spec Editor */}
                               <div className="space-y-4">
                                 <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Structured Specifications</Label>
-                                <SpecEditor 
-                                  sheetIndex={activeSheetIndex}
-                                  rowIndex={index}
+                                <SpecEditor
+                                  sheetIndex={location.sheetIndex}
+                                  rowIndex={location.rowIndex}
                                   specifications={row.transformedSpecifications}
                                 />
                                 {row.parsingErrors.length > 0 && (
@@ -676,6 +810,31 @@ export function DataTable() {
                                     </div>
                                   </div>
                                 )}
+                                {(row.aiAppliedFixes?.length ?? 0) > 0 && (
+                                  <div className="p-4 rounded-lg bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 text-violet-800 dark:text-violet-200 text-xs">
+                                    <div className="flex items-center gap-2 font-bold mb-2">
+                                      <Bot className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                                      AI đã sửa ({row.aiAppliedFixes!.length} trường)
+                                    </div>
+                                    <div className="max-h-[200px] overflow-y-auto pr-1 space-y-2">
+                                      {row.aiAppliedFixes!.map((fix, i) => (
+                                        <div key={i} className="border-b border-violet-200/50 dark:border-violet-500/20 pb-1.5 last:border-0">
+                                          <div className="font-semibold flex items-center gap-1.5">
+                                            {fix.field}
+                                            <span className="text-[9px] px-1 rounded bg-violet-500/15 font-normal">
+                                              {fix.engine === "gemini" ? "Gemini" : fix.engine === "translation" ? "Dịch AI" : "qwen3.5:9b"}
+                                            </span>
+                                          </div>
+                                          <div className="text-[10px] opacity-80 break-words">
+                                            <span className="line-through opacity-60">{fix.oldValue || "(trống)"}</span>
+                                            {" → "}
+                                            <span>{fix.newValue || "(trống)"}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -684,7 +843,8 @@ export function DataTable() {
                     </TableRow>
                   )}
                 </React.Fragment>
-              ))}
+                );
+              })}
             </AnimatePresence>
           </TableBody>
         </Table>
@@ -703,58 +863,86 @@ export function DataTable() {
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted-foreground order-2 sm:order-1">
-          Showing{" "}
-          <strong>{Math.min((currentPage - 1) * PAGE_SIZE + 1, processedData.length)}–{Math.min(currentPage * PAGE_SIZE, processedData.length)}</strong>{" "}
-          of <strong>{processedData.length}</strong> products
+          {isShowingAll ? (
+            <>Showing all <strong>{processedData.length}</strong> products</>
+          ) : (
+            <>
+              Showing{" "}
+              <strong>{Math.min((currentPage - 1) * pageSize + 1, processedData.length)}–{Math.min(currentPage * pageSize, processedData.length)}</strong>{" "}
+              of <strong>{processedData.length}</strong> products
+            </>
+          )}
           {processedData.length !== activeSheet.rows.length && (
             <span className="ml-1 text-primary">(filtered from {activeSheet.rows.length})</span>
           )}
         </p>
-        <div className="flex items-center gap-2 order-1 sm:order-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-          >
-            Previous
-          </Button>
-          <div className="flex items-center gap-1">
-            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-              // Show pages around current page
-              let page: number;
-              if (totalPages <= 7) {
-                page = i + 1;
-              } else if (currentPage <= 4) {
-                page = i + 1;
-                if (i === 6) page = totalPages;
-              } else if (currentPage >= totalPages - 3) {
-                page = totalPages - 6 + i;
-              } else {
-                const offsets = [-3, -2, -1, 0, 1, 2, 3];
-                page = currentPage + offsets[i];
-              }
-              return (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 w-8 p-0 text-xs"
-                  onClick={() => setCurrentPage(page)}
-                >
-                  {page}
-                </Button>
-              );
-            })}
+        <div className="flex items-center gap-3 order-1 sm:order-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Hiển thị</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(val) => setPageSize(val === "all" ? SHOW_ALL : Number(val))}
+            >
+              <SelectTrigger size="sm" className="h-8 w-[90px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                ))}
+                <SelectItem value="all">Tất cả</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-          >
-            Next
-          </Button>
+
+          {!isShowingAll && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  // Show pages around current page
+                  let page: number;
+                  if (totalPages <= 7) {
+                    page = i + 1;
+                  } else if (currentPage <= 4) {
+                    page = i + 1;
+                    if (i === 6) page = totalPages;
+                  } else if (currentPage >= totalPages - 3) {
+                    page = totalPages - 6 + i;
+                  } else {
+                    const offsets = [-3, -2, -1, 0, 1, 2, 3];
+                    page = currentPage + offsets[i];
+                  }
+                  return (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 w-8 p-0 text-xs"
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -770,13 +958,13 @@ export function DataTable() {
                 : "Are you sure you want to delete?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget?.type === "single" 
-                ? "This action will permanently delete this row from the active sheet."
+              {deleteTarget?.type === "single"
+                ? "This action will permanently delete this row."
                 : deleteTarget?.type === "validationIssues"
-                ? "This action will permanently delete all rows containing validation errors or warnings from the active sheet."
+                ? `This action will permanently delete all rows containing validation errors or warnings${isAllSheets ? " across every sheet" : " from the active sheet"}.`
                 : deleteTarget?.type === "filtered"
-                ? `This action will permanently delete all ${processedData.length} rows currently matching your filters and search term from the active sheet.`
-                : `This action will permanently delete ${selectedRows.size} selected rows from the active sheet.`}
+                ? `This action will permanently delete all ${processedData.length} rows currently matching your filters and search term${isAllSheets ? " across every sheet" : " from the active sheet"}.`
+                : `This action will permanently delete ${selectedRows.size} selected rows${isAllSheets ? " across every sheet" : " from the active sheet"}.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -785,20 +973,24 @@ export function DataTable() {
               variant="destructive"
               onClick={() => {
                 if (deleteTarget?.type === "single" && deleteTarget.rowId) {
-                  deleteProductRows(activeSheetIndex, [deleteTarget.rowId]);
+                  deleteRowIdsAcrossSheets([deleteTarget.rowId]);
                   toast.success("Row removed successfully");
                   const newSelected = new Set(selectedRows);
                   newSelected.delete(deleteTarget.rowId);
                   setSelectedRows(newSelected);
                 } else if (deleteTarget?.type === "bulk") {
-                  deleteProductRows(activeSheetIndex, Array.from(selectedRows));
+                  deleteRowIdsAcrossSheets(Array.from(selectedRows));
                   toast.success(`Deleted ${selectedRows.size} rows successfully`);
                   setSelectedRows(new Set());
                 } else if (deleteTarget?.type === "validationIssues") {
-                  deleteRowsWithIssues(activeSheetIndex);
+                  if (isAllSheets) {
+                    sheets.forEach((_, sIdx) => deleteRowsWithIssues(sIdx));
+                  } else {
+                    deleteRowsWithIssues(activeSheetIndex);
+                  }
                   toast.success("Deleted all rows with validation issues");
                 } else if (deleteTarget?.type === "filtered") {
-                  deleteProductRows(activeSheetIndex, processedData.map(row => row.id));
+                  deleteRowIdsAcrossSheets(processedData.map(row => row.id));
                   toast.success(`Deleted ${processedData.length} filtered rows successfully`);
                   setSelectedRows(new Set());
                 }
@@ -810,6 +1002,38 @@ export function DataTable() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Fix Review — the row is re-read live from `sheets` (not a stashed copy) so
+          the comparison always reflects the current data, even if it changed elsewhere. */}
+      <AiFixReviewModal
+        open={aiFixTargetId !== null}
+        row={aiFixTargetId ? getRowById(aiFixTargetId) : null}
+        columns={activeSheet.columns}
+        onClose={() => setAiFixTargetId(null)}
+        onApply={(updates, fieldChanges, engine) => {
+          const location = aiFixTargetId ? rowLocationById.get(aiFixTargetId) : undefined;
+          if (!location) return;
+          applyAiFix(location.sheetIndex, location.rowIndex, updates, fieldChanges, engine);
+        }}
+      />
+
+      <TranslateMixedLanguageModal
+        open={translateTargetId !== null}
+        row={translateTargetId ? getRowById(translateTargetId) : null}
+        columns={activeSheet.columns}
+        onClose={() => setTranslateTargetId(null)}
+        onApply={(updates, fieldChanges) => {
+          const location = translateTargetId ? rowLocationById.get(translateTargetId) : undefined;
+          if (!location) return;
+          applyAiFix(location.sheetIndex, location.rowIndex, updates, fieldChanges, "translation");
+        }}
+      />
+
+      <CmsCompareModal
+        open={cmsCompareTargetId !== null}
+        row={cmsCompareTargetId ? getRowById(cmsCompareTargetId) : null}
+        onClose={() => setCmsCompareTargetId(null)}
+      />
     </div>
   );
 }

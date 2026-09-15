@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 import { SheetData, ProductRow } from "@/types";
 import { technicalSpecsToText } from "./specsTranslator";
+import { computeAiFixChanges } from "./aiFixUtils";
 
 /**
  * Helper to clean row data before export, excluding metadata fields case-insensitively.
@@ -8,17 +9,20 @@ import { technicalSpecsToText } from "./specsTranslator";
  * Excluded columns: datasheet, Confidence, Datasheet_Type, Wix_Slug, originalRawRow, and internal tracking fields.
  */
 function cleanRowForExport(row: ProductRow, isWarnings?: boolean): Record<string, any> {
-  const { 
-    id, 
-    parsedSpecifications, 
-    transformedSpecifications, 
-    validationState, 
-    parsingErrors, 
-    isEdited, 
+  const {
+    id,
+    parsedSpecifications,
+    transformedSpecifications,
+    validationState,
+    parsingErrors,
+    isEdited,
     originalValues,
     lastModified,
     originalRawRow,
-    ...originalData 
+    aiReviewFindings,
+    aiFixSuggestion,
+    aiAppliedFixes,
+    ...originalData
   } = row;
 
   const finalData: Record<string, any> = {};
@@ -194,6 +198,112 @@ export async function exportValidToExcel(sheets: SheetData[], fileName: string):
 
   const safeFileName = (fileName || "catalog").split(".")[0];
   XLSX.writeFile(workbook, `${safeFileName}_valid.xlsx`);
+  return true;
+}
+
+/**
+ * Exports a report of every AI-Fix change actually applied across all sheets
+ * (see AiAppliedFix / applyAiFix in useDataStore.ts) — one row per changed
+ * field, so a reviewer can see exactly what AI changed on which product
+ * without having to open each row individually. Returns false if nothing has
+ * been AI-fixed yet.
+ */
+export async function exportAiFixesToExcel(sheets: SheetData[], fileName: string): Promise<boolean> {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+
+  const exportData: Record<string, any>[] = [];
+  sheets.forEach((sheet) => {
+    sheet.rows.forEach((row) => {
+      if (!row.aiAppliedFixes || row.aiAppliedFixes.length === 0) return;
+      row.aiAppliedFixes.forEach((fix) => {
+        exportData.push({
+          Sheet: sheet.brandName,
+          Brand: row.Brand ?? row.brand ?? "",
+          Product: row.Product ?? row.product ?? "",
+          Field: fix.field,
+          "Old Value": fix.oldValue,
+          "New Value": fix.newValue,
+          Engine: fix.engine === "gemini" ? "Gemini (có nguồn)" : fix.engine === "translation" ? "Dịch AI" : "qwen3.5:9b (local)",
+          "Applied At": new Date(fix.appliedAt).toLocaleString("vi-VN"),
+        });
+      });
+    });
+  });
+
+  if (exportData.length === 0) {
+    return false;
+  }
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const maxWidths = exportData.reduce((acc: any, row: any) => {
+    Object.keys(row).forEach((key, i) => {
+      const val = row[key] ? row[key].toString() : "";
+      acc[i] = Math.max(acc[i] || 0, val.length, key.length);
+    });
+    return acc;
+  }, []);
+  worksheet["!cols"] = maxWidths.map((w: number) => ({ w: Math.min(w, 60) }));
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "AI Fixes");
+
+  const safeFileName = (fileName || "catalog").split(".")[0];
+  XLSX.writeFile(workbook, `${safeFileName}_ai_fixes.xlsx`);
+  return true;
+}
+
+/**
+ * Exports every PENDING AI Fix suggestion (aiFixSuggestion) across all sheets
+ * as a diff report — Brand/Product/Field/Current/AI Suggested/Note — without
+ * requiring anything to be applied first. This is what "Sửa bằng AI
+ * (qwen3.5:9b)" alone produces (it only generates suggestions; nothing is
+ * applied until a user reviews and confirms each row in AiFixReviewModal, or
+ * uses "Áp dụng tất cả đề xuất"), so this export is the way to see/download
+ * what AI proposed right after that bulk run, before deciding what to apply.
+ */
+export async function exportAiFixSuggestionsToExcel(sheets: SheetData[], fileName: string): Promise<boolean> {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+
+  const exportData: Record<string, any>[] = [];
+  sheets.forEach((sheet) => {
+    sheet.rows.forEach((row) => {
+      if (!row.aiFixSuggestion) return;
+      const changes = computeAiFixChanges(row, row.aiFixSuggestion, sheet.columns);
+      if (changes.length === 0) return;
+      changes.forEach((c) => {
+        exportData.push({
+          Sheet: sheet.brandName,
+          Brand: row.Brand ?? row.brand ?? "",
+          Product: row.Product ?? row.product ?? "",
+          Field: c.field,
+          "Current Value": c.oldValue,
+          "AI Suggested Value": c.newValue,
+          Engine: row.aiFixSuggestion!.engine === "gemini" ? "Gemini (có nguồn)" : "qwen3.5:9b (local)",
+          Note: row.aiFixSuggestion!.note || "",
+        });
+      });
+    });
+  });
+
+  if (exportData.length === 0) {
+    return false;
+  }
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const maxWidths = exportData.reduce((acc: any, row: any) => {
+    Object.keys(row).forEach((key, i) => {
+      const val = row[key] ? row[key].toString() : "";
+      acc[i] = Math.max(acc[i] || 0, val.length, key.length);
+    });
+    return acc;
+  }, []);
+  worksheet["!cols"] = maxWidths.map((w: number) => ({ w: Math.min(w, 60) }));
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "AI Suggestions");
+
+  const safeFileName = (fileName || "catalog").split(".")[0];
+  XLSX.writeFile(workbook, `${safeFileName}_ai_suggestions.xlsx`);
   return true;
 }
 

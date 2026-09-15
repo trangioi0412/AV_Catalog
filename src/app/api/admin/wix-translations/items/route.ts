@@ -81,7 +81,14 @@ export async function GET(req: NextRequest) {
     ]);
     const fieldDefs = schema ? getTranslatableFields(schema) : [];
 
-    const items: WixTranslationListItem[] = await mapWithConcurrency(page_.items, 5, async (raw): Promise<WixTranslationListItem> => {
+    // Each item needs its own Wix Translation Content API call (queryContentForEntity) to
+    // learn its per-item translation status — unlike the CMS EN/VI tool, that status isn't
+    // available from the base item query. Concurrency here is what "Chọn toàn bộ" pays for on
+    // every page of items it walks, so it's set higher than a typical write path (which is
+    // bottlenecked by Wix's write quota instead) — this is a read-only query, and a failed
+    // one already degrades gracefully to "chưa dịch" in translationInfoFor()'s catch below
+    // rather than failing the whole page.
+    const items: WixTranslationListItem[] = await mapWithConcurrency(page_.items, 15, async (raw): Promise<WixTranslationListItem> => {
       const data = raw.data;
       const name = String(data.title ?? data.Title ?? data.product ?? data.Product ?? data.name ?? data.Name ?? raw.itemId);
       const { status: translationStatus, untranslatedFields } = await translationInfoFor(schema?.id || null, fieldDefs, raw.itemId, targetLocale);
