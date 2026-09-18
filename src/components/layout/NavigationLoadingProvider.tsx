@@ -11,7 +11,7 @@ const routeLabels: Record<string, string> = {
   "/admin/dashboard":        "Discovery Dashboard",
   "/admin/discovery":        "Discovery Queue",
   "/admin/scanner":          "Manual Scanner",
-  "/admin/image-discovery":  "AI Image Discovery",
+  "/admin/image-discovery":  "Tra Cứu Sản Phẩm AI",
   "/admin/image-sync":       "Image Sync",
   "/admin/tools/wix-translation-sync": "Wix Translation Sync",
 };

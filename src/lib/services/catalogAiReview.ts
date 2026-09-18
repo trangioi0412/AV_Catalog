@@ -52,12 +52,14 @@ export interface CatalogReviewItem {
 }
 
 /**
- * Fixed taxonomy the model is constrained to (via REVIEW_RESPONSE_SCHEMA's
- * enum below) — lets the review dashboard show a real breakdown by problem
- * type instead of trying to bucket free-text Vietnamese with regex.
+ * Fixed taxonomy the model is constrained to (via each request's dynamically
+ * built response schema — see getReviewResponseSchema) — lets the review
+ * dashboard show a real breakdown by problem type instead of trying to
+ * bucket free-text Vietnamese with regex.
  */
 export const CATALOG_REVIEW_CATEGORIES = [
   "category_mismatch",
+  "series_mismatch",
   "missing_specs",
   "invalid_name",
   "placeholder_data",
@@ -68,6 +70,84 @@ export const CATALOG_REVIEW_CATEGORIES = [
 
 export type CatalogReviewCategory = (typeof CATALOG_REVIEW_CATEGORIES)[number];
 
+/**
+ * Fields a reviewer can choose to have AI check (see page.tsx's "Kiểm tra
+ * AI" field-picker dialog — the admin picks a subset before running the
+ * review, defaulting to Category + Series). Every field is still given to
+ * the model as CONTEXT regardless of selection — judging Category
+ * correctly, for instance, requires reading Main Feature/Product Overview
+ * even when those two aren't themselves selected for checking.
+ */
+export const AI_REVIEW_TARGET_FIELDS = ["Category", "Series", "Title", "MainFeature", "ProductOverview", "TechnicalSpecifications"] as const;
+
+export type AiReviewTargetField = (typeof AI_REVIEW_TARGET_FIELDS)[number];
+
+/** Which finding categories are in-scope when a given field is selected for checking. */
+const FIELD_CATEGORY_MAP: Record<AiReviewTargetField, CatalogReviewCategory[]> = {
+  Category: ["category_mismatch"],
+  Series: ["series_mismatch"],
+  Title: ["invalid_name"],
+  MainFeature: ["duplicate_content", "placeholder_data", "mixed_language"],
+  ProductOverview: ["duplicate_content", "placeholder_data", "mixed_language"],
+  TechnicalSpecifications: ["missing_specs", "duplicate_content"],
+};
+
+/** Prompt instructions per selected field — only the ones for the fields the reviewer picked get included, so the model isn't asked to also hunt for problems nobody asked about this run. */
+const FIELD_DESCRIPTIONS: Record<AiReviewTargetField, string> = {
+  Category: `- "category_mismatch": Category không khớp với loại sản phẩm thực tế. QUAN TRỌNG: so sánh Category không chỉ với tên sản phẩm (Product/Title), mà PHẢI đối chiếu cả với nội dung Main Feature và Product Overview — nếu Main Feature/Product Overview mô tả rõ chức năng của một loại thiết bị khác với Category đã ghi (ví dụ Category ghi "Loa" nhưng Main Feature/Product Overview mô tả rõ đây là bộ xử lý tín hiệu DSP hoặc micro), đây LÀ category_mismatch dù tên sản phẩm không rõ ràng.
+  ĐẶC BIỆT LƯU Ý VỚI PHỤ KIỆN/THIẾT BỊ MỞ RỘNG (mic mở rộng, remote, dây cáp, chân đế, adapter, module mở rộng...): phải phân loại theo BẢN CHẤT CHỨC NĂNG của CHÍNH sản phẩm đó, KHÔNG PHẢI theo loại sản phẩm CHÍNH mà nó đi kèm/mở rộng. Ví dụ: một microphone mở rộng (extension mic) được thiết kế để dùng kèm một video bar/camera thì BẢN THÂN nó VẪN LÀ thiết bị âm thanh (microphone) — phải thuộc Category về Audio/Microphone, TUYỆT ĐỐI KHÔNG được xếp vào Category về Camera/Video Capture chỉ vì nó tương thích hoặc bán kèm với một camera/video bar. Luôn hỏi "bản thân thiết bị NÀY thu/xử lý/truyền tín hiệu gì (âm thanh, hình ảnh, điều khiển...)" chứ không phải "nó đi kèm với sản phẩm loại gì".
+  TUYỆT ĐỐI KHÔNG suy ra Category của một sản phẩm dựa trên việc HÃNG đó thường được biết đến với loại sản phẩm gì (ví dụ: một hãng nổi tiếng về DSP/âm thanh hội nghị KHÔNG có nghĩa mọi sản phẩm của hãng đó đều là thiết bị âm thanh) — chỉ được kết luận Category dựa trên chức năng CỤ THỂ của CHÍNH sản phẩm đang xét (đọc kỹ Title/Main Feature/Product Overview của đúng sản phẩm đó).
+  ĐẶC BIỆT LƯU Ý VỚI BẢNG/MÀN HÌNH ĐIỀU KHIỂN CẢM ỨNG (touch panel, control panel, room scheduling panel, bộ điều khiển phòng họp...): đây là thiết bị ĐIỀU KHIỂN/GIAO DIỆN NGƯỜI DÙNG, KHÔNG PHẢI thiết bị âm thanh — dù mô tả sản phẩm có nhắc đến các nút điều khiển liên quan đến âm thanh (mute mic, điều chỉnh âm lượng, định tuyến audio...), bản thân màn hình/bảng điều khiển đó KHÔNG thu/phát/xử lý tín hiệu âm thanh nên KHÔNG được xếp vào Category về Microphone/Audio Input — phải xếp vào Category về Control/Touch Panel hoặc tương đương.`,
+  Series: `- "series_mismatch": Series (dòng sản phẩm) không hợp lý hoặc không khớp với Model/Title/Category/Brand — ví dụ Series ghi tên của một dòng sản phẩm hoàn toàn khác, rõ ràng bị dán nhầm từ sản phẩm khác, hoặc không thuộc hãng/dòng sản phẩm mà Brand/Product/Title thể hiện. KHÔNG báo cáo chỉ vì Series đang trống — trống không đủ căn cứ để so sánh, không phải lỗi sai lệch nội dung.`,
+  Title: `- "invalid_name": Tên sản phẩm/Model (Title/Product) bị thiếu, chứa ký tự rác/lỗi encoding, hoặc bị cắt cụt bất thường.`,
+  MainFeature: `- "placeholder_data", "duplicate_content", "mixed_language" áp dụng cho Main Feature: còn sót placeholder ("N/A", "TBD", "CẦN VERIFY"...), nội dung rõ ràng dán nhầm/trùng lặp từ sản phẩm khác, hoặc lẫn lộn cả tiếng Anh và tiếng Việt không nhất quán trong Main Feature.`,
+  ProductOverview: `- "placeholder_data", "duplicate_content", "mixed_language" áp dụng cho Product Overview: còn sót placeholder, nội dung rõ ràng dán nhầm/trùng lặp từ sản phẩm khác, hoặc lẫn lộn cả tiếng Anh và tiếng Việt không nhất quán trong Product Overview.`,
+  TechnicalSpecifications: `- "missing_specs": Technical Specifications trống, quá sơ sài (chỉ 1-2 thông số cho một thiết bị phức tạp), hoặc lặp lại thông số giống hệt nhau. "duplicate_content" áp dụng cho Technical Specifications khi nội dung rõ ràng bị dán nhầm từ sản phẩm khác không liên quan.`,
+};
+
+const MIXED_LANGUAGE_NOTE = `Với "mixed_language": KHÔNG tính là lỗi nếu chỉ là tên riêng, tên hãng, mã model, hoặc thuật ngữ kỹ thuật/viết tắt tiếng Anh phổ biến (HDMI, USB, WiFi, DSP...) xuất hiện trong câu tiếng Việt bình thường — đó là cách hành văn tự nhiên, không phải lỗi.`;
+
+/** Every category reachable from a set of target fields — what the model's response schema gets constrained to for this request. */
+function allowedCategoriesForFields(targetFields: readonly AiReviewTargetField[]): CatalogReviewCategory[] {
+  const set = new Set<CatalogReviewCategory>();
+  targetFields.forEach((f) => FIELD_CATEGORY_MAP[f].forEach((c) => set.add(c)));
+  return Array.from(set);
+}
+
+// A bare `format: "json"` only forces *some* valid JSON — it does not pin down
+// the top-level type. Verified live against qwen3.5:9b: with just "json", a
+// batch with several flagged products came back as a single flat
+// `{"id":...,"findings":[...]}`, silently dropping every other finding.
+// Passing this schema instead forces genuine array output — same batch then
+// returned all flagged items correctly, each with an accurate category.
+// The category `enum` is built PER REQUEST from the reviewer's selected
+// fields — Ollama's grammar-constrained decoding then makes it structurally
+// impossible for the model to emit a category outside what was asked for,
+// which is a stronger guarantee than a prompt instruction alone.
+function getReviewResponseSchema(allowedCategories: CatalogReviewCategory[]) {
+  return {
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        findings: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              category: { type: "string", enum: allowedCategories },
+              message: { type: "string" },
+            },
+            required: ["category", "message"],
+          },
+        },
+      },
+      required: ["id", "findings"],
+    },
+  };
+}
+
 export interface CatalogReviewFinding {
   category: CatalogReviewCategory;
   message: string;
@@ -77,34 +157,6 @@ export interface CatalogReviewIssue {
   id: string;
   findings: CatalogReviewFinding[];
 }
-
-// A bare `format: "json"` only forces *some* valid JSON — it does not pin down
-// the top-level type. Verified live against qwen3.5:9b: with just "json", a
-// batch with several flagged products came back as a single flat
-// `{"id":...,"findings":[...]}`, silently dropping every other finding.
-// Passing this schema instead forces genuine array output — same batch then
-// returned all flagged items correctly, each with an accurate category.
-const REVIEW_RESPONSE_SCHEMA = {
-  type: "array",
-  items: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      findings: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            category: { type: "string", enum: [...CATALOG_REVIEW_CATEGORIES] },
-            message: { type: "string" },
-          },
-          required: ["category", "message"],
-        },
-      },
-    },
-    required: ["id", "findings"],
-  },
-};
 
 export type CatalogAiReviewErrorCode = "NOT_CONFIGURED" | "TIMEOUT" | "UPSTREAM_ERROR" | "INVALID_RESPONSE";
 
@@ -139,19 +191,22 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
-function buildReviewPrompt(items: CatalogReviewItem[]): string {
+function buildReviewPrompt(items: CatalogReviewItem[], targetFields: readonly AiReviewTargetField[]): string {
+  const descriptions = targetFields.map((f) => FIELD_DESCRIPTIONS[f]).join("\n");
+  const needsMixedLanguageNote = targetFields.includes("MainFeature") || targetFields.includes("ProductOverview");
+
   return `Bạn là chuyên gia kiểm duyệt chất lượng dữ liệu catalog sản phẩm Audio Visual (AV) chuyên nghiệp (âm thanh, hội nghị truyền hình, trình chiếu, điều khiển tích hợp).
 
-Nhiệm vụ: kiểm tra danh sách sản phẩm dưới đây (mỗi sản phẩm có "id" và các trường dữ liệu), phát hiện các vấn đề chất lượng dữ liệu THỰC SỰ đáng ngờ. Mỗi vấn đề phát hiện được PHẢI gán đúng một trong các loại (category) sau:
-- "category_mismatch": Category không khớp với loại sản phẩm thực tế. QUAN TRỌNG: so sánh Category không chỉ với tên sản phẩm (Product/Title), mà PHẢI đối chiếu cả với nội dung Main Feature và Product Overview — nếu Main Feature/Product Overview mô tả rõ chức năng của một loại thiết bị khác với Category đã ghi (ví dụ Category ghi "Loa" nhưng Main Feature/Product Overview mô tả rõ đây là bộ xử lý tín hiệu DSP hoặc micro), đây LÀ category_mismatch dù tên sản phẩm không rõ ràng.
-- "missing_specs": Technical Specifications trống, quá sơ sài (chỉ 1-2 thông số cho một thiết bị phức tạp), hoặc lặp lại thông số giống hệt nhau.
-- "invalid_name": Tên sản phẩm/Model bị thiếu, chứa ký tự rác/lỗi encoding, hoặc bị cắt cụt bất thường.
-- "placeholder_data": Còn sót placeholder như "N/A", "TBD", "CẦN VERIFY", "???", "xxx", hoặc trường quan trọng bị bỏ trống.
-- "duplicate_content": Nội dung của một trường (đặc biệt Technical Specifications) rõ ràng bị dán nhầm/trùng lặp từ một sản phẩm khác không liên quan.
-- "mixed_language": Một trường văn bản (đặc biệt Title, Main Feature, Product Overview) bị LẪN LỘN cả tiếng Anh và tiếng Việt một cách không nhất quán trong cùng nội dung (ví dụ nửa câu tiếng Việt, nửa câu tiếng Anh, hoặc xen kẽ từng câu một). KHÔNG tính là lỗi nếu chỉ là tên riêng, tên hãng, mã model, hoặc thuật ngữ kỹ thuật/viết tắt tiếng Anh phổ biến (HDMI, USB, WiFi, DSP...) xuất hiện trong câu tiếng Việt bình thường — đó là cách hành văn tự nhiên, không phải lỗi.
-- "other": Vấn đề chất lượng dữ liệu rõ ràng khác không thuộc các loại trên.
+Nhiệm vụ: kiểm tra danh sách sản phẩm dưới đây (mỗi sản phẩm có "id" và các trường dữ liệu). Người dùng CHỈ yêu cầu kiểm tra các khía cạnh sau — KHÔNG báo cáo bất kỳ vấn đề nào khác dù có nhận thấy, dù đó là vấn đề ở một trường không nằm trong phạm vi được yêu cầu:
+${descriptions}
+${needsMixedLanguageNote ? `\n${MIXED_LANGUAGE_NOTE}\n` : ""}
+QUAN TRỌNG: dù chỉ báo cáo các khía cạnh trên, bạn vẫn phải đọc và đối chiếu ĐẦY ĐỦ mọi trường dữ liệu của sản phẩm (Category, Product, Title, Series, Main Feature, Product Overview, Technical Specifications...) làm CĂN CỨ đánh giá — ví dụ để biết Category đúng hay sai, PHẢI đối chiếu với nội dung thực tế ở Main Feature/Product Overview, kể cả khi hai trường đó không nằm trong phạm vi được yêu cầu báo cáo riêng lần này.
 
-KHÔNG báo cáo những điều chỉ là thiếu sót nhỏ, không chắc chắn, hoặc là cách hành văn bình thường. CHỈ liệt kê sản phẩm CÓ vấn đề rõ ràng — bỏ qua hoàn toàn sản phẩm hợp lệ.
+QUAN TRỌNG — MỖI SẢN PHẨM PHẢI ĐƯỢC ĐÁNH GIÁ ĐỘC LẬP: danh sách dưới đây có thể chứa nhiều sản phẩm khác loại nhau trong cùng một lượt kiểm tra. TUYỆT ĐỐI KHÔNG để dữ liệu/Category/đặc điểm của một sản phẩm ảnh hưởng đến kết luận về một sản phẩm KHÁC có "id" khác — mọi nhận định về một "id" phải dựa CHỈ trên đúng các trường dữ liệu của chính "id" đó. Đặc biệt: nếu Category của một sản phẩm thuộc một NHÓM CHỨC NĂNG hoàn toàn khác với nội dung Main Feature/Product Overview của CHÍNH sản phẩm đó (ví dụ: thiết bị THU tín hiệu như micro/camera bị ghi Category là thiết bị PHÁT/khuếch đại như loa/amply/power amplifier, hoặc ngược lại; hoặc bất kỳ hai nhóm thiết bị không liên quan nào khác), đây LUÔN LÀ category_mismatch RÕ RÀNG với độ tin cậy cao — phải báo cáo, không được bỏ sót chỉ vì đang bận đánh giá nhiều sản phẩm khác trong cùng batch.
+
+Mỗi vấn đề phát hiện được PHẢI gán đúng một trong các loại (category) đã liệt kê ở trên — KHÔNG dùng loại nào khác ngoài danh sách đó.
+
+KHÔNG báo cáo những điều chỉ là thiếu sót nhỏ, không chắc chắn, hoặc là cách hành văn bình thường. CHỈ liệt kê sản phẩm CÓ vấn đề rõ ràng — bỏ qua hoàn toàn sản phẩm hợp lệ. Nhưng một Category thuộc nhóm chức năng hoàn toàn khác với mô tả thực tế của sản phẩm KHÔNG BAO GIỜ được coi là "thiếu sót nhỏ" — luôn phải báo cáo.
 
 Trả lời DUY NHẤT một JSON array, không kèm giải thích, không dùng markdown code fence, đúng định dạng:
 [{"id": "<id sản phẩm>", "findings": [{"category": "<một trong các loại ở trên>", "message": "<mô tả ngắn gọn vấn đề>"}]}, ...]
@@ -183,16 +238,20 @@ function extractIssueArray(parsed: unknown): unknown[] | null {
   return wrapperKey ? (obj[wrapperKey] as unknown[]) : null;
 }
 
-function normalizeCategory(value: unknown): CatalogReviewCategory {
-  return (CATALOG_REVIEW_CATEGORIES as readonly string[]).includes(value as string)
-    ? (value as CatalogReviewCategory)
-    : "other";
+function normalizeCategory(value: unknown, allowedCategories: CatalogReviewCategory[]): CatalogReviewCategory {
+  if (allowedCategories.includes(value as CatalogReviewCategory)) return value as CatalogReviewCategory;
+  // Falls back to whichever allowed category comes first rather than a
+  // hardcoded "other" — "other" isn't necessarily in scope for this
+  // request's selected fields, and the schema enum should already prevent
+  // this path in practice (kept only as a defensive fallback).
+  return allowedCategories[0];
 }
 
 /** Single Ollama call for one batch — no retry logic. See reviewCatalogBatch for that. */
-async function reviewCatalogBatchOnce(items: CatalogReviewItem[], model?: string): Promise<CatalogReviewIssue[]> {
+async function reviewCatalogBatchOnce(items: CatalogReviewItem[], targetFields: readonly AiReviewTargetField[], model?: string): Promise<CatalogReviewIssue[]> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (OLLAMA_API_KEY) headers.Authorization = `Bearer ${OLLAMA_API_KEY}`;
+  const allowedCategories = allowedCategoriesForFields(targetFields);
 
   let response: Response;
   try {
@@ -202,13 +261,13 @@ async function reviewCatalogBatchOnce(items: CatalogReviewItem[], model?: string
         headers,
         body: JSON.stringify({
           model: model || CATALOG_AI_REVIEW_MODEL,
-          prompt: buildReviewPrompt(items),
+          prompt: buildReviewPrompt(items, targetFields),
           stream: false,
           // Skip hybrid-reasoning chain-of-thought (e.g. Qwen3) — on a batch-sized
           // prompt like this, thinking alone can consume the whole output budget
           // and leave the actual JSON answer empty. No-op for non-hybrid models.
           think: false,
-          format: REVIEW_RESPONSE_SCHEMA,
+          format: getReviewResponseSchema(allowedCategories),
           options: { temperature: 0.1, num_ctx: CATALOG_AI_REVIEW_NUM_CTX },
         }),
       }),
@@ -265,7 +324,7 @@ async function reviewCatalogBatchOnce(items: CatalogReviewItem[], model?: string
       if (!f || typeof f !== "object") continue;
       const message = (f as Record<string, unknown>).message;
       if (typeof message !== "string" || message.trim() === "") continue;
-      findings.push({ category: normalizeCategory((f as Record<string, unknown>).category), message });
+      findings.push({ category: normalizeCategory((f as Record<string, unknown>).category, allowedCategories), message });
     }
     if (findings.length > 0) results.push({ id, findings });
   }
@@ -286,14 +345,19 @@ async function reviewCatalogBatchOnce(items: CatalogReviewItem[], model?: string
  * open-ended cascade. Whichever half still succeeds is kept even if the other
  * fails, so a single stubborn item doesn't wipe out findings for the rest.
  */
-export async function reviewCatalogBatch(items: CatalogReviewItem[], model?: string): Promise<CatalogReviewIssue[]> {
+export async function reviewCatalogBatch(
+  items: CatalogReviewItem[],
+  targetFields: readonly AiReviewTargetField[] = AI_REVIEW_TARGET_FIELDS,
+  model?: string
+): Promise<CatalogReviewIssue[]> {
   if (!OLLAMA_BASE_URL) {
     throw new CatalogAiReviewError("OLLAMA_BASE_URL is not configured.", "NOT_CONFIGURED");
   }
   if (items.length === 0) return [];
+  if (targetFields.length === 0) return [];
 
   try {
-    return await reviewCatalogBatchOnce(items, model);
+    return await reviewCatalogBatchOnce(items, targetFields, model);
   } catch (err) {
     const isRetryable = err instanceof CatalogAiReviewError && (err.code === "INVALID_RESPONSE" || err.code === "TIMEOUT");
     if (!isRetryable || items.length < 2) throw err;
@@ -308,7 +372,7 @@ export async function reviewCatalogBatch(items: CatalogReviewItem[], model?: str
     let anyHalfSucceeded = false;
     for (const half of halves) {
       try {
-        results.push(...(await reviewCatalogBatchOnce(half, model)));
+        results.push(...(await reviewCatalogBatchOnce(half, targetFields, model)));
         anyHalfSucceeded = true;
       } catch (halfErr) {
         console.error(`[catalogAiReview] Half-batch of ${half.length} also failed:`, halfErr);

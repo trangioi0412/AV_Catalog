@@ -147,6 +147,18 @@ export async function listSiteSchemas(forceRefresh = false): Promise<Translation
  * `key.entityType` to the collection ID. Honors an optional
  * `WIX_TRANSLATION_SCHEMA_ID` env override before falling back to auto-discovery,
  * per the project's "don't hard-code the schema ID unless forced to" rule.
+ *
+ * Queries List Site Schemas with `entityType`/`scope` as server-side filter
+ * params (both documented, supported query params on this endpoint) instead
+ * of only relying on listSiteSchemas()'s unpaginated, unfiltered fetch —
+ * that single request returns whatever page size Wix defaults to, and a
+ * site accumulates one schema per translatable app/collection (Stores,
+ * Blog, Bookings, every other Data Collection marked translatable...), so
+ * on a site with enough of those the Products schema could silently fall
+ * outside that one page and never be found here even though it's genuinely
+ * configured in the Translation Manager — exactly the reported symptom
+ * ("shows in Wix, tool says not found"). Falls back to the full list only
+ * if the filtered query itself comes back empty, as a safety net.
  */
 export async function findCollectionSchema(collectionId: string): Promise<TranslationSchema | null> {
   const overrideId = process.env.WIX_TRANSLATION_SCHEMA_ID;
@@ -164,10 +176,19 @@ export async function findCollectionSchema(collectionId: string): Promise<Transl
     }
   }
 
+  const params = new URLSearchParams({ entityType: collectionId, scope: "SITE" });
+  try {
+    const json = (await wixFetch(`${TRANSLATION_SCHEMA_API}/schemas/site?${params.toString()}`, { method: "GET" })) as {
+      schemas?: TranslationSchema[];
+    } | null;
+    const match = json?.schemas?.find((s) => s.key?.scope === "SITE" && s.key?.entityType === collectionId);
+    if (match) return match;
+  } catch (err) {
+    console.warn(`[Wix Multilingual] Filtered schema lookup for entityType="${collectionId}" failed, falling back to full list:`, err);
+  }
+
   const schemas = await listSiteSchemas();
-  return (
-    schemas.find((s) => s.key?.scope === "SITE" && s.key?.entityType === collectionId) || null
-  );
+  return schemas.find((s) => s.key?.scope === "SITE" && s.key?.entityType === collectionId) || null;
 }
 
 /** Derives the machine-translatable field allowlist for a schema (text fields only, minus the denylist). */

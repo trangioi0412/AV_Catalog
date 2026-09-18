@@ -414,9 +414,16 @@ async function runWrite(
     fields: Object.fromEntries(Object.entries(p.sanitizedFields).map(([key, value]) => [key, { textValue: value, published }])),
   });
 
+  // Skip the network call entirely when there's nothing to write — besides
+  // being a wasted request, Wix's bulk endpoints have been observed to
+  // reject an empty items array outright, which would otherwise fail the
+  // WHOLE batch (including any items that DID succeed) any time every
+  // item in a batch ends up skipped (e.g. every item hit the stale-preview
+  // conflict check above, or already had a translation and overwrite
+  // wasn't confirmed) — a fairly common real scenario, not just an edge case.
   const [createResults, updateResults] = await Promise.all([
-    bulkCreateContent(toCreate.map(toBulkInput)),
-    bulkUpdateContentByKey(toUpdate.map(toBulkInput)),
+    toCreate.length > 0 ? bulkCreateContent(toCreate.map(toBulkInput)) : Promise.resolve([]),
+    toUpdate.length > 0 ? bulkUpdateContentByKey(toUpdate.map(toBulkInput)) : Promise.resolve([]),
   ]);
   const writeResultByItemId = new Map([...createResults, ...updateResults].map((r) => [r.entityId, r]));
 

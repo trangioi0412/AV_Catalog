@@ -323,7 +323,11 @@ describe("translateAndSyncWixCmsItems", () => {
       const result = await translateAndSyncWixCmsItems(writeInput("draft", { overwriteExisting: true }));
 
       expect(bulkUpdateContentByKey).toHaveBeenCalledTimes(1);
-      expect(bulkCreateContent).toHaveBeenCalledWith([]);
+      // Nothing needs creating in this scenario (it's an update), so the
+      // create endpoint should not be called at all — see runWrite's
+      // "skip the network call entirely when there's nothing to write"
+      // comment for why (Wix's bulk endpoints reject an empty items array).
+      expect(bulkCreateContent).not.toHaveBeenCalled();
       expect(result.items[0]).toMatchObject({ status: "success", action: "updated" });
     });
 
@@ -335,8 +339,8 @@ describe("translateAndSyncWixCmsItems", () => {
 
       const result = await translateAndSyncWixCmsItems(writeInput("draft", { overwriteExisting: false }));
 
-      expect(bulkCreateContent).toHaveBeenCalledWith([]);
-      expect(bulkUpdateContentByKey).toHaveBeenCalledWith([]);
+      expect(bulkCreateContent).not.toHaveBeenCalled();
+      expect(bulkUpdateContentByKey).not.toHaveBeenCalled();
       expect(result.items[0].status).toBe("skipped");
       expect(result.items[0].message).toMatch(/ghi đè/i);
     });

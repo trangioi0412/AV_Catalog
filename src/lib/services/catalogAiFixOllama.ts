@@ -119,6 +119,8 @@ QUAN TRỌNG — GIỚI HẠN CỦA BẠN: Bạn KHÔNG có quyền truy cập I
 
 QUAN TRỌNG — LỖI LẪN NGÔN NGỮ (mixed_language): nếu "issues" của một sản phẩm nêu rằng một trường (Title, MainFeature, ProductOverview...) bị lẫn lộn cả tiếng Anh và tiếng Việt, hãy VIẾT LẠI TOÀN BỘ nội dung trường đó bằng tiếng Việt thống nhất, giữ nguyên đầy đủ thông tin/ý nghĩa gốc — không dịch từng câu một cách máy móc mà hãy diễn đạt tự nhiên như văn bản tiếng Việt thuần. Chỉ giữ nguyên (không dịch) tên riêng, tên hãng, mã model/số hiệu, và các thuật ngữ/viết tắt kỹ thuật tiếng Anh phổ biến (HDMI, USB, WiFi, DSP, 4K...). Đây KHÔNG cần kiến thức bên ngoài (chỉ là viết lại ngôn ngữ của nội dung đã có) nên PHẢI thực hiện, không được bỏ qua với lý do "cần tra cứu thêm".
 
+QUAN TRỌNG — MỖI SẢN PHẨM PHẢI ĐƯỢC SỬA ĐỘC LẬP: danh sách dưới đây có thể chứa nhiều sản phẩm khác loại nhau trong cùng một lượt sửa. TUYỆT ĐỐI KHÔNG lấy giá trị field (đặc biệt là Category) từ một sản phẩm khác gán nhầm cho sản phẩm đang xét — giá trị đề xuất cho một "id" PHẢI được suy ra CHỈ từ "fields"/"issues" của chính "id" đó. Trước khi trả về "Category" mới cho một sản phẩm, đọc lại đúng "Main Feature"/"Product Overview" của CHÍNH sản phẩm đó để xác nhận giá trị mới thực sự khớp — không copy nhầm Category của sản phẩm khác trong cùng danh sách.
+
 Nhiệm vụ: với mỗi sản phẩm dưới đây (có "id", "fields" hiện tại, và "issues" — các vấn đề đã được phát hiện trước đó), đề xuất giá trị sửa cho CÁC TRƯỜNG BẠN CÓ THỂ SỬA CHẮC CHẮN. Các trường được phép sửa: ${FIXABLE_FIELDS.join(", ")}.
 
 Trả lời DUY NHẤT một JSON array, không giải thích thêm, đúng định dạng:

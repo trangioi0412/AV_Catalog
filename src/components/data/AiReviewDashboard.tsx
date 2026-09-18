@@ -9,6 +9,7 @@ import type { AiReviewCategory } from "@/types";
 
 const CATEGORY_META: Record<AiReviewCategory, { label: string; color: string }> = {
   category_mismatch: { label: "Category không khớp", color: "bg-rose-500" },
+  series_mismatch: { label: "Series không khớp", color: "bg-pink-500" },
   missing_specs: { label: "Thông số thiếu/sơ sài", color: "bg-amber-500" },
   invalid_name: { label: "Tên sản phẩm lỗi", color: "bg-orange-500" },
   placeholder_data: { label: "Còn sót placeholder", color: "bg-yellow-500" },
@@ -19,6 +20,7 @@ const CATEGORY_META: Record<AiReviewCategory, { label: string; color: string }> 
 
 const CATEGORY_ORDER: AiReviewCategory[] = [
   "category_mismatch",
+  "series_mismatch",
   "missing_specs",
   "invalid_name",
   "placeholder_data",
@@ -36,6 +38,7 @@ export function AiReviewDashboard() {
     let flaggedCount = 0;
     const categoryCounts: Record<AiReviewCategory, number> = {
       category_mismatch: 0,
+      series_mismatch: 0,
       missing_specs: 0,
       invalid_name: 0,
       placeholder_data: 0,
@@ -69,7 +72,7 @@ export function AiReviewDashboard() {
       <Card className="border-dashed border-violet-500/30 bg-violet-500/5">
         <CardContent className="py-6 flex items-center gap-3 text-sm text-muted-foreground">
           <Bot className="w-5 h-5 text-violet-500 shrink-0" />
-          Chưa chạy AI Review — nhấn <span className="font-semibold text-foreground">"Kiểm tra AI"</span> ở trên để rà soát chất lượng dữ liệu cho {stats.totalProducts.toLocaleString()} sản phẩm.
+          Chưa chạy AI Review — nhấn <span className="font-semibold text-foreground">&quot;Kiểm tra AI&quot;</span> ở trên để rà soát chất lượng dữ liệu cho {stats.totalProducts.toLocaleString()} sản phẩm.
         </CardContent>
       </Card>
     );

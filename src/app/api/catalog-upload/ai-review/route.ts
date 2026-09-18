@@ -22,6 +22,7 @@ import {
   isCatalogAiReviewConfigured,
   CatalogAiReviewError,
   CATALOG_AI_REVIEW_BATCH_SIZE,
+  AI_REVIEW_TARGET_FIELDS,
 } from "@/lib/services/catalogAiReview";
 
 export const runtime = "nodejs";
@@ -45,6 +46,11 @@ const requestSchema = z.object({
     .min(1)
     .max(MAX_ITEMS),
   model: z.string().min(1).max(200).optional(),
+  // Which fields the reviewer wants AI to actually flag issues on this run
+  // (see catalogAiReview.ts's FIELD_CATEGORY_MAP) — every field is still
+  // given to the model as context regardless. Defaults to every field if
+  // omitted, matching the previous "check everything" behavior.
+  targetFields: z.array(z.enum(AI_REVIEW_TARGET_FIELDS)).min(1).max(AI_REVIEW_TARGET_FIELDS.length).optional(),
 });
 
 function noStore(json: unknown, init?: ResponseInit) {
@@ -78,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const results = await reviewCatalogBatch(parsed.data.items, parsed.data.model);
+    const results = await reviewCatalogBatch(parsed.data.items, parsed.data.targetFields ?? AI_REVIEW_TARGET_FIELDS, parsed.data.model);
     return noStore({ results });
   } catch (err) {
     if (err instanceof CatalogAiReviewError) {

@@ -1,285 +1,367 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+/**
+ * /admin/image-discovery
+ * ─────────────────────────────────────────────────────────────────────────────
+ * "Tra cứu sản phẩm bằng AI" — admin types in a brand name (any AV brand,
+ * does not need to already exist in Wix CMS's Brand collection) and this
+ * calls runBrandDiscoveryAction, which uses Gemini Search Grounding
+ * (discoverProductsWithGeminiAgent) to find that brand's professional AV
+ * products on the open web, enriches each new one, and appends it to the
+ * same Discovery Queue (/admin/discovery) a scheduled per-brand scan uses —
+ * so results go through the existing review/approve flow.
+ *
+ * Replaces this page's previous purpose (scanning existing CMS products for
+ * MISSING IMAGES via imageDiscoveryService.ts) per an explicit request to
+ * repurpose it into a brand product lookup tool instead. The old image-scan
+ * action/service files are left in place (imageDiscoveryService.ts,
+ * app/actions/imageDiscovery.ts) since nothing else references them, but
+ * they're no longer wired to any page — only the ImageSearchToggle it also
+ * used still appears on /admin/dashboard.
+ *
+ * Reuses discoveryEngine.ts's shared scan state (activeScanLogs /
+ * isScanInProgress, the same module runProductDiscovery already uses) via
+ * the existing /api/scan-status polling route and stopDiscoveryAction — the
+ * established pattern in ScannerConsole.tsx — rather than building a
+ * parallel status-tracking mechanism.
+ */
+
+import React from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { 
-  startImageDiscoveryAction, 
-  getImageDiscoveryStatusAction, 
-  resetImageDiscoveryAction,
-  stopImageDiscoveryAction 
-} from "@/app/actions/imageDiscovery";
-import { getDashboardStatsAction } from "@/app/actions/discovery";
-import { ImageSearchToggle } from "@/components/data/ImageSearchToggle";
-import { 
-  Play, 
-  RotateCcw, 
-  Loader2, 
-  Sparkles, 
-  FileText, 
-  ImageIcon, 
-  CheckCircle2, 
-  AlertCircle,
-  StopCircle
-} from "lucide-react";
+import { runBrandDiscoveryAction, getDiscoveryLogsAction, stopDiscoveryAction, SyncLogEntry } from "@/app/actions/discovery";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Search,
+  Loader2,
+  Sparkles,
+  Terminal,
+  History,
+  StopCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle,
+  Link as LinkIcon,
+} from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import Link from "next/link";
 
-export default function ImageDiscoveryPage() {
-  const [inProgress, setInProgress] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [isImageSearchEnabled, setIsImageSearchEnabled] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const logEndRef = useRef<HTMLDivElement>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+export default function BrandDiscoveryPage() {
+  const [brandName, setBrandName] = React.useState("");
+  const [keyword, setKeyword] = React.useState("");
+  const [provider, setProvider] = React.useState<"gemini" | "ollama">("gemini");
+  const [skipDedup, setSkipDedup] = React.useState(false);
+  const [isScanning, setIsScanning] = React.useState(false);
+  const [isStopping, setIsStopping] = React.useState(false);
+  const [logs, setLogs] = React.useState<string[]>([]);
+  const [historicalLogs, setHistoricalLogs] = React.useState<SyncLogEntry[]>([]);
+  const [activeTab, setActiveTab] = React.useState("console");
+  const [lastResult, setLastResult] = React.useState<{ totalNew: number; totalScanned: number; brandMatched: boolean } | null>(null);
 
-  // Load initial settings and status
-  useEffect(() => {
-    async function init() {
-      try {
-        const stats = await getDashboardStatsAction();
-        setIsImageSearchEnabled(!!stats.isImageSearchEnabled);
+  const terminalEndRef = React.useRef<HTMLDivElement>(null);
+  const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
-        const status = await getImageDiscoveryStatusAction();
-        setInProgress(status.inProgress);
-        setLogs(status.logs);
-      } catch (err) {
-        console.error("Failed to load initial discovery settings:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    init();
+  React.useEffect(() => {
+    getDiscoveryLogsAction().then(setHistoricalLogs).catch(() => {});
   }, []);
 
-  // Poll status when inProgress is true
-  useEffect(() => {
-    if (inProgress) {
-      pollIntervalRef.current = setInterval(async () => {
-        try {
-          const status = await getImageDiscoveryStatusAction();
-          setLogs(status.logs);
-          setInProgress(status.inProgress);
-
-          if (!status.inProgress) {
-            toast.success("AI Image Discovery job finished!");
-            setIsStopping(false);
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-          }
-        } catch (err) {
-          console.error("Failed to poll discovery status:", err);
-        }
-      }, 1500);
-    } else {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-      setIsStopping(false);
-    }
-
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, [inProgress]);
-
-  // Scroll to bottom of logs
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  React.useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  const handleStart = async () => {
-    if (!isImageSearchEnabled) {
-      toast.error("Please enable 'AI Image Searching' in settings first.");
+  const handleSearch = async () => {
+    const trimmed = brandName.trim();
+    if (!trimmed) {
+      toast.error("Nhập tên hãng cần tra cứu.");
       return;
     }
 
-    setInProgress(true);
-    setLogs(["[SYSTEM] Starting AI Image Discovery job..."]);
+    setIsScanning(true);
+    setActiveTab("console");
+    setLastResult(null);
+    setLogs([`[SYSTEM] Đang gửi yêu cầu tra cứu sản phẩm cho hãng "${trimmed}"...`]);
+    toast.loading(`Đang tra cứu sản phẩm của "${trimmed}"...`, { id: "brand-discovery-toast" });
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch("/api/scan-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.logs) && data.logs.length > 0) {
+            setLogs([`[SYSTEM] Đang gửi yêu cầu tra cứu sản phẩm cho hãng "${trimmed}"...`, ...data.logs]);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling scan status:", err);
+      }
+    }, 800);
 
     try {
-      const result = await startImageDiscoveryAction();
-      if (result.success) {
-        toast.success("AI Image Discovery has started in the background.");
+      const res = await runBrandDiscoveryAction(trimmed, keyword.trim() || undefined, provider, skipDedup);
+      if (res.success) {
+        setLogs((prev) => [...prev, ...res.logs, `[SYSTEM] Hoàn tất. Tìm được ${res.totalNew} sản phẩm mới.`]);
+        setLastResult({ totalNew: res.totalNew ?? 0, totalScanned: res.totalScanned ?? 0, brandMatched: Boolean(res.brandMatched) });
+        if ((res.totalNew ?? 0) > 0) {
+          toast.success(`Tìm được ${res.totalNew} sản phẩm mới cho "${trimmed}".`, { id: "brand-discovery-toast" });
+        } else {
+          toast.info(`Không tìm thấy sản phẩm mới nào cho "${trimmed}" (có thể đã có trong catalog).`, { id: "brand-discovery-toast" });
+        }
       } else {
-        setInProgress(false);
-        toast.error(result.error || "Failed to start AI Image Discovery.");
+        setLogs((prev) => [...prev, ...res.logs, "[SYSTEM] [ERROR] Tra cứu thất bại — xem log phía trên."]);
+        toast.error(`Tra cứu thất bại: ${res.error || "Lỗi không xác định"}`, { id: "brand-discovery-toast" });
       }
-    } catch (err: any) {
-      setInProgress(false);
-      toast.error(`Error starting scan: ${err.message || err}`);
+    } catch (err) {
+      setLogs((prev) => [...prev, `[SYSTEM] [ERROR] ${err instanceof Error ? err.message : String(err)}`]);
+      toast.error(`Lỗi: ${err instanceof Error ? err.message : String(err)}`, { id: "brand-discovery-toast" });
+    } finally {
+      if (pollRef.current) clearInterval(pollRef.current);
+      setIsScanning(false);
+      setIsStopping(false);
+      getDiscoveryLogsAction().then(setHistoricalLogs).catch(() => {});
     }
   };
 
   const handleStop = async () => {
     setIsStopping(true);
-    toast.loading("Đang yêu cầu dừng tìm kiếm...", { id: "stop-image-toast" });
+    toast.loading("Đang yêu cầu dừng tra cứu...", { id: "brand-discovery-stop" });
     try {
-      const result = await stopImageDiscoveryAction();
-      if (result.success) {
-        toast.success("Đã yêu cầu dừng tìm kiếm hình ảnh. Hệ thống đang dừng...", { id: "stop-image-toast" });
+      const res = await stopDiscoveryAction();
+      if (res.success) {
+        toast.success("Đã gửi yêu cầu dừng. Hệ thống đang dừng...", { id: "brand-discovery-stop" });
       } else {
-        toast.error(result.error || "Không thể dừng tìm kiếm.", { id: "stop-image-toast" });
+        toast.error(res.error || "Không thể dừng tra cứu.", { id: "brand-discovery-stop" });
         setIsStopping(false);
       }
-    } catch (err: any) {
-      toast.error(`Lỗi: ${err.message || err}`, { id: "stop-image-toast" });
+    } catch (err) {
+      toast.error(`Lỗi: ${err instanceof Error ? err.message : String(err)}`, { id: "brand-discovery-stop" });
       setIsStopping(false);
     }
   };
 
-  const handleReset = async () => {
-    if (confirm("Are you sure you want to force reset the scanner status? Use this only if the scanner gets stuck.")) {
-      try {
-        await resetImageDiscoveryAction();
-        setInProgress(false);
-        setIsStopping(false);
-        toast.success("Scanner status has been reset.");
-      } catch (err: any) {
-        toast.error(`Failed to reset: ${err.message}`);
-      }
+  const formatLogTime = (isoString: string) => {
+    try {
+      return new Date(isoString).toLocaleString();
+    } catch {
+      return isoString;
     }
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-8 max-w-5xl">
-        {/* Header */}
+      <div className="space-y-8 max-w-6xl">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent flex items-center gap-2">
             <Sparkles className="w-8 h-8 text-primary animate-pulse" />
-            AI Image Discovery
+            Tra Cứu Sản Phẩm Bằng AI
           </h1>
           <p className="text-muted-foreground mt-1">
-            Automatically search manufacturer websites for missing product images and upload them directly to Wix Media Manager.
+            Nhập tên một hãng AV (không cần đã có trong hệ thống) — AI sẽ tra cứu trên mạng để tìm toàn bộ sản phẩm chuyên dụng AV của hãng đó và đưa vào Discovery Queue để duyệt.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Settings / Controls Card */}
-          <div className="md:col-span-1 space-y-6">
-            {/* Toggle switch component */}
-            {!loading && (
-              <ImageSearchToggle 
-                initialEnabled={isImageSearchEnabled} 
-              />
-            )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Search Controls */}
+          <Card className="lg:col-span-1 border-primary/10 bg-card/40 backdrop-blur-md shadow-sm h-fit">
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Search className="w-4 h-4 text-primary" />
+                Tra cứu theo hãng
+              </CardTitle>
+              <CardDescription>AI dùng Gemini Search Grounding để tìm sản phẩm thật của hãng trên mạng.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Tên hãng *</label>
+                <Input
+                  value={brandName}
+                  onChange={(e) => setBrandName(e.target.value)}
+                  placeholder="Ví dụ: Shure, Biamp, BZBGEAR..."
+                  disabled={isScanning}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !isScanning) handleSearch();
+                  }}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Từ khoá thêm (tuỳ chọn)</label>
+                <Input
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="Ví dụ: camera hội nghị, DSP..."
+                  disabled={isScanning}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !isScanning) handleSearch();
+                  }}
+                />
+              </div>
 
-            {/* Run Discovery Controller */}
-            <Card className="border-primary/10 bg-card/40 backdrop-blur-md shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Play className="w-4 h-4 text-primary" />
-                  Control Panel
-                </CardTitle>
-                <CardDescription>
-                  Start or stop the scanner. The scanner runs asynchronously in the background.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button
-                  onClick={handleStart}
-                  disabled={inProgress || loading}
-                  className="w-full gap-2 h-11 text-base font-semibold shadow-lg shadow-primary/20 transition-all"
-                >
-                  {inProgress ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Scanning Products...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5 fill-current" />
-                      Start Image Search
-                    </>
-                  )}
-                </Button>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Nguồn AI tra cứu</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setProvider("gemini")}
+                    disabled={isScanning}
+                    className={`text-xs px-2 py-2 rounded-md border transition-colors ${
+                      provider === "gemini" ? "border-primary bg-primary/10 text-primary font-semibold" : "border-border/60 text-muted-foreground hover:bg-muted/30"
+                    }`}
+                  >
+                    Gemini
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProvider("ollama")}
+                    disabled={isScanning}
+                    className={`text-xs px-2 py-2 rounded-md border transition-colors ${
+                      provider === "ollama" ? "border-primary bg-primary/10 text-primary font-semibold" : "border-border/60 text-muted-foreground hover:bg-muted/30"
+                    }`}
+                  >
+                    Ollama qwen3.5:9b
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {provider === "gemini"
+                    ? "Google Search Grounding thật — đáng tin cậy hơn cho việc tìm sản phẩm hoàn toàn mới."
+                    : "Miễn phí, tự lưu trữ — tra cứu qua DuckDuckGo rồi để Ollama tổng hợp. Có thể bỏ sót sản phẩm so với Gemini."}
+                </p>
+              </div>
 
-                {inProgress && (
-                  <div className="flex flex-col gap-2 w-full">
-                    <Button
-                      variant="destructive"
-                      onClick={handleStop}
-                      disabled={isStopping || loading}
-                      className="w-full gap-2 h-10 font-semibold shadow-lg shadow-destructive/20 transition-all"
-                    >
-                      {isStopping ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Đang dừng...
-                        </>
-                      ) : (
-                        <>
-                          <StopCircle className="w-4 h-4" />
-                          Dừng tìm kiếm ảnh
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      onClick={handleReset}
-                      disabled={isStopping || loading}
-                      className="w-full gap-2 text-muted-foreground border-muted-foreground/20 hover:bg-muted/10"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      Khôi phục trạng thái (Reset)
-                    </Button>
-                  </div>
+              <label className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-md p-2">
+                <Checkbox checked={skipDedup} onCheckedChange={(v) => setSkipDedup(Boolean(v))} disabled={isScanning} className="mt-0.5" />
+                <span>
+                  <span className="font-medium text-amber-600">Tạm tắt kiểm tra sản phẩm đã có</span> — bỏ qua bước lọc trùng lặp, dùng để kiểm tra xem AI có thật sự không tìm được sản phẩm nào, hay do bị lọc hết vì tưởng đã có. Bật lên có thể đưa sản phẩm đã tồn tại vào Discovery Queue lần nữa.
+                </span>
+              </label>
+
+              <Button onClick={handleSearch} disabled={isScanning} className="w-full gap-2 h-11 font-semibold shadow-lg shadow-primary/20">
+                {isScanning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Đang tra cứu...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                    Tra cứu sản phẩm
+                  </>
                 )}
+              </Button>
 
-                <div className="p-3.5 bg-muted/40 rounded-xl border border-primary/5 text-xs text-muted-foreground space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                    How it works
+              {isScanning && (
+                <Button variant="destructive" onClick={handleStop} disabled={isStopping} className="w-full gap-2">
+                  {isStopping ? <Loader2 className="w-4 h-4 animate-spin" /> : <StopCircle className="w-4 h-4" />}
+                  {isStopping ? "Đang dừng..." : "Dừng tra cứu"}
+                </Button>
+              )}
+
+              {lastResult && (
+                <div className="p-3 rounded-lg border border-primary/10 bg-muted/30 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    Tìm được {lastResult.totalScanned} sản phẩm, {lastResult.totalNew} sản phẩm mới.
                   </div>
-                  <p>1. Scans Wix CMS for products without images.</p>
-                  <p>2. Uses brand domain mappings to target manufacturer sites.</p>
-                  <p>3. Runs Gemini Search Grounding as an AI fallback.</p>
-                  <p>4. Validates and downloads 1 high-resolution product image.</p>
-                  <p>5. Uploads directly to Wix Media Manager and links to CMS.</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Progress / Logs Card */}
-          <div className="md:col-span-2">
-            <Card className="border-primary/10 bg-card/40 backdrop-blur-md shadow-sm h-full flex flex-col">
-              <CardHeader className="pb-3 border-b border-primary/5">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-primary" />
-                  Console output logs
-                </CardTitle>
-                <CardDescription>
-                  Real-time logs showing crawler activities and download completions.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 p-0 flex flex-col min-h-[400px]">
-                <div className="flex-1 bg-black/95 text-green-400 font-mono text-xs p-6 overflow-y-auto max-h-[500px] custom-scrollbar rounded-b-xl space-y-1">
-                  {logs.length === 0 ? (
-                    <div className="text-muted-foreground italic flex items-center gap-2 justify-center h-full py-20">
-                      <AlertCircle className="w-4 h-4" />
-                      No logs recorded. Start search to see activity.
+                  {!lastResult.brandMatched && lastResult.totalNew > 0 && (
+                    <div className="flex items-start gap-1.5 text-amber-600">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>Hãng này chưa có trong Brand collection trên CMS — cần thêm hãng trước khi duyệt các sản phẩm này.</span>
                     </div>
-                  ) : (
-                    logs.map((log, index) => {
-                      let color = "text-green-400";
-                      if (log.includes("[ERROR]")) color = "text-red-400 font-semibold";
-                      if (log.includes("[WARN]")) color = "text-yellow-400 font-semibold";
-                      if (log.includes("[SYSTEM]")) color = "text-blue-400 font-semibold";
-                      
-                      return (
-                        <div key={index} className={color}>
-                          {log}
-                        </div>
-                      );
-                    })
                   )}
-                  <div ref={logEndRef} />
+                  {lastResult.totalNew > 0 && (
+                    <Link href="/admin/discovery" className="flex items-center gap-1.5 text-primary hover:underline">
+                      <LinkIcon className="w-3.5 h-3.5" />
+                      Xem trong Discovery Queue
+                    </Link>
+                  )}
                 </div>
-              </CardContent>
+              )}
+
+              <div className="p-3.5 bg-muted/40 rounded-xl border border-primary/5 text-xs text-muted-foreground space-y-2">
+                <div className="flex items-center gap-2 font-medium text-foreground">
+                  <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  Cách hoạt động
+                </div>
+                <p>1. AI tra cứu Google Search để tìm các model sản phẩm AV chuyên dụng thật của hãng.</p>
+                <p>2. Với mỗi sản phẩm mới, AI tra cứu tiếp để bổ sung Category, Series, tính năng, thông số, ảnh, datasheet.</p>
+                <p>3. Sản phẩm mới được thêm vào Discovery Queue để admin duyệt trước khi đồng bộ lên CMS.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Console / History */}
+          <div className="lg:col-span-2">
+            <Card className="border-primary/10 bg-card/40 backdrop-blur-md shadow-sm h-full flex flex-col">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between border-b border-primary/5">
+                  <div>
+                    <CardTitle className="text-sm font-semibold">Kết quả tra cứu</CardTitle>
+                    <CardDescription>Log thời gian thực và lịch sử các lần tra cứu.</CardDescription>
+                  </div>
+                  <TabsList className="bg-muted/50 border">
+                    <TabsTrigger value="console" className="gap-1.5 text-xs">
+                      <Terminal className="w-3.5 h-3.5" />
+                      Console
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="gap-1.5 text-xs">
+                      <History className="w-3.5 h-3.5" />
+                      Lịch sử
+                    </TabsTrigger>
+                  </TabsList>
+                </CardHeader>
+
+                <TabsContent value="console" className="flex-1 p-4 pt-3 flex flex-col min-h-[400px]">
+                  <div className="flex-1 bg-black/95 text-green-400 font-mono text-xs p-4 overflow-y-auto max-h-[500px] custom-scrollbar rounded-xl space-y-1">
+                    {logs.length === 0 ? (
+                      <div className="text-muted-foreground italic flex items-center gap-2 justify-center h-full py-20">
+                        <AlertTriangle className="w-4 h-4" />
+                        Chưa có log — nhập tên hãng và bắt đầu tra cứu.
+                      </div>
+                    ) : (
+                      logs.map((log, index) => {
+                        let color = "text-green-400";
+                        if (log.includes("[ERROR]")) color = "text-red-400 font-semibold";
+                        else if (log.includes("[WARN]")) color = "text-yellow-400 font-semibold";
+                        else if (log.includes("[SYSTEM]")) color = "text-blue-400 font-semibold";
+                        return (
+                          <div key={index} className={color}>
+                            {log}
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={terminalEndRef} />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="history" className="flex-1 p-4 pt-3 overflow-y-auto custom-scrollbar min-h-[400px]">
+                  {historicalLogs.length === 0 ? (
+                    <div className="text-center text-muted-foreground italic py-20">Chưa có lịch sử.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {historicalLogs.map((log, idx) => (
+                        <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border border-primary/5 bg-background/40 text-xs">
+                          {log.level === "ERROR" ? (
+                            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                          ) : log.level === "WARNING" ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                          ) : (
+                            <Info className="w-4 h-4 text-blue-500 shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center gap-2">
+                              <span className="font-bold text-foreground">{log.brand ? `[${log.brand}]` : "[SYSTEM]"}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono">{formatLogTime(log.timestamp)}</span>
+                            </div>
+                            <p className="text-muted-foreground mt-1 leading-relaxed break-words">{log.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </Card>
           </div>
         </div>

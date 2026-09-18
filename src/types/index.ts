@@ -19,6 +19,7 @@ export interface ParsingError {
  */
 export type AiReviewCategory =
   | "category_mismatch"
+  | "series_mismatch"
   | "missing_specs"
   | "invalid_name"
   | "placeholder_data"
@@ -70,9 +71,19 @@ export interface AiFixSuggestion {
 
 export interface ProductRow {
   id: string;
+  /**
+   * The real Wix CMS Data item `_id` for this row — only present when the
+   * row came from pullCmsCatalogAsSheets() (cmsCatalogPull.ts), never for an
+   * uploaded Excel row. `id` above is just a fresh client-side uuidv4() for
+   * React keying, NOT the CMS identity — a write-back MUST use this field
+   * (via a by-id update path) instead of re-matching by Product/model name,
+   * which is not guaranteed unique or even non-empty across the collection
+   * and can silently patch the wrong CMS record.
+   */
+  cmsItemId?: string;
   // Dynamic fields from the original file
   [key: string]: any;
-  
+
   // Enrichment fields
   parsedSpecifications: Specification[];
   transformedSpecifications: Specification[];

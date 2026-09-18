@@ -1,15 +1,25 @@
 "use client";
 
 import React from "react";
-import { GitCompare, Loader2, UploadCloud, ChevronRight, ChevronDown, Info, Languages, ArrowLeft, AlertTriangle } from "lucide-react";
+import { GitCompare, Loader2, UploadCloud, ChevronRight, ChevronDown, Info, Languages, ArrowLeft, AlertTriangle, FileSpreadsheet, FileWarning, CheckCircle2, XCircle, Search, ClipboardCopy } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useDataStore } from "@/store/useDataStore";
 import { updateCmsProductFieldsAction } from "@/app/actions/discovery";
 import { toast } from "sonner";
-import type { CmsSyncDiff } from "@/app/api/catalog-upload/cms-sync-check/route";
+import type { CmsSyncDiff } from "@/lib/services/cmsSyncCompare";
+import { parseCmsCsvFile, normalizeProductKey, type CmsCsvRow } from "@/lib/utils/cmsCsvUtils";
 import { Pager, PAGER_SHOW_ALL, PAGER_PAGE_SIZE_OPTIONS } from "./Pager";
 
 function getField(row: Record<string, unknown>, candidates: string[]): string {
@@ -27,6 +37,20 @@ const CMS_FIELD_PROP: Record<string, "Title" | "MainFeature" | "ProductOverview"
   "Product Overview": "ProductOverview",
 };
 
+interface PushFailure {
+  product: string;
+  brand: string;
+  fields: string[];
+  error: string;
+}
+
+interface PushReport {
+  totalProducts: number;
+  successCount: number;
+  failCount: number;
+  failures: PushFailure[];
+}
+
 interface SyncEntry {
   key: string;
   rowId: string;
@@ -41,12 +65,20 @@ interface SyncEntry {
 }
 
 /**
- * Bulk-compares the whole catalog against Wix CMS (natural-language fields
- * only — Title / Main Feature / Product Overview), normalizing whichever side
- * isn't Vietnamese before comparing (see cms-sync-check route), and lets a
- * reviewer approve pushing the Vietnamese-normalized local value to CMS. This
- * is the intended step after "Kiểm tra AI" / "Sửa bằng AI": those clean up
- * the local catalog; this syncs the result to the live CMS record.
+ * Bulk-compares the whole catalog against a CSV the admin exported from the
+ * Wix CMS Content Manager and uploads here (natural-language fields only —
+ * Title / Main Feature / Product Overview), normalizing whichever side isn't
+ * Vietnamese before comparing (see cmsSyncCompare.ts), and lets a reviewer
+ * approve pushing the Vietnamese-normalized local value to CMS. This is the
+ * intended step after "Kiểm tra AI" / "Sửa bằng AI": those clean up the local
+ * catalog; this compares the result against what's live in Wix.
+ *
+ * CSV instead of a live per-product Wix lookup on purpose — looking up every
+ * product one at a time over the network was the real bottleneck for any
+ * catalog of real size (hundreds of round-trips). Matching against an
+ * uploaded CSV is pure in-memory work, so the whole catalog compares in
+ * seconds instead of minutes; only the AI language-normalization step (when
+ * needed) still costs real time.
  */
 interface CmsSyncDashboardProps {
   /** Called whenever a comparison is running/showing results, so the page can hide the regular Catalog Data table and let this dashboard's comparison table take its place. */
@@ -65,6 +97,11 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
   const [isPushing, setIsPushing] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState<number>(PAGER_PAGE_SIZE_OPTIONS[0]);
+  const [csvMeta, setCsvMeta] = React.useState<{ fileName: string; rowCount: number; matchedColumnCount: number } | null>(null);
+  const csvInputRef = React.useRef<HTMLInputElement>(null);
+  const [pushReport, setPushReport] = React.useState<PushReport | null>(null);
+  const [isPushReportOpen, setIsPushReportOpen] = React.useState(false);
+  const [pushErrorSearch, setPushErrorSearch] = React.useState("");
 
   React.useEffect(() => {
     onActiveChange?.(hasRun);
@@ -78,6 +115,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
     setEntries([]);
     setSelected({});
     setPage(1);
+    setCsvMeta(null);
   };
 
   if (sheets.length === 0) return null;
@@ -92,36 +130,45 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
   const hasFixed = sheets.some((s) => s.rows.some((r) => r.aiFixSuggestion || (r.aiAppliedFixes?.length ?? 0) > 0));
   const isUnlocked = hasReviewed && hasFixed;
 
-  const handleRunCheck = async () => {
+  const handleCsvSelected = async (file: File) => {
     if (!isUnlocked) {
       toast.error("Cần chạy \"Kiểm tra AI\" và \"Sửa bằng AI\" trước khi so sánh với CMS.");
       return;
     }
 
-    const items: { id: string; sheetIndex: number; rowIndex: number; fields: Record<string, string> }[] = [];
-    sheets.forEach((sheet, sheetIndex) => {
-      sheet.rows.forEach((row, rowIndex) => {
+    let csv;
+    try {
+      csv = await parseCmsCsvFile(file);
+    } catch (err) {
+      toast.error(`Không đọc được file CSV: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    if (csv.byProduct.size === 0) {
+      toast.error("File CSV không có dòng nào có tên sản phẩm/model hợp lệ.");
+      return;
+    }
+
+    const items: { id: string; brand: string; product: string; localFields: CmsCsvRow; cmsFields: CmsCsvRow | null }[] = [];
+    sheets.forEach((sheet) => {
+      sheet.rows.forEach((row) => {
         const product = getField(row, ["Product", "Model"]);
         if (!product) return;
         items.push({
           id: row.id,
-          sheetIndex,
-          rowIndex,
-          fields: {
-            Product: product,
-            Category: getField(row, ["Category"]),
+          brand: getField(row, ["Brand"]),
+          product,
+          localFields: {
             Title: getField(row, ["Title"]),
-            Series: getField(row, ["Series"]),
             MainFeature: getField(row, ["Main Feature", "MainFeature"]),
             ProductOverview: getField(row, ["Product Overview", "ProductOverview"]),
-            Brand: getField(row, ["Brand"]),
           },
+          cmsFields: csv.byProduct.get(normalizeProductKey(product)) ?? null,
         });
       });
     });
 
     if (items.length === 0) {
-      toast.error("Không có sản phẩm nào có tên/model để tra cứu CMS.");
+      toast.error("Không có sản phẩm nào có tên/model trong catalog để so sánh.");
       return;
     }
 
@@ -130,8 +177,11 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
     setProgress({ done: 0, total: items.length });
     setEntries([]);
     setNotFoundCount(0);
+    setCsvMeta({ fileName: file.name, rowCount: csv.rowCount, matchedColumnCount: csv.matchedColumnCount });
 
-    const batchSize = 10;
+    // Pure in-memory diffing (no Wix I/O) — this batch size is only about
+    // request/response size, not rate limits, so it can be generous.
+    const batchSize = 40;
     const newEntries: SyncEntry[] = [];
     let notFound = 0;
     let failedBatches = 0;
@@ -139,10 +189,12 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
       try {
-        const res = await fetch("/api/catalog-upload/cms-sync-check", {
+        const res = await fetch("/api/catalog-upload/cms-sync-check-csv", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: batch.map((b) => ({ id: b.id, fields: b.fields })) }),
+          body: JSON.stringify({
+            items: batch.map((b) => ({ id: b.id, localFields: b.localFields, cmsFields: b.cmsFields })),
+          }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
@@ -163,8 +215,8 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
               newEntries.push({
                 key: `${item.id}::${d.field}`,
                 rowId: item.id,
-                brand: item.fields.Brand,
-                product: item.fields.Product,
+                brand: item.brand,
+                product: item.product,
                 field: d.field,
                 localValue: d.localValue,
                 cmsValue: d.cmsValue,
@@ -228,6 +280,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
     setIsPushing(true);
     let successCount = 0;
     let failCount = 0;
+    const failures: PushFailure[] = [];
 
     for (const [modelName, productEntries] of byProduct) {
       const fieldsToPush: Partial<Record<"Title" | "MainFeature" | "ProductOverview", string>> = {};
@@ -243,16 +296,36 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
         } else {
           failCount += productEntries.length;
           console.error(`[CMS Sync] Push failed for ${modelName}:`, result.error);
+          failures.push({
+            product: modelName,
+            brand: productEntries[0].brand,
+            fields: productEntries.map((e) => e.field),
+            error: result.error || "Lỗi không xác định.",
+          });
         }
       } catch (err) {
         failCount += productEntries.length;
         console.error(`[CMS Sync] Push failed for ${modelName}:`, err);
+        failures.push({
+          product: modelName,
+          brand: productEntries[0].brand,
+          fields: productEntries.map((e) => e.field),
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
     setIsPushing(false);
+    setPushReport({ totalProducts: byProduct.size, successCount, failCount, failures });
+    setPushErrorSearch("");
+    // A dashboard report, not just a toast — a toast disappears before the
+    // admin can see WHICH product failed and why, which matters here since a
+    // failed push means that product's CMS record still has the old,
+    // uncorrected content.
+    setIsPushReportOpen(true);
+
     if (failCount > 0) {
-      toast.warning(`Đã ghi đè ${successCount} trường lên CMS, ${failCount} trường thất bại.`);
+      toast.warning(`Đã ghi đè ${successCount} trường lên CMS, ${failCount} trường thất bại — xem chi tiết trong báo cáo.`);
     } else {
       toast.success(`Đã ghi đè ${successCount} trường lên ${byProduct.size} sản phẩm trên CMS.`);
     }
@@ -277,7 +350,17 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
     ? productOrder
     : productOrder.slice((effectivePage - 1) * pageSize, effectivePage * pageSize);
 
+  const failedPushSearchResults = pushReport
+    ? pushReport.failures.filter(
+        (f) =>
+          !pushErrorSearch ||
+          f.product.toLowerCase().includes(pushErrorSearch.toLowerCase()) ||
+          f.error.toLowerCase().includes(pushErrorSearch.toLowerCase())
+      )
+    : [];
+
   return (
+    <>
     <Card className="border border-blue-500/20 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -290,23 +373,34 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{entries.length} trường</Badge>
                 {notFoundCount > 0 && (
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-slate-400/30 text-muted-foreground">
-                    {notFoundCount} chưa có trên CMS
+                    {notFoundCount} không khớp trong CSV
                   </Badge>
                 )}
               </>
             )}
           </CardTitle>
           <div className="flex items-center gap-2">
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleCsvSelected(file);
+              }}
+            />
             <Button
               variant="outline"
               size="sm"
               className="gap-1.5 h-7 text-xs border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
-              onClick={handleRunCheck}
+              onClick={() => csvInputRef.current?.click()}
               disabled={isChecking || !isUnlocked}
-              title={isUnlocked ? undefined : "Cần chạy \"Kiểm tra AI\" và \"Sửa bằng AI\" trước"}
+              title={isUnlocked ? "Chọn file CSV export từ Wix CMS (collection Import1)" : "Cần chạy \"Kiểm tra AI\" và \"Sửa bằng AI\" trước"}
             >
-              {isChecking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitCompare className="w-3.5 h-3.5" />}
-              {isChecking ? `Đang so sánh (${progress.done}/${progress.total})` : `So sánh toàn bộ với CMS (${totalProducts})`}
+              {isChecking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+              {isChecking ? `Đang so sánh (${progress.done}/${progress.total})` : `Tải file CSV từ Wix CMS (${totalProducts} sản phẩm local)`}
             </Button>
             {hasRun && entries.length > 0 && (
               <Button
@@ -342,13 +436,51 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
         </CardContent>
       )}
 
+      {isUnlocked && !hasRun && !isChecking && (
+        <CardContent>
+          <div className="flex items-start gap-2 text-xs text-muted-foreground py-2">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Xuất collection sản phẩm (Import1) từ Wix Content Manager sang CSV rồi tải lên đây — cần ít nhất cột{" "}
+              <span className="font-medium text-foreground">Product/Model</span> để khớp sản phẩm, cùng{" "}
+              <span className="font-medium text-foreground">Title</span>,{" "}
+              <span className="font-medium text-foreground">Main Feature</span>,{" "}
+              <span className="font-medium text-foreground">Product Overview</span> để so sánh. So sánh qua CSV không cần gọi API Wix cho từng sản phẩm nên nhanh hơn nhiều so với tra cứu trực tiếp.
+            </span>
+          </div>
+        </CardContent>
+      )}
+
       {isUnlocked && hasRun && (
         <CardContent className="space-y-2">
+          {csvMeta && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-1 pb-1">
+              <FileSpreadsheet className="w-3 h-3 shrink-0" />
+              <span className="font-mono truncate max-w-[220px]">{csvMeta.fileName}</span>
+              <span>— {csvMeta.rowCount} dòng, khớp {csvMeta.matchedColumnCount}/3 cột nội dung</span>
+              {csvMeta.matchedColumnCount < 3 && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-0.5">
+                  <FileWarning className="w-2.5 h-2.5" /> Thiếu cột
+                </Badge>
+              )}
+            </div>
+          )}
+          {pushReport && pushReport.failCount > 0 && (
+            <div className="flex items-center justify-between gap-2 text-xs rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2">
+              <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-medium">
+                <XCircle className="w-3.5 h-3.5 shrink-0" />
+                {pushReport.failures.length} sản phẩm ghi đè CMS thất bại ở lần gần nhất — nội dung trên CMS CHƯA được cập nhật cho các sản phẩm này.
+              </span>
+              <Button variant="outline" size="sm" className="h-6 text-[11px] shrink-0 border-rose-500/30 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400" onClick={() => setIsPushReportOpen(true)}>
+                Xem chi tiết
+              </Button>
+            </div>
+          )}
           {entries.length === 0 ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
               <Info className="w-4 h-4 shrink-0" />
-              Không có khác biệt nào giữa catalog local và CMS
-              {notFoundCount > 0 && ` (${notFoundCount} sản phẩm chưa có trên CMS, không tính vào so sánh này)`}.
+              Không có khác biệt nào giữa catalog local và CSV
+              {notFoundCount > 0 && ` (${notFoundCount} sản phẩm không khớp trong CSV, không tính vào so sánh này)`}.
             </div>
           ) : (
             <>
@@ -442,5 +574,108 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
         </CardContent>
       )}
     </Card>
+
+    {/* Push-to-CMS result dashboard — a toast disappears before an admin can
+        see WHICH product failed and why; this stays open until dismissed and
+        is re-openable from the banner above even after closing it. */}
+    <Dialog open={isPushReportOpen} onOpenChange={setIsPushReportOpen}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UploadCloud className="w-5 h-5 text-blue-500" />
+            Kết quả ghi đè lên Wix CMS
+          </DialogTitle>
+          <DialogDescription>
+            Báo cáo chi tiết các trường/sản phẩm vừa được ghi đè lên CMS từ kết quả so sánh CSV.
+          </DialogDescription>
+        </DialogHeader>
+
+        {pushReport && (
+          <div className="flex-1 overflow-y-auto space-y-4 pb-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 text-center">
+                <span className="text-[11px] text-primary/80 font-medium block mb-1">Sản phẩm đã xử lý</span>
+                <strong className="text-xl font-extrabold text-primary">{pushReport.totalProducts}</strong>
+              </div>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium block mb-1">Trường thành công</span>
+                <strong className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{pushReport.successCount}</strong>
+              </div>
+              <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center">
+                <span className="text-[11px] text-rose-600 dark:text-rose-400 font-medium block mb-1">Trường thất bại</span>
+                <strong className="text-xl font-extrabold text-rose-600 dark:text-rose-400">{pushReport.failCount}</strong>
+              </div>
+            </div>
+
+            {pushReport.failures.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Tất cả sản phẩm đã chọn được ghi đè lên CMS thành công.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                    Sản phẩm ghi đè thất bại ({pushReport.failures.length})
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-[11px] h-7 gap-1.5"
+                    onClick={() => {
+                      const text = pushReport.failures.map((f) => `${f.brand} ${f.product} [${f.fields.join(", ")}] - ${f.error}`).join("\n");
+                      navigator.clipboard.writeText(text);
+                      toast.success("Đã sao chép danh sách lỗi vào bộ nhớ tạm!");
+                    }}
+                  >
+                    <ClipboardCopy className="w-3.5 h-3.5" />
+                    Sao chép tất cả lỗi
+                  </Button>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tìm theo tên sản phẩm hoặc nội dung lỗi..."
+                    value={pushErrorSearch}
+                    onChange={(e) => setPushErrorSearch(e.target.value)}
+                    className="pl-10 text-sm"
+                  />
+                </div>
+
+                <div className="max-h-[280px] overflow-y-auto border border-rose-500/10 rounded-xl bg-card text-xs divide-y divide-border">
+                  {failedPushSearchResults.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground italic">Không tìm thấy lỗi nào khớp với tìm kiếm.</div>
+                  ) : (
+                    failedPushSearchResults.map((f, i) => (
+                      <div key={i} className="p-3 hover:bg-muted/20 transition-colors flex gap-3 items-start">
+                        <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-foreground">{f.brand} {f.product}</span>
+                            {f.fields.map((field) => (
+                              <Badge key={field} variant="outline" className="text-[9px] px-1 py-0 h-4">{field}</Badge>
+                            ))}
+                          </div>
+                          <span className="text-muted-foreground leading-relaxed break-words">{f.error}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="mt-2 border-t pt-4">
+          <Button variant="default" onClick={() => setIsPushReportOpen(false)} className="w-full sm:w-auto">
+            Đóng báo cáo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

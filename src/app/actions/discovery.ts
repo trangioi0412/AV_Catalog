@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { runProductDiscovery, stopProductDiscovery } from "@/lib/services/discoveryEngine";
+import { runProductDiscovery, runProductDiscoveryForBrand, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
 import { getActiveBrands, getAllProducts, insertProduct, WixProduct, isValidProductImageFormat, isProductImageAccessible, compareProductWithCms, CmsCompareResult, updateCmsProductFields } from "@/lib/services/wixCms";
 import { getProductDocumentEntries, hasProductDocument } from "@/lib/utils/documentFields";
+import { pullCmsCatalogAsSheets } from "@/lib/services/cmsCatalogPull";
+import type { SheetData } from "@/types";
 
 export interface DashboardStats {
   totalBrands: number;
@@ -71,6 +73,42 @@ export async function runDiscoveryAction(brandId?: string) {
       success: false,
       error: (err as Error).message,
       logs: [`[ERROR] Scan failed: ${(err as Error).message}`],
+    };
+  }
+}
+
+/**
+ * Runs the ad-hoc "Tra cứu sản phẩm bằng AI" lookup for a single brand name
+ * typed in by an admin — brandName does not need to already exist as a Wix
+ * Brand (see runProductDiscoveryForBrand's doc comment). Results land in
+ * the same Discovery Queue (/admin/discovery) as a scheduled scan.
+ */
+export async function runBrandDiscoveryAction(
+  brandName: string,
+  keyword?: string,
+  provider: "gemini" | "ollama" = "gemini",
+  skipDedup = false
+) {
+  try {
+    const result = await runProductDiscoveryForBrand(brandName, keyword, provider, skipDedup);
+
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/discovery");
+    revalidatePath("/admin/scanner");
+
+    return {
+      success: true,
+      totalScanned: result.totalScanned,
+      totalNew: result.totalNew,
+      brandMatched: result.brandMatched,
+      logs: result.logs,
+    };
+  } catch (err) {
+    console.error("Brand discovery action failed:", err);
+    return {
+      success: false,
+      error: (err as Error).message,
+      logs: [`[ERROR] Lookup failed: ${(err as Error).message}`],
     };
   }
 }
@@ -404,6 +442,52 @@ export async function updateCmsProductFieldsAction(
   } catch (err) {
     console.error("[updateCmsProductFieldsAction] Failed:", err);
     return { found: false, success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Same write as updateCmsProductFieldsAction, but PATCHes the CMS item by
+ * its real Wix `_id` (ProductRow.cmsItemId, from pullCmsCatalogAsSheets())
+ * instead of re-matching by Product/model name. Prefer this whenever the
+ * caller already has cmsItemId — matching by name is not guaranteed unique
+ * (and can be blank) and can silently patch the wrong product; see
+ * updateCmsProductFields's doc comment in wixCms.ts.
+ */
+export async function updateCmsProductFieldsByIdAction(
+  itemId: string,
+  fields: Partial<Record<"Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications", string>>
+): Promise<{ found: boolean; success: boolean; error?: string }> {
+  if (!itemId.trim()) {
+    return { found: false, success: false, error: "Không có cmsItemId để ghi lên CMS (thiếu ID gốc của sản phẩm)." };
+  }
+  try {
+    const result = await updateCmsProductFields("", fields, { itemId });
+    return { found: result.found, success: result.success, error: result.error };
+  } catch (err) {
+    console.error("[updateCmsProductFieldsByIdAction] Failed:", err);
+    return { found: false, success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Pulls the entire live product catalog from Wix CMS and converts it into
+ * the same SheetData[] shape an uploaded Excel file produces (see
+ * cmsCatalogPull.ts) — a second entry point into the catalog data pipeline
+ * so "Kiểm tra AI" / "Sửa bằng AI" can run directly against what's actually
+ * on the CMS right now, without first needing an Excel export of it.
+ */
+export async function pullCmsCatalogAction(): Promise<
+  { success: true; sheets: SheetData[]; totalProducts: number } | { success: false; error: string }
+> {
+  try {
+    const { sheets, totalProducts } = await pullCmsCatalogAsSheets();
+    if (totalProducts === 0) {
+      return { success: false, error: "Không tìm thấy sản phẩm nào trên Wix CMS (kiểm tra lại cấu hình WIX_API_KEY / WIX_SITE_ID)." };
+    }
+    return { success: true, sheets, totalProducts };
+  } catch (err) {
+    console.error("[pullCmsCatalogAction] Failed:", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

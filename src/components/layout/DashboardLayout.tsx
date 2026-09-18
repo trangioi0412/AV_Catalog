@@ -19,6 +19,8 @@ import {
   FileText,
   HardDrive,
   Layers,
+  Bot,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +51,7 @@ const navDiscovery = [
   { href: "/admin/dashboard",       icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/discovery",       icon: CheckSquare,     label: "Discovery Queue" },
   { href: "/admin/scanner",         icon: Activity,        label: "Manual Scanner" },
-  { href: "/admin/image-discovery", icon: ImageIcon,       label: "AI Image Discovery", accent: true },
+  { href: "/admin/image-discovery", icon: Search,          label: "Tra Cứu Sản Phẩm AI", accent: true },
   { href: "/admin/image-sync",      icon: ImageIcon,       label: "Image Sync" },
   { href: "/admin/specs-translator", icon: Languages,       label: "Specs Translator" },
 ];
@@ -59,6 +61,7 @@ const navTools = [
   { href: "/admin/tools/cms-translate", icon: Languages, label: "Dịch CMS Anh → Việt" },
   { href: "/admin/tools/wix-translation-sync", icon: Languages, label: "Wix Translation Sync" },
   { href: "/admin/tools/cms-merge", icon: Database, label: "CMS Merge Tool" },
+  { href: "/admin/tools/cms-ai-review", icon: Bot, label: "AI Kiểm Tra CMS", accent: true },
   { href: "/admin/media", icon: HardDrive, label: "Media Manager" },
 ];
 
@@ -67,7 +70,7 @@ const navMobile = [
   { href: "/",                      icon: Upload,          label: "Upload" },
   { href: "/admin/dashboard",       icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/discovery",       icon: CheckSquare,     label: "Queue" },
-  { href: "/admin/image-discovery", icon: ImageIcon,       label: "AI Images" },
+  { href: "/admin/image-discovery", icon: Search,          label: "Tra Cứu AI" },
 ];
 
 // ─── Breadcrumb map ────────────────────────────────────────────────────────
@@ -77,13 +80,14 @@ const breadcrumbMap: Record<string, { label: string; parent?: string }> = {
   "/admin/dashboard":           { label: "Dashboard",         parent: "Discovery" },
   "/admin/discovery":           { label: "Discovery Queue",   parent: "Discovery" },
   "/admin/scanner":             { label: "Manual Scanner",    parent: "Discovery" },
-  "/admin/image-discovery":     { label: "AI Image Discovery", parent: "Discovery" },
+  "/admin/image-discovery":     { label: "Tra Cứu Sản Phẩm AI", parent: "Discovery" },
   "/admin/image-sync":          { label: "Image Sync",        parent: "Discovery" },
   "/admin/specs-translator":    { label: "Specs Translator",  parent: "Discovery" },
   "/admin/wix-translations":    { label: "Dịch đa ngôn ngữ",  parent: "Tools" },
   "/admin/tools/cms-translate": { label: "Dịch CMS Anh → Việt", parent: "Tools" },
   "/admin/tools/wix-translation-sync": { label: "Wix Translation Sync", parent: "Tools" },
   "/admin/tools/cms-merge":     { label: "CMS Merge Tool",   parent: "Tools" },
+  "/admin/tools/cms-ai-review": { label: "AI Kiểm Tra CMS",  parent: "Tools" },
   "/admin/media":               { label: "Media Manager",    parent: "Tools" },
 };
 

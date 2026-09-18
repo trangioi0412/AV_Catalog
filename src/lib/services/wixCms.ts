@@ -573,24 +573,57 @@ export async function compareProductWithCms(local: {
 
 /**
  * Writes a small, specific set of fields directly onto an EXISTING Wix CMS
- * product record (matched by model name) — a partial update that leaves
- * every other field untouched. Never creates a new record (returns `found:
- * false` if there's no match). Used to push a human-approved value (e.g. a
- * corrected translation) back to CMS after compareProductWithCms flags it as
- * different — this is the write counterpart to that read-only comparison.
+ * product record (matched by model name) — a true partial update that
+ * leaves every other field untouched. Never creates a new record (returns
+ * `found: false` if there's no match). Used to push a human-approved value
+ * (e.g. a corrected translation, or a field flagged different by CMS Sync)
+ * back to CMS after a comparison — this is the write counterpart to that
+ * read-only comparison, so it must NEVER touch fields outside `fields`.
+ *
+ * Uses Wix Data's "Patch Data Item" endpoint (PATCH, `fieldModifications`),
+ * NOT "Update Data Item" (PUT, a full `dataItem.data` replace) — Wix's own
+ * docs for Update Data Item are explicit: "After an item is updated, it
+ * only contains the fields included in the `dataItem.data` payload... If
+ * the existing item has fields with values and those fields aren't
+ * included in the updated item, their values are lost." An earlier version
+ * of this function used PUT with only the changed fields in `data`, which
+ * silently wiped every OTHER field (Category, Series, TechnicalSpecifications,
+ * Brand, images, etc.) on the product every single time it ran.
+ *
+ * `options.itemId`: pass the CMS item's real `_id` when the caller already
+ * has it (e.g. a row pulled via pullCmsCatalogAsSheets(), which carries it
+ * as ProductRow.cmsItemId) to PATCH that exact record directly, skipping
+ * findExistingProductByModel(modelName) entirely. That name-based lookup
+ * filters on `Product: {$eq: modelName}` with `paging.limit: 1` and NO
+ * uniqueness guarantee — if `modelName` is blank (a real, observed case:
+ * some CMS rows simply have no Product/model code filled in) or happens to
+ * collide with another row, Wix returns an arbitrary matching item and this
+ * function then patches THAT one instead of the product the caller meant,
+ * silently corrupting an unrelated product's Category/etc. Always prefer
+ * passing `options.itemId` when it's available.
  */
 export async function updateCmsProductFields(
   modelName: string,
-  fields: Partial<Pick<WixProduct, "Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications">>
+  fields: Partial<Pick<WixProduct, "Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications">>,
+  options?: { itemId?: string }
 ): Promise<{ found: boolean; success: boolean; itemId?: string; error?: string }> {
   const headers = getWixHeaders();
   if (!headers) return { found: false, success: false, error: "Wix credentials not configured." };
 
-  const existingItem = await findExistingProductByModel(modelName);
-  if (!existingItem) return { found: false, success: false, error: `Không tìm thấy "${modelName}" trên CMS.` };
+  let itemId: string | undefined = options?.itemId;
+  let existingData: Record<string, any> = {};
 
-  const itemId = existingItem._id || existingItem.id || existingItem.dataItem?._id || existingItem.dataItem?.id;
-  const existingData: Record<string, any> = existingItem.data || existingItem.dataItem?.data || existingItem;
+  if (itemId) {
+    // Caller already resolved the exact record — no name-based lookup, no ambiguity.
+  } else {
+    if (!modelName.trim()) {
+      return { found: false, success: false, error: "Không có model name để tìm sản phẩm trên CMS (modelName trống)." };
+    }
+    const existingItem = await findExistingProductByModel(modelName);
+    if (!existingItem) return { found: false, success: false, error: `Không tìm thấy "${modelName}" trên CMS.` };
+    itemId = existingItem._id || existingItem.id || existingItem.dataItem?._id || existingItem.dataItem?.id;
+    existingData = existingItem.data || existingItem.dataItem?.data || existingItem;
+  }
 
   const cmsKeysMap: Record<string, string> = {
     Category: "category",
@@ -601,31 +634,52 @@ export async function updateCmsProductFields(
     TechnicalSpecifications: "technicalSpecifications",
   };
 
-  const data: Record<string, any> = {};
+  const fieldModifications: { fieldPath: string; action: "SET_FIELD"; setFieldOptions: { value: unknown } }[] = [];
   Object.entries(fields).forEach(([prop, val]) => {
     if (val === undefined) return;
     const standardKey = cmsKeysMap[prop] || prop;
     // Match the collection's existing casing for this field, same approach as buildCmsData.
     const targetKey = Object.prototype.hasOwnProperty.call(existingData, prop) ? prop : standardKey;
-    data[targetKey] = val;
+
+    // Same JSON-string-to-real-array/object normalization buildCmsData() applies
+    // for a fresh insertProduct() write — without it, a caller passing AI Fix's
+    // stringified specs (e.g. from the CMS AI Review tool) would store the
+    // literal JSON text as the field value instead of a real array, unlike
+    // every other product record in the collection.
+    let value: unknown = val;
+    if (prop === "TechnicalSpecifications" && typeof value === "string") {
+      const trimmed = value.trim();
+      if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+        try {
+          value = JSON.parse(trimmed);
+        } catch (err) {
+          console.warn("[Wix CMS] Failed to parse TechnicalSpecifications JSON string in updateCmsProductFields:", err);
+        }
+      }
+    }
+
+    fieldModifications.push({ fieldPath: targetKey, action: "SET_FIELD", setFieldOptions: { value } });
   });
 
-  if (Object.keys(data).length === 0) {
+  if (fieldModifications.length === 0) {
     return { found: true, success: false, itemId, error: "No fields to update." };
   }
 
   try {
     const url = `https://www.wixapis.com/wix-data/v2/items/${itemId}`;
     const response = await fetch(url, {
-      method: "PUT",
+      method: "PATCH",
       headers,
-      body: JSON.stringify({ dataCollectionId: "Import1", dataItem: { id: itemId, data } }),
+      body: JSON.stringify({
+        dataCollectionId: "Import1",
+        patch: { dataItemId: itemId, fieldModifications },
+      }),
     });
     if (!response.ok) {
       const text = await response.text();
       return { found: true, success: false, itemId, error: `${response.statusText} (${text})` };
     }
-    console.log(`[Wix CMS] Updated field(s) [${Object.keys(data).join(", ")}] on product: ${modelName}`);
+    console.log(`[Wix CMS] Patched field(s) [${fieldModifications.map((f) => f.fieldPath).join(", ")}] on product: ${modelName}`);
     return { found: true, success: true, itemId };
   } catch (err) {
     return { found: true, success: false, itemId, error: err instanceof Error ? err.message : String(err) };

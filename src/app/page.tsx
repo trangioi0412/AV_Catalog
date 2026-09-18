@@ -63,7 +63,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-
 export default function DashboardPage() {
   const {
     fileName,
@@ -83,7 +82,6 @@ export default function DashboardPage() {
 
   const [isAiReviewing, setIsAiReviewing] = React.useState(false);
   const [aiReviewProgress, setAiReviewProgress] = React.useState({ done: 0, total: 0 });
-
   const handleAiReview = async () => {
     if (!sheets || sheets.length === 0) {
       toast.error("No product data loaded to review.");
@@ -347,7 +345,12 @@ export default function DashboardPage() {
           toast.success(`Successfully uploaded all ${result.successCount} products to Wix Studio!`);
         } else {
           toast.warning(`Uploaded ${result.successCount} products successfully, but ${result.failedCount} failed.`);
-          console.warn("Wix upload errors:", result.errors);
+          // Capped, not the full array — the report dialog already shows every
+          // error with search; Next.js dev forwards browser console.warn to the
+          // terminal over a WebSocket with a fixed max payload, and a large
+          // catalog's full failure list has crashed that channel before.
+          const errors = result.errors || [];
+          console.warn(`Wix upload errors (${errors.length} total, showing first 20):`, errors.slice(0, 20));
         }
       } else {
         toast.error(`Wix upload failed: ${result.error}`);
