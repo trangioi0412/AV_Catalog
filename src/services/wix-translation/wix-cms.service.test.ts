@@ -146,3 +146,45 @@ describe("updateWixCmsItemFields (mocked fetch)", () => {
     expect(callTimes[1] - callTimes[0]).toBeGreaterThanOrEqual(300);
   });
 });
+
+describe("getWixCmsItems brand filter (mocked fetch)", () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env.WIX_API_KEY = "test-key";
+    process.env.WIX_SITE_ID = "test-site";
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.unstubAllGlobals();
+  });
+
+  async function sentFilter(params: { search?: string; brandIds?: string[] }) {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ dataItems: [], pagingMetadata: { total: 0 } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const mod = await import("./wix-cms.service");
+    await mod.getWixCmsItems({ collectionId: "Import1", page: 1, limit: 20, ...params });
+    return JSON.parse(fetchMock.mock.calls[0][1].body).query.filter;
+  }
+
+  it("filters by one or more brand reference ids", async () => {
+    expect(await sentFilter({ brandIds: ["brand-eizo", "brand-vissonic"] })).toEqual({ brand: { $in: ["brand-eizo", "brand-vissonic"] } });
+  });
+
+  it("combines brand and search with $and", async () => {
+    const filter = await sentFilter({ brandIds: ["brand-eizo"], search: "Flex" });
+    expect(filter.$and).toHaveLength(2);
+    expect(filter.$and).toContainEqual({ brand: { $in: ["brand-eizo"] } });
+    expect(filter.$and[0].$or).toContainEqual({ title: { $contains: "Flex" } });
+  });
+
+  it("sends no filter when neither is given", async () => {
+    expect(await sentFilter({})).toBeUndefined();
+  });
+});

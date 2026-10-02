@@ -27,7 +27,7 @@ import type {
   MediaTypeFilter,
   WixMediaType,
 } from "@/types/media-manager";
-import { normalizeName } from "@/lib/services/wixCms";
+import { normalizeName, matchKey } from "@/lib/services/wixCms";
 import { parseImageName } from "@/lib/services/imageSyncService";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -372,7 +372,7 @@ export async function findMediaFilesByProductName(
   mediaType?: MediaTypeFilter
 ): Promise<MediaFileItem[]> {
   const headers = getWixHeaders();
-  const targetKey = normalizeName(productName);
+  const targetKey = matchKey(normalizeName(productName));
   const mediaTypes = MEDIA_TYPE_FILTER_MAP[mediaType ?? "ALL"];
 
   const matches: MediaFileItem[] = [];
@@ -401,7 +401,7 @@ export async function findMediaFilesByProductName(
 
     for (const item of page_.items) {
       const { base } = parseImageName(item.displayName);
-      if (normalizeName(base) === targetKey) matches.push(item);
+      if (matchKey(normalizeName(base)) === targetKey) matches.push(item);
     }
 
     if (!page_.hasNextPage || !page_.nextCursor) break;

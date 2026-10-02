@@ -5,7 +5,7 @@
  * orchestrating batch uploads with progress reporting.
  */
 
-import { normalizeName, ProductImageItem } from "./wixCms";
+import { normalizeName, matchKey, ProductImageItem } from "./wixCms";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -217,6 +217,7 @@ export function parseImageName(filename: string): { base: string; index: number 
 /**
  * Intelligent image name parser that references existing CMS keys to distinguish
  * true gallery index suffixes (e.g., -2 in Model-2) from model numbers (e.g., -16 in Model-16).
+ * `existingKeys` holds `matchKey()` (space-insensitive) forms of the CMS keys.
  */
 export function parseImageNameWithKeys(
   filename: string,
@@ -235,7 +236,7 @@ export function parseImageNameWithKeys(
   // 2. If existingKeys are loaded, do direct lookups
   if (existingKeys && existingKeys.size > 0) {
     const normalizedFull = normalizeName(nameNoExt);
-    if (existingKeys.has(normalizedFull)) {
+    if (existingKeys.has(matchKey(normalizedFull))) {
       // Exact product key match, this is the main image (index 0)
       return { base: nameNoExt, index: 0 };
     }
@@ -252,7 +253,7 @@ export function parseImageNameWithKeys(
 
       if (/^\d{1,2}$/.test(suffixPart)) {
         const baseNormalized = normalizeName(basePart);
-        if (existingKeys.has(baseNormalized)) {
+        if (existingKeys.has(matchKey(baseNormalized))) {
           // Found base product key match, the suffix is a gallery index
           const index = parseInt(suffixPart, 10);
           return { base: basePart, index };
@@ -284,23 +285,26 @@ export function groupImagesByProduct(
     entries: Array<{ file: ImageFile; index: number }>;
   };
 
-  const accMap = new Map<string, Accumulator>();
+  // Grouped by matchKey so "WiFi-1.jpg" and "wifi-2.jpg" land in one group;
+  // the first file's spaced normalizeName key is kept for display.
+  const accMap = new Map<string, Accumulator & { normalizedKey: string }>();
 
   for (const file of files) {
     if (!isSupportedImageFile(file.name)) continue;
 
     const { base, index } = parseImageNameWithKeys(file.name, existingKeys);
-    const key = normalizeName(base);
+    const normalizedKey = normalizeName(base);
+    const key = matchKey(normalizedKey);
 
     if (!accMap.has(key)) {
-      accMap.set(key, { displayName: base, entries: [] });
+      accMap.set(key, { normalizedKey, displayName: base, entries: [] });
     }
     accMap.get(key)!.entries.push({ file, index });
   }
 
   const groups: ImageGroup[] = [];
 
-  for (const [normalizedKey, acc] of accMap.entries()) {
+  for (const { normalizedKey, ...acc } of accMap.values()) {
     acc.entries.sort((a, b) => {
       const ai = a.index === 0 ? 0 : a.index;
       const bi = b.index === 0 ? 0 : b.index;
@@ -336,8 +340,12 @@ export function matchImages(
   const unmatched: ImageGroup[] = [];
   const matchedCmsIds = new Set<string>();
 
+  // Look up space-insensitively (see matchKey in wixCms.ts)
+  const byMatchKey = new Map<string, ProductImageItem>();
+  for (const [key, item] of productMap.entries()) byMatchKey.set(matchKey(key), item);
+
   for (const group of imageGroups) {
-    const cmsItem = productMap.get(group.normalizedKey);
+    const cmsItem = byMatchKey.get(matchKey(group.normalizedKey));
     if (cmsItem) {
       matched.push({ cmsItem, imageGroup: group });
       matchedCmsIds.add(cmsItem._id);
@@ -396,7 +404,7 @@ export function buildScanPreview(
     .filter(isSupportedImageFile)
     .map((name) => ({ name, size: 0, type: "image/jpeg" }));
 
-  const existingKeys = new Set(productMap.keys());
+  const existingKeys = new Set([...productMap.keys()].map(matchKey));
   const groups = groupImagesByProduct(imageFiles, existingKeys);
   const { matched, unmatched, missing } = matchImages(groups, productMap);
 

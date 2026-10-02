@@ -37,6 +37,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { TranslatedContentViewer } from "@/components/wix-translations/translated-content-viewer";
+import { BrandMultiSelect } from "@/components/data/BrandMultiSelect";
 import type {
   CmsTranslationStatus,
   TranslationItemResult,
@@ -102,6 +103,10 @@ export function WixTranslationPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  // Brand filter — only the products collection references a brand. Empty = all brands.
+  const [brandIds, setBrandIds] = useState<string[]>([]);
+  // Sorted, comma-joined — a stable string for effect deps and the `brandIds` query param.
+  const activeBrandIds = collectionKey === "products" ? [...brandIds].sort().join(",") : "";
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // "Chọn toàn bộ" can select items well beyond the current page, so their display name isn't
   // in `items` (only the current page's 20 rows) — collected alongside itemId there so Bước 2/3
@@ -198,6 +203,7 @@ export function WixTranslationPage() {
       limit: String(PAGE_SIZE),
       search,
     });
+    if (activeBrandIds) params.set("brandIds", activeBrandIds);
     const { ok, json } = await fetchJson(`/api/admin/wix-translations/items?${params.toString()}`);
     if (!ok) {
       setItemsError(json?.error || "Không thể tải danh sách sản phẩm.");
@@ -208,7 +214,7 @@ export function WixTranslationPage() {
       setTotal(json.total || 0);
     }
     setItemsLoading(false);
-  }, [collectionKey, targetLocale, page, search]);
+  }, [collectionKey, targetLocale, page, search, activeBrandIds]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -270,6 +276,7 @@ export function WixTranslationPage() {
       let serverTotal = Infinity;
       while ((p - 1) * FETCH_LIMIT < serverTotal) {
         const params = new URLSearchParams({ collectionKey, targetLocale, page: String(p), limit: String(FETCH_LIMIT), search });
+        if (activeBrandIds) params.set("brandIds", activeBrandIds);
         const { ok, json } = await fetchJson(`/api/admin/wix-translations/items?${params.toString()}`);
         if (!ok) {
           toast.error(json?.error || "Không thể tải danh sách sản phẩm.");
@@ -318,6 +325,7 @@ export function WixTranslationPage() {
       let index = (startPage - 1) * FETCH_LIMIT; // count of items on every page before startPage
       while (index < to && (p - 1) * FETCH_LIMIT < serverTotal) {
         const params = new URLSearchParams({ collectionKey, targetLocale, page: String(p), limit: String(FETCH_LIMIT), search });
+        if (activeBrandIds) params.set("brandIds", activeBrandIds);
         const { ok, json } = await fetchJson(`/api/admin/wix-translations/items?${params.toString()}`);
         if (!ok) {
           toast.error(json?.error || "Không thể tải danh sách sản phẩm.");
@@ -839,6 +847,15 @@ export function WixTranslationPage() {
                 className="w-full pl-9 pr-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>
+            {collectionKey === "products" && (
+              <BrandMultiSelect
+                value={brandIds}
+                onChange={(ids) => {
+                  setPage(1);
+                  setBrandIds(ids);
+                }}
+              />
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"

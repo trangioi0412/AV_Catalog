@@ -21,6 +21,8 @@ import {
   Layers,
   Bot,
   Search,
+  RefreshCw,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,9 +53,19 @@ const navDiscovery = [
   { href: "/admin/dashboard",       icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/discovery",       icon: CheckSquare,     label: "Discovery Queue" },
   { href: "/admin/scanner",         icon: Activity,        label: "Manual Scanner" },
-  { href: "/admin/image-discovery", icon: Search,          label: "Tra Cứu Sản Phẩm AI", accent: true },
+  // Temporarily locked: superseded on the sidebar by DataCrawler's
+  // manufacturer sync feature below. Flip `locked` back to false (and
+  // FEATURE_LOCKED in the page itself) to re-enable.
+  { href: "/admin/image-discovery", icon: Search,          label: "Tra Cứu Sản Phẩm AI", accent: true, locked: true },
   { href: "/admin/image-sync",      icon: ImageIcon,       label: "Image Sync" },
   { href: "/admin/specs-translator", icon: Languages,       label: "Specs Translator" },
+];
+
+// DataCrawler integration — UI-only, calls the standalone DataCrawler
+// FastAPI backend. Kept in its own nav group so this feature can keep
+// evolving (FE and BE) independently of the rest of AV Catalog.
+const navDataCrawler = [
+  { href: "/admin/manufacturer-sync", icon: RefreshCw, label: "Đồng Bộ NSX (DataCrawler)", accent: true },
 ];
 
 const navTools = [
@@ -65,12 +77,13 @@ const navTools = [
   { href: "/admin/media", icon: HardDrive, label: "Media Manager" },
 ];
 
-// Mobile bottom bar (top 4 routes only)
+// Mobile bottom bar (top 4 routes only). "Tra Cứu AI" swapped out for the
+// new DataCrawler sync page while that feature is locked — see navDiscovery.
 const navMobile = [
   { href: "/",                      icon: Upload,          label: "Upload" },
   { href: "/admin/dashboard",       icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/discovery",       icon: CheckSquare,     label: "Queue" },
-  { href: "/admin/image-discovery", icon: Search,          label: "Tra Cứu AI" },
+  { href: "/admin/manufacturer-sync", icon: RefreshCw,     label: "Đồng Bộ NSX" },
 ];
 
 // ─── Breadcrumb map ────────────────────────────────────────────────────────
@@ -83,6 +96,7 @@ const breadcrumbMap: Record<string, { label: string; parent?: string }> = {
   "/admin/image-discovery":     { label: "Tra Cứu Sản Phẩm AI", parent: "Discovery" },
   "/admin/image-sync":          { label: "Image Sync",        parent: "Discovery" },
   "/admin/specs-translator":    { label: "Specs Translator",  parent: "Discovery" },
+  "/admin/manufacturer-sync":   { label: "Đồng Bộ NSX (DataCrawler)", parent: "DataCrawler" },
   "/admin/wix-translations":    { label: "Dịch đa ngôn ngữ",  parent: "Tools" },
   "/admin/tools/cms-translate": { label: "Dịch CMS Anh → Việt", parent: "Tools" },
   "/admin/tools/wix-translation-sync": { label: "Wix Translation Sync", parent: "Tools" },
@@ -128,6 +142,7 @@ function NavLink({
   label,
   active,
   accent,
+  locked,
   onNavigate,
 }: {
   href: string;
@@ -135,8 +150,22 @@ function NavLink({
   label: string;
   active: boolean;
   accent?: boolean;
+  locked?: boolean;
   onNavigate: (dest: string) => void;
 }) {
+  if (locked) {
+    return (
+      <div
+        title="Tính năng đang tạm khóa"
+        className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground/50 cursor-not-allowed select-none"
+      >
+        <Icon className="w-4 h-4 shrink-0 opacity-40" />
+        <span className="truncate flex-1 line-through">{label}</span>
+        <Lock className="w-3.5 h-3.5 shrink-0 opacity-50" />
+      </div>
+    );
+  }
+
   return (
     <Link
       href={href}
@@ -224,6 +253,29 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </p>
             <div className="space-y-0.5">
               {navDiscovery.map(item => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={pathname === item.href}
+                  accent={item.accent}
+                  locked={item.locked}
+                  onNavigate={startLoading}
+                />
+              ))}
+            </div>
+          </div>
+
+          <Separator className="opacity-50" />
+
+          {/* DataCrawler (manufacturer sync, UI-only, own backend) */}
+          <div>
+            <p className="px-3 mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase">
+              DataCrawler
+            </p>
+            <div className="space-y-0.5">
+              {navDataCrawler.map(item => (
                 <NavLink
                   key={item.href}
                   href={item.href}

@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   sanitizeSegment,
   searchCmsProduct,
+  clearCmsProductListCache,
   MAX_PDF_SIZE_BYTES,
   checkAdminSession,
   CATALOG_UPLOAD_FOLDER_NAME,
@@ -172,6 +173,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── CMS matching (concurrent, capped at 5) ────────────────────────────────
+    // Force a fresh product list for this batch — `searchCmsProduct` caches
+    // it for the lifetime of this request only (see wixCatalogPdf.ts), but
+    // the Next.js server process outlives a single request, so without this
+    // a later validate call could keep matching against a stale snapshot.
+    clearCmsProductListCache();
+
     const MATCH_CONCURRENCY = 5;
 
     for (let i = 0; i < validEntries.length; i += MATCH_CONCURRENCY) {

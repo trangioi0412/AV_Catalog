@@ -416,6 +416,7 @@ export async function compareProductWithCmsAction(local: {
   ProductOverview?: string;
   TechnicalSpecifications?: string;
   Brand?: string;
+  productItem?: string;
 }): Promise<CmsCompareResult> {
   try {
     return await compareProductWithCms(local);

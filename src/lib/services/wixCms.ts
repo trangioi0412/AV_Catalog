@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { normalizeName } from "../utils/productName";
 
 /**
  * Must match `export const revalidate` in `app/products/[slug]/page.tsx` —
@@ -481,6 +482,57 @@ export async function findExistingProductByModel(modelName: string): Promise<any
   }
 }
 
+/**
+ * Find the CMS row an import row should upsert into.
+ *
+ * `productItem` (the Excel "product (item)" column, e.g. "EV2740S",
+ * "VIS-CATC-C") is the unique model code and is tried first. `Product` is NOT
+ * unique for every brand: for EIZO/Vissonic it holds the product line
+ * ("New Standard", "Premium", ...) shared by 10-20 models, so upserting by
+ * `Product` alone made every model of a line overwrite the same CMS row --
+ * a 200-row EIZO sheet ended up as 18 CMS products (one per line).
+ *
+ * When `productItem` is given but not found, the only fallback is a row whose
+ * `Product` equals that model code (brands that keep the model in `Product`);
+ * it never falls back to matching by the row's own `Product` value.
+ */
+export async function findExistingProductForUpsert(product: {
+  Product?: string;
+  productItem?: string;
+}): Promise<any | null> {
+  const item = typeof product.productItem === "string" ? product.productItem.trim() : "";
+  if (!item) {
+    return product.Product ? findExistingProductByModel(product.Product) : null;
+  }
+
+  const headers = getWixHeaders();
+  if (!headers) return null;
+  const url = "https://www.wixapis.com/wix-data/v2/items/query";
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      dataCollectionId: "Import1",
+      query: {
+        filter: { $or: [{ productItem: { $eq: item } }, { ProductItem: { $eq: item } }] },
+        paging: { limit: 1 },
+      },
+    }),
+  });
+  // Unlike findExistingProductByModel, don't swallow a failed lookup: treating
+  // it as "not found" would insert a duplicate of an existing product.
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`[Wix CMS] Lookup by productItem "${item}" failed: ${response.status} (${text})`);
+  }
+  const json = await response.json();
+  const items = json.items || json.dataItems || [];
+  if (items[0]) return items[0];
+
+  return findExistingProductByModel(item);
+}
+
 export interface CmsFieldDiff {
   field: string;
   localValue: string;
@@ -510,11 +562,11 @@ export async function compareProductWithCms(local: {
   ProductOverview?: string;
   TechnicalSpecifications?: string;
   Brand?: string;
+  productItem?: string;
 }): Promise<CmsCompareResult> {
-  const modelName = local.Product || "";
-  if (!modelName) return { found: false, diffs: [] };
+  if (!local.Product && !local.productItem) return { found: false, diffs: [] };
 
-  const existingItem = await findExistingProductByModel(modelName);
+  const existingItem = await findExistingProductForUpsert(local);
   if (!existingItem) return { found: false, diffs: [] };
 
   const cmsItemId = existingItem._id || existingItem.id || existingItem.dataItem?._id || existingItem.dataItem?.id;
@@ -764,8 +816,9 @@ export async function insertProduct(product: WixProduct): Promise<WixProduct> {
     throw new Error("Wix credentials not configured. Cannot insert product.");
   }
 
-  // 1. Search for existing product by model name (Product field)
-  const existingItem = await findExistingProductByModel(product.Product);
+  // 1. Search for existing product by its unique model code (productItem),
+  //    falling back to Product only when the row has no productItem.
+  const existingItem = await findExistingProductForUpsert(product);
   const itemId = existingItem 
     ? (existingItem._id || existingItem.id || existingItem.dataItem?._id || existingItem.dataItem?.id) 
     : null;
@@ -925,57 +978,7 @@ export async function getAllProductsForImageSync(
   return map;
 }
 
-/**
- * Normalize a product name for case-insensitive, format-agnostic matching.
- *
- * Handles:
- *   - ALL_CAPS, Title Case, camelCase, PascalCase
- *   - Hyphens, underscores → space (the only characters treated as separators)
- *   - "/", "\", "+", ":", "*" dropped entirely (not replaced with space)
- *   - All other special characters (parentheses, brackets, ...) are kept as
- *     literal characters — they still count when comparing names
- *   - Number–letter boundaries: "MXA920" → "mxa 920", "Gen2" → "gen 2"
- *   - Extra whitespace collapsed
- *
- * Examples:
- *   "Neat Board Pro"      → "neat board pro"
- *   "NEAT-BOARD-PRO"      → "neat board pro"
- *   "Neat_Board_Pro"      → "neat board pro"
- *   "Shure MXA920"        → "shure mxa 920"
- *   "Logitech RallyBarMini" → "logitech rally bar mini"
- *   "Neat Bar (Gen 2)"    → "neat bar (gen 2)"
- *   "on/off"              → "onoff"
- */
-export function normalizeName(name: string): string {
-  return (
-    name
-      // Convert Vietnamese d/D with stroke (đ/Đ) to standard d/D
-      .replace(/[đĐ]/g, "d")
-      // Split accented characters into base character + diacritical marks
-      .normalize("NFD")
-      // Remove diacritical marks (e.g. "Parlé" → "Parle")
-      .replace(/[\u0300-\u036f]/g, "")
-      // 1. Replace word separators with space: "-" and "_" only.
-      //    All other special characters (e.g. "(", ")") are kept as-is
-      //    so they still count when comparing names.
-      .replace(/[-_]/g, " ")
-      // 2. Drop slashes and other punctuation entirely (not replaced with
-      //    space) on both sides before comparing, e.g. "USB-C/Type-C" and
-      //    "USB-CType-C" match.
-      .replace(/[/\\+:*]/g, "")
-      // 3. Insert space between letter→digit boundary: "MXA920" → "MXA 920", "Gen2" → "Gen 2"
-      .replace(/([a-zA-Z])(\d)/g, "$1 $2")
-      // 4. Insert space between digit→letter boundary: "920A" → "920 A"
-      .replace(/(\d)([a-zA-Z])/g, "$1 $2")
-      // 5. Insert space at CamelCase boundaries: "RallyBar" → "Rally Bar"
-      .replace(/([a-z])([A-Z])/g, "$1 $2")
-      // 6. Lowercase everything
-      .toLowerCase()
-      // 7. Collapse multiple spaces
-      .replace(/\s+/g, " ")
-      .trim()
-  );
-}
+export { normalizeName, matchKey } from "../utils/productName";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IMAGE DIMENSION & FOLDER HELPERS

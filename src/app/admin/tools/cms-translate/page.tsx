@@ -22,6 +22,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BrandMultiSelect } from "@/components/data/BrandMultiSelect";
 import { AlertTriangle, ArrowLeftRight, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Languages, Loader2, Plus, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 
 type FieldType = "text" | "richText" | "json";
@@ -118,6 +119,11 @@ export default function CmsTranslatePage() {
   const [total, setTotal] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [hideTranslated, setHideTranslated] = useState(false);
+  // Brand filter — only the products collection references a brand. Empty = all brands.
+  const [brandIds, setBrandIds] = useState<string[]>([]);
+  const isProductsCollection = collectionKey === "products";
+  // Sorted, comma-joined — a stable string for effect deps and the `brandIds` query param.
+  const activeBrandIds = isProductsCollection ? [...brandIds].sort().join(",") : "";
 
   const [fieldMappings, setFieldMappings] = useState<FieldMappingRow[]>([EMPTY_MAPPING_ROW]);
   const [overwrite, setOverwrite] = useState(false);
@@ -193,6 +199,7 @@ export default function CmsTranslatePage() {
       search,
       targetFields: targetFieldsKey,
     });
+    if (activeBrandIds) params.set("brandIds", activeBrandIds);
     const { ok, json } = await fetchJson(`/api/admin/cms-translate/items?${params.toString()}`);
     if (ok) {
       setItems((json.items || []) as ListItem[]);
@@ -203,7 +210,7 @@ export default function CmsTranslatePage() {
       setTotal(0);
     }
     setItemsLoading(false);
-  }, [collectionKey, page, search, targetFieldsKey]);
+  }, [collectionKey, page, search, targetFieldsKey, activeBrandIds]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -211,10 +218,10 @@ export default function CmsTranslatePage() {
   }, [loadItems]);
 
   useEffect(() => {
-    // A new collection or search term invalidates the current page — go back to page 1.
+    // A new collection, search term or brand invalidates the current page — go back to page 1.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-  }, [collectionKey, search]);
+  }, [collectionKey, search, activeBrandIds]);
 
   const loadFields = useCallback(async () => {
     if (!collectionKey) return;
@@ -268,6 +275,7 @@ export default function CmsTranslatePage() {
           search,
           targetFields: targetFieldsKey,
         });
+        if (activeBrandIds) params.set("brandIds", activeBrandIds);
         const { ok, json } = await fetchJson(`/api/admin/cms-translate/items?${params.toString()}`);
         if (!ok) {
           toast.error(json?.error || "Không thể tải danh sách sản phẩm.");
@@ -320,6 +328,7 @@ export default function CmsTranslatePage() {
           search,
           targetFields: targetFieldsKey,
         });
+        if (activeBrandIds) params.set("brandIds", activeBrandIds);
         const { ok, json } = await fetchJson(`/api/admin/cms-translate/items?${params.toString()}`);
         if (!ok) {
           toast.error(json?.error || "Không thể tải danh sách sản phẩm.");
@@ -829,7 +838,10 @@ export default function CmsTranslatePage() {
           {!itemsCollapsed && (
           <CardContent className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-              <Input placeholder="Tìm theo tên, model hoặc ID sản phẩm..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3 w-full sm:w-auto">
+                <Input placeholder="Tìm theo tên, model hoặc ID sản phẩm..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+                {isProductsCollection && <BrandMultiSelect value={brandIds} onChange={setBrandIds} />}
+              </div>
               <label className="flex items-center gap-2 text-sm cursor-pointer select-none w-fit shrink-0">
                 <Checkbox checked={hideTranslated} onCheckedChange={(v) => setHideTranslated(Boolean(v))} disabled={validMappings.length === 0} />
                 Ẩn sản phẩm đã dịch đủ{hiddenCount > 0 ? ` (${hiddenCount})` : ""}

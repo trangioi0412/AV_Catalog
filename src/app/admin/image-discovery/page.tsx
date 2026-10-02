@@ -48,6 +48,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import Link from "next/link";
+import { Lock } from "lucide-react";
+
+// Temporarily disabled in favor of the new DataCrawler manufacturer-sync
+// page (/admin/manufacturer-sync) taking this slot in the sidebar. Flip
+// back to false (and remove `locked: true` on this route in
+// DashboardLayout.tsx's navDiscovery) to re-enable.
+const FEATURE_LOCKED = true;
 
 export default function BrandDiscoveryPage() {
   const [brandName, setBrandName] = React.useState("");
@@ -65,6 +72,7 @@ export default function BrandDiscoveryPage() {
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   React.useEffect(() => {
+    if (FEATURE_LOCKED) return;
     getDiscoveryLogsAction().then(setHistoricalLogs).catch(() => {});
   }, []);
 
@@ -148,6 +156,29 @@ export default function BrandDiscoveryPage() {
       return isoString;
     }
   };
+
+  if (FEATURE_LOCKED) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-xl mx-auto mt-16 text-center space-y-4">
+          <div className="mx-auto w-14 h-14 rounded-full bg-muted flex items-center justify-center">
+            <Lock className="w-6 h-6 text-muted-foreground" />
+          </div>
+          <h1 className="text-xl font-semibold">Tính năng đang tạm khóa</h1>
+          <p className="text-sm text-muted-foreground">
+            &quot;Tra Cứu Sản Phẩm Bằng AI&quot; đang được tạm khóa để nhường chỗ cho tính năng Đồng Bộ Dữ Liệu
+            Nhà Sản Xuất (DataCrawler) đang được phát triển. Chức năng này sẽ được mở lại sau.
+          </p>
+          <Link
+            href="/admin/manufacturer-sync"
+            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+          >
+            Đi tới Đồng Bộ NSX (DataCrawler)
+          </Link>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

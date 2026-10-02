@@ -24,7 +24,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { pullCmsCatalogAction, updateCmsProductFieldsByIdAction } from "@/app/actions/discovery";
 import { toast } from "sonner";
-import { Bot, Database, Loader2, ArrowDownToLine, ChevronDown, ChevronRight, ShieldCheck, ScanSearch, AlertTriangle, Wrench, UploadCloud, Info, Layers } from "lucide-react";
+import { BrandMultiSelect } from "@/components/data/BrandMultiSelect";
+import { RULE_CHECKS, runRuleChecks, type QualityCheckProduct, type RuleCheckKey } from "@/lib/services/cmsDataQualityChecks";
+import { Bot, Database, Loader2, ArrowDownToLine, ChevronDown, ChevronRight, ShieldCheck, ScanSearch, AlertTriangle, Wrench, UploadCloud, Info, Layers, ListChecks } from "lucide-react";
 
 interface LocalProduct {
   id: string;
@@ -33,6 +35,11 @@ interface LocalProduct {
   brand: string;
   product: string;
   fields: Record<string, string>;
+  /** Structured specs + raw link/model fields — only used by the rule-based checks. */
+  specs: { label: string; value: string }[];
+  productItem: string;
+  image: string;
+  datasheet: string;
 }
 
 interface CategoryCluster {
@@ -48,6 +55,8 @@ interface GroundingSource {
 interface Finding {
   category: string;
   message: string;
+  /** "ai" = catalogAiReview (Ollama); "rule" = cmsDataQualityChecks. */
+  source?: "ai" | "rule";
 }
 
 interface FixSuggestion {
@@ -97,6 +106,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   duplicate_content: "Nội dung trùng lặp",
   mixed_language: "Lẫn Anh/Việt",
   other: "Khác",
+  ...Object.fromEntries(RULE_CHECKS.map((r) => [r.key, r.label])),
 };
 
 export default function CmsAiReviewPage() {
@@ -108,6 +118,11 @@ export default function CmsAiReviewPage() {
   const [findingsById, setFindingsById] = React.useState<Map<string, Finding[]>>(new Map());
   const [hasReviewed, setHasReviewed] = React.useState(false);
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+  // Brand names (as shown on each product) to limit checking to; empty = every brand.
+  const [brandFilter, setBrandFilter] = React.useState<string[]>([]);
+  const [selectedRules, setSelectedRules] = React.useState<RuleCheckKey[]>(RULE_CHECKS.map((r) => r.key));
+  const [ruleFindingsById, setRuleFindingsById] = React.useState<Map<string, Finding[]>>(new Map());
+  const [hasRuleChecked, setHasRuleChecked] = React.useState(false);
 
   const [isFixing, setIsFixing] = React.useState(false);
   const [fixProgress, setFixProgress] = React.useState({ done: 0, total: 0 });
@@ -158,6 +173,10 @@ export default function CmsAiReviewPage() {
               Brand: String(row.Brand ?? ""),
               Product: String(row.Product ?? ""),
             },
+            specs: Array.isArray(row.transformedSpecifications) ? row.transformedSpecifications : [],
+            productItem: String(row.originalRawRow?.productItem ?? row.originalRawRow?.ProductItem ?? ""),
+            image: String(row.image ?? ""),
+            datasheet: String(row.Datasheet ?? ""),
           };
         })
       );
@@ -165,6 +184,10 @@ export default function CmsAiReviewPage() {
       setProducts(flat);
       setFindingsById(new Map());
       setHasReviewed(false);
+      setRuleFindingsById(new Map());
+      setHasRuleChecked(false);
+      // Keep only brands that still exist in the freshly loaded data
+      setBrandFilter((prev) => prev.filter((b) => flat.some((p) => p.brand === b)));
       setFixSuggestionsById(new Map());
       setHasFixed(false);
       setAppliedProductIds(new Set());
@@ -181,6 +204,55 @@ export default function CmsAiReviewPage() {
     } finally {
       setIsPulling(false);
     }
+  };
+
+  const brandOptions = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    products.forEach((p) => counts.set(p.brand, (counts.get(p.brand) ?? 0) + 1));
+    return [...counts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ value: name, label: `${name} (${count})` }));
+  }, [products]);
+
+  /** Products the brand filter keeps — what both the AI review and the rule checks run on. */
+  const scopedProducts = React.useMemo(
+    () => (brandFilter.length === 0 ? products : products.filter((p) => brandFilter.includes(p.brand))),
+    [products, brandFilter]
+  );
+
+  const toQualityCheckProduct = (p: LocalProduct): QualityCheckProduct => ({
+    id: p.id,
+    brand: p.brand,
+    title: p.fields.Title,
+    product: p.fields.Product,
+    category: p.fields.Category,
+    series: p.fields.Series,
+    mainFeature: p.fields.MainFeature,
+    productOverview: p.fields.ProductOverview,
+    specs: p.specs,
+    productItem: p.productItem,
+    image: p.image,
+    datasheet: p.datasheet,
+  });
+
+  const handleRunRuleChecks = () => {
+    if (scopedProducts.length === 0) return;
+    if (selectedRules.length === 0) {
+      toast.error("Chưa chọn quy tắc nào để kiểm tra.");
+      return;
+    }
+    // Duplicates/copied content are compared against the whole catalog, so a
+    // product copied from another brand is still caught when filtering by brand.
+    const result = runRuleChecks(scopedProducts.map(toQualityCheckProduct), selectedRules, products.map(toQualityCheckProduct));
+    const next = new Map<string, Finding[]>();
+    result.forEach((findings, id) => next.set(id, findings.map((f) => ({ ...f, source: "rule" as const }))));
+    setRuleFindingsById(next);
+    setHasRuleChecked(true);
+    toast.success(
+      next.size > 0
+        ? `Kiểm tra quy tắc: phát hiện vấn đề ở ${next.size}/${scopedProducts.length} sản phẩm.`
+        : `Kiểm tra quy tắc: không phát hiện vấn đề nào trong ${scopedProducts.length} sản phẩm.`
+    );
   };
 
   const productsByCategory = React.useMemo(() => {
@@ -316,13 +388,13 @@ export default function CmsAiReviewPage() {
   };
 
   const handleRunReview = async () => {
-    if (products.length === 0) return;
+    if (scopedProducts.length === 0) return;
     if (selectedFields.length === 0) {
       toast.error("Chưa chọn cột nào để kiểm tra.");
       return;
     }
 
-    const items = products.map((p) => ({
+    const items = scopedProducts.map((p) => ({
       id: p.id,
       fields: {
         Category: p.fields.Category.slice(0, 200),
@@ -358,7 +430,7 @@ export default function CmsAiReviewPage() {
 
         const results: { id: string; findings: Finding[] }[] = json.results || [];
         results.forEach((r) => {
-          nextFindings.set(r.id, r.findings);
+          nextFindings.set(r.id, r.findings.map((f) => ({ ...f, source: "ai" as const })));
           if (r.findings.length > 0) flaggedCount++;
         });
       } catch (err) {
@@ -384,10 +456,20 @@ export default function CmsAiReviewPage() {
     }
   };
 
-  const flaggedProducts = products.filter((p) => (findingsById.get(p.id)?.length ?? 0) > 0);
+  const allFindingsFor = (id: string): Finding[] => [...(findingsById.get(id) || []), ...(ruleFindingsById.get(id) || [])];
+  const flaggedProducts = scopedProducts.filter((p) => allFindingsFor(p.id).length > 0);
+  // AI Fix only gets AI findings — rule findings like "trùng tên" or "thiếu ảnh" aren't something it can fix from the text.
+  const aiFlaggedProducts = scopedProducts.filter((p) => (findingsById.get(p.id)?.length ?? 0) > 0);
+  const findingCountsByCategory = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    scopedProducts.forEach((p) =>
+      [...(findingsById.get(p.id) || []), ...(ruleFindingsById.get(p.id) || [])].forEach((f) => counts.set(f.category, (counts.get(f.category) ?? 0) + 1))
+    );
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [scopedProducts, findingsById, ruleFindingsById]);
 
   const handleRunFix = async () => {
-    const targets = flaggedProducts.filter((p) => !appliedProductIds.has(p.id));
+    const targets = aiFlaggedProducts.filter((p) => !appliedProductIds.has(p.id));
     if (targets.length === 0) return;
 
     setIsFixing(true);
@@ -705,10 +787,66 @@ export default function CmsAiReviewPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <ScanSearch className="w-4 h-4 text-violet-500" />
-                Bước 3 — Chọn cột cần AI kiểm tra
+                Bước 3 — Chọn phạm vi và nội dung kiểm tra
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold">Phạm vi kiểm tra</p>
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  <BrandMultiSelect value={brandFilter} onChange={setBrandFilter} options={brandOptions} />
+                  <p className="text-xs text-muted-foreground sm:pt-2.5">
+                    Sẽ kiểm tra <span className="font-semibold text-foreground">{scopedProducts.length}</span> / {products.length} sản phẩm
+                    {brandFilter.length > 0 ? ` của ${brandFilter.length} hãng đã chọn` : " (tất cả hãng)"}.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t pt-4">
+                <p className="text-xs font-semibold flex items-center gap-1.5">
+                  <ListChecks className="w-3.5 h-3.5 text-emerald-500" />
+                  Kiểm tra nhanh theo quy tắc (không dùng AI, chạy tức thì)
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Kết quả chính xác tuyệt đối theo dữ liệu — không phụ thuộc AI. Phát hiện được lỗi AI bỏ sót vì so sánh toàn bộ catalog cùng lúc (sản phẩm trùng, mô tả sao chép giữa các sản phẩm).
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {RULE_CHECKS.map((rule) => (
+                    <label
+                      key={rule.key}
+                      className="flex items-start gap-3 p-2.5 rounded-lg border border-border/50 hover:bg-accent/40 transition-colors cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={selectedRules.includes(rule.key)}
+                        onCheckedChange={(v) =>
+                          setSelectedRules((prev) => (v ? [...prev, rule.key] : prev.filter((k) => k !== rule.key)))
+                        }
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{rule.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{rule.hint}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex items-center justify-end pt-1">
+                  <Button
+                    onClick={handleRunRuleChecks}
+                    disabled={selectedRules.length === 0 || scopedProducts.length === 0}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <ListChecks className="w-4 h-4" />
+                    Kiểm tra theo quy tắc ({selectedRules.length} quy tắc)
+                  </Button>
+                </div>
+              </div>
+
+              <p className="text-xs font-semibold border-t pt-4 flex items-center gap-1.5">
+                <Bot className="w-3.5 h-3.5 text-violet-500" />
+                Kiểm tra bằng AI
+              </p>
               <p className="text-xs text-muted-foreground">
                 AI vẫn đọc đầy đủ mọi thông tin sản phẩm để đối chiếu (ví dụ đọc Main Feature/Product Overview để đánh giá Category), nhưng chỉ báo lỗi cho những cột được chọn dưới đây.
               </p>
@@ -732,7 +870,7 @@ export default function CmsAiReviewPage() {
               </div>
               {isReviewing && <Progress value={(progress.done / Math.max(1, progress.total)) * 100} className="h-2" />}
               <div className="flex items-center justify-end pt-1">
-                <Button onClick={handleRunReview} disabled={isReviewing || selectedFields.length === 0} className="gap-2">
+                <Button onClick={handleRunReview} disabled={isReviewing || selectedFields.length === 0 || scopedProducts.length === 0} className="gap-2">
                   {isReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
                   {isReviewing ? `Đang kiểm tra (${progress.done}/${progress.total})` : `Bắt đầu kiểm tra AI (${selectedFields.length} cột)`}
                 </Button>
@@ -742,7 +880,7 @@ export default function CmsAiReviewPage() {
         )}
 
         {/* Bước 4 — Kết quả */}
-        {hasReviewed && (
+        {(hasReviewed || hasRuleChecked) && (
           <Card className="border-border/60 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -751,16 +889,25 @@ export default function CmsAiReviewPage() {
                 ) : (
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
                 )}
-                Bước 4 — Kết quả kiểm tra ({flaggedProducts.length} / {products.length} sản phẩm bị gắn cờ)
+                Bước 4 — Kết quả kiểm tra ({flaggedProducts.length} / {scopedProducts.length} sản phẩm bị gắn cờ)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {findingCountsByCategory.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pb-1">
+                  {findingCountsByCategory.map(([cat, count]) => (
+                    <Badge key={cat} variant="secondary" className="text-[10px]">
+                      {CATEGORY_LABELS[cat] || cat}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               {flaggedProducts.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">Không phát hiện vấn đề nào ở các cột đã chọn.</p>
               ) : (
                 <div className="max-h-[560px] overflow-y-auto space-y-2 pr-1">
                   {flaggedProducts.map((p) => {
-                    const findings = findingsById.get(p.id) || [];
+                    const findings = allFindingsFor(p.id);
                     const isOpen = expanded[p.id];
                     return (
                       <div key={p.id} className="border rounded-lg overflow-hidden">
@@ -776,7 +923,10 @@ export default function CmsAiReviewPage() {
                           <div className="divide-y">
                             {findings.map((f, i) => (
                               <div key={i} className="px-3 py-2.5 text-xs space-y-1">
-                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">{CATEGORY_LABELS[f.category] || f.category}</Badge>
+                                <div className="flex items-center gap-1.5">
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">{CATEGORY_LABELS[f.category] || f.category}</Badge>
+                                  <span className="text-[9px] text-muted-foreground">{f.source === "rule" ? "Quy tắc" : "AI"}</span>
+                                </div>
                                 <p className="text-muted-foreground">{f.message}</p>
                               </div>
                             ))}
@@ -792,7 +942,7 @@ export default function CmsAiReviewPage() {
         )}
 
         {/* Bước 5 — Sửa bằng AI */}
-        {hasReviewed && flaggedProducts.length > 0 && (
+        {hasReviewed && aiFlaggedProducts.length > 0 && (
           <Card className="border-violet-500/20 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -806,7 +956,7 @@ export default function CmsAiReviewPage() {
                     ? `Đang đề xuất (${fixProgress.done}/${fixProgress.total})`
                     : hasFixed
                     ? "Đề xuất lại"
-                    : `Đề xuất sửa (${flaggedProducts.filter((p) => !appliedProductIds.has(p.id)).length} sản phẩm)`}
+                    : `Đề xuất sửa (${aiFlaggedProducts.filter((p) => !appliedProductIds.has(p.id)).length} sản phẩm)`}
                 </Button>
               </div>
             </CardHeader>

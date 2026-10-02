@@ -62,6 +62,7 @@ export function CmsCompareModal({ open, onClose, row }: CmsCompareModalProps) {
         ProductOverview: getField(row, ["Product Overview", "ProductOverview"]),
         TechnicalSpecifications: specsText,
         Brand: getField(row, ["Brand"]),
+        productItem: getField(row, ["product (item)", "productItem"]),
       });
       setResult(res);
     } catch (err) {

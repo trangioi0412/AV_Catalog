@@ -42,20 +42,25 @@ export async function getWixCmsItems(params: {
   page: number;
   limit: number;
   search?: string;
+  /** Brand collection item _ids — products store `brand` as a reference to one of them. */
+  brandIds?: string[];
 }): Promise<WixCmsItemsPage> {
-  const { collectionId, page, limit, search } = params;
+  const { collectionId, page, limit, search, brandIds } = params;
   const offset = Math.max(0, (page - 1) * limit);
 
   const trimmedSearch = search?.trim();
-  const filter = trimmedSearch
-    ? {
-        $or: [
-          { title: { $contains: trimmedSearch } },
-          { product: { $contains: trimmedSearch } },
-          { _id: { $eq: trimmedSearch } },
-        ],
-      }
-    : undefined;
+  const conditions: Record<string, unknown>[] = [];
+  if (trimmedSearch) {
+    conditions.push({
+      $or: [
+        { title: { $contains: trimmedSearch } },
+        { product: { $contains: trimmedSearch } },
+        { _id: { $eq: trimmedSearch } },
+      ],
+    });
+  }
+  if (brandIds && brandIds.length > 0) conditions.push({ brand: { $in: brandIds } });
+  const filter = conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : { $and: conditions };
 
   const json = (await wixDataFetch("items/query", {
     dataCollectionId: collectionId,

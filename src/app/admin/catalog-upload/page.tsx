@@ -1161,8 +1161,16 @@ export default function CatalogUploadPage() {
       const noMatchItems = previewRows.filter((r) => r.cmsMatchStatus === "no_match");
       const multipleMatchItems = previewRows.filter((r) => r.cmsMatchStatus === "multiple_match");
 
+      // `total` counts every file that was a real upload candidate
+      // (matched + no_match + multiple_match), not just the ones that were
+      // matched+selected -- otherwise e.g. selecting 200 files where 60
+      // never matched a CMS product reports "140/140 thành công" and looks
+      // like a clean 100% run instead of 140/200.
+      const total = previewRows.length;
+      const unmatchedCount = noMatchItems.length + multipleMatchItems.length;
+
       const finalReport: CatalogUploadReport = {
-        total: selectedRows.length,
+        total,
         success: successItems.length,
         skipped: skippedItems.length,
         failed: failedItems.length,
@@ -1177,10 +1185,14 @@ export default function CatalogUploadPage() {
       setReport(finalReport);
       setPhase("done");
 
-      if (failedItems.length === 0) {
-        toast.success(`Upload hoàn tất! ${successItems.length} file thành công.`);
+      if (failedItems.length === 0 && unmatchedCount === 0) {
+        toast.success(`Upload hoàn tất! ${successItems.length}/${total} file thành công.`);
       } else {
-        toast.warning(`Upload xong: ${successItems.length} thành công, ${failedItems.length} thất bại.`);
+        const unmatchedNote = unmatchedCount > 0 ? `, ${unmatchedCount} chưa khớp CMS (chưa upload)` : "";
+        toast.warning(
+          `Upload xong: ${successItems.length}/${total} thành công, ${failedItems.length} thất bại${unmatchedNote}.`,
+          { duration: 8000 }
+        );
       }
 
       return finalQueue;

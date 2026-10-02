@@ -35,6 +35,11 @@ const querySchema = z.object({
   search: z.string().max(200).optional().default(""),
   /** Comma-separated target field keys — the target side of the caller's current field mappings. */
   targetFields: z.string().max(2000).optional().default(""),
+  /** Comma-separated brand item _ids to filter products by (only applies to the products collection). */
+  brandIds: z
+    .string()
+    .regex(/^[a-zA-Z0-9-]{1,64}(,[a-zA-Z0-9-]{1,64}){0,99}$/)
+    .optional(),
 });
 
 function noStore(json: unknown, init?: ResponseInit) {
@@ -59,7 +64,7 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) {
     return noStore({ error: "Invalid query parameters.", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { collectionKey, page, limit, search, targetFields } = parsed.data;
+  const { collectionKey, page, limit, search, targetFields, brandIds } = parsed.data;
 
   const collection = resolveCollection(collectionKey);
   if (!collection) {
@@ -72,7 +77,14 @@ export async function GET(req: NextRequest) {
     .filter(Boolean);
 
   try {
-    const { items: rawItems, total } = await getWixCmsItems({ collectionId: collection.collectionId, page, limit, search });
+    const { items: rawItems, total } = await getWixCmsItems({
+      collectionId: collection.collectionId,
+      page,
+      limit,
+      search,
+      // Only products reference a brand; the brand collection itself has no such field.
+      brandIds: collectionKey === "products" && brandIds ? brandIds.split(",") : undefined,
+    });
 
     const items = rawItems.map((raw) => {
       const untranslatedFields = targetFieldKeys.filter((key) => {

@@ -491,12 +491,38 @@ export async function updateProductDocument(
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CmsSuggestion } from "@/types/catalog-upload";
+import { getAllProducts, normalizeName, matchKey, type WixProduct } from "./wixCms";
 
 export interface CmsSearchResult {
   status: "matched" | "no_match" | "multiple_match";
   itemId?: string;
   productName?: string;
   suggestions?: CmsSuggestion[];
+}
+
+/**
+ * The whole Import1 collection, fetched once per server process and reused
+ * across every file in a batch (was previously 1 Wix Data API query per
+ * file, with a raw case-sensitive `$eq`/`$contains` filter -- see the
+ * `searchCmsProduct` doc below for why that undercounted real matches).
+ * Concurrent calls during the same validate batch share one in-flight
+ * fetch instead of racing separate requests.
+ */
+let cmsProductListPromise: Promise<WixProduct[]> | null = null;
+
+async function getCmsProductListForMatching(): Promise<WixProduct[]> {
+  if (!cmsProductListPromise) {
+    cmsProductListPromise = getAllProducts().catch((err) => {
+      cmsProductListPromise = null; // allow the next call to retry
+      throw err;
+    });
+  }
+  return cmsProductListPromise;
+}
+
+/** Drop the cached product list (new upload batch, or tests). */
+export function clearCmsProductListCache(): void {
+  cmsProductListPromise = null;
 }
 
 /**
@@ -538,149 +564,120 @@ export function computeSimilarity(str1: string, str2: string): number {
   return Math.round(dice * 100);
 }
 
-function extractItemData(item: any): { id: string; productName: string; brandName?: string } {
-  const data = item.data || item.dataItem?.data || item;
-  const id = item._id || item.id || item.dataItem?._id || data._id || "";
-  const productName = data.Product || data.product || data.Title || data.title || "";
-  const brandName = data.Brand || data.brand || data.brandName || "";
-  return { id, productName, brandName };
+function extractItemData(item: WixProduct): {
+  id: string;
+  productName: string;
+  brandName?: string;
+  names: string[];
+} {
+  // Which column holds the model name depends on the brand's import:
+  // e.g. EIZO rows have title "FlexScan EV2490" / product "Premium" (series),
+  // while others have product "UD-1" / title "Relacart UD-1 Wireless ...".
+  // So both columns are candidate names to match a filename against.
+  const names = [item.Product, item.Title].filter((n): n is string => !!n && !!n.trim());
+  return {
+    id: item._id || "",
+    productName: item.Product || item.Title || "",
+    brandName: item.Brand || "",
+    names,
+  };
 }
 
 /**
  * Search Wix CMS for a product by normalized product name and brand.
  * Returns exact match or top fuzzy suggestions for unmatched/multiple matches.
+ *
+ * Matches locally against the full product list using `normalizeName()`
+ * (the same normalizer validated against all 1014 real CMS products for
+ * the Image Sync feature) instead of a raw Wix Data API `$eq`/`$contains`
+ * filter. The old filter compared the filename-derived product name
+ * byte-for-byte (only `.trim()`ed) against the CMS `Product` field, so any
+ * trivial difference -- casing, a "™" symbol, "/" vs "-" (path segments
+ * can't contain "/", see `sanitizeSegment` above, so a CMS name like
+ * "4x1 4K60 HDMI™ Switcher (ARC/eARC)" could only ever reach here as
+ * "...(ARC-eARC)" or similar) -- silently pushed a real product into
+ * "no_match"/"multiple_match". Those buckets are then dropped from the
+ * upload queue entirely (see `handleStartUpload` in the admin page), so
+ * every such miss looked like a product that was simply never attempted,
+ * not a reported failure.
+ *
+ * Note: `WixProduct.Brand` is a CMS *reference id*, not a brand display
+ * name, so it can't be compared against the folder's brand name string --
+ * brand is therefore not used to narrow candidates here (it wasn't
+ * effectively doing so before either, since the old comparison was against
+ * that same id).
  */
 export async function searchCmsProduct(
   productName: string,
-  brandName: string
+  _brandName: string
 ): Promise<CmsSearchResult> {
-  let headers: Record<string, string>;
+  let allProducts: WixProduct[];
   try {
-    headers = getWixHeaders();
-  } catch {
+    allProducts = await getCmsProductListForMatching();
+  } catch (err: any) {
+    console.error("[CatalogPdf] Failed to load CMS product list for matching:", err.message);
     return { status: "no_match" };
   }
-
-  const url = "https://www.wixapis.com/wix-data/v2/items/query";
 
   const normalizedProduct = productName.trim();
-  const normalizedBrand = brandName.trim();
+  const targetKey = matchKey(normalizeName(normalizedProduct));
 
-  try {
-    // 1. Primary query: match by Product field
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        dataCollectionId: COLLECTION_ID,
-        query: {
-          filter: {
-            $or: [
-              { Product: { $eq: normalizedProduct } },
-              { product: { $eq: normalizedProduct } },
-              { Product: { $eq: normalizedProduct.toLowerCase() } },
-              { Product: { $contains: normalizedProduct } },
-            ],
-          },
-          paging: { limit: 15 },
-        },
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.warn(`[CatalogPdf] CMS search failed: ${res.status} — ${text}`);
-      return { status: "no_match" };
-    }
-
-    const json = await res.json();
-    const items: any[] = json.items || json.dataItems || [];
-
-    const brandNorm = normalizedBrand.toLowerCase().trim();
-
-    // 2. Exact / Brand-narrowed match check
-    if (items.length > 0) {
-      const brandFiltered = items.filter((item: any) => {
-        const { brandName: itemBrand } = extractItemData(item);
-        const b = (itemBrand || "").toLowerCase().trim();
-        return !b || b.includes(brandNorm) || brandNorm.includes(b);
-      });
-
-      const candidateItems = brandFiltered.length > 0 ? brandFiltered : items;
-
-      if (candidateItems.length === 1) {
-        const { id, productName: cmsTitle } = extractItemData(candidateItems[0]);
-        return {
-          status: "matched",
-          itemId: id,
-          productName: cmsTitle || normalizedProduct,
-        };
-      }
-
-      // Multiple matches found — build suggestions from all candidates
-      const suggestions: CmsSuggestion[] = candidateItems.map((item) => {
-        const { id, productName: cmsTitle, brandName: itemBrand } = extractItemData(item);
-        const score = computeSimilarity(normalizedProduct, cmsTitle);
-        return {
-          itemId: id,
-          productName: cmsTitle,
-          brandName: itemBrand,
-          score,
-        };
-      }).sort((a, b) => b.score - a.score).slice(0, 3);
-
-      return {
-        status: "multiple_match",
-        suggestions,
-      };
-    }
-
-    // 3. Fallback: Fuzzy search by brand or general search for suggestions
-    const fallbackRes = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        dataCollectionId: COLLECTION_ID,
-        query: {
-          paging: { limit: 25 },
-        },
-      }),
-    });
-
-    if (fallbackRes.ok) {
-      const fallbackJson = await fallbackRes.json();
-      const allItems: any[] = fallbackJson.items || fallbackJson.dataItems || [];
-
-      const candidateSuggestions: CmsSuggestion[] = [];
-
-      for (const item of allItems) {
-        const { id, productName: cmsTitle, brandName: itemBrand } = extractItemData(item);
-        if (!cmsTitle) continue;
-
-        const score = computeSimilarity(normalizedProduct, cmsTitle);
-        // If similarity score >= 30, add as suggestion
-        if (score >= 30) {
-          candidateSuggestions.push({
-            itemId: id,
-            productName: cmsTitle,
-            brandName: itemBrand,
-            score,
-          });
-        }
-      }
-
-      candidateSuggestions.sort((a, b) => b.score - a.score);
-      const topSuggestions = candidateSuggestions.slice(0, 3);
-
-      return {
-        status: "no_match",
-        suggestions: topSuggestions.length > 0 ? topSuggestions : undefined,
-      };
-    }
-
-    return { status: "no_match" };
-  } catch (err: any) {
-    console.error("[CatalogPdf] searchCmsProduct error:", err.message);
-    return { status: "no_match" };
+  // Match on either Product or Title (see extractItemData); remember which
+  // name matched so the preview shows the name the user actually recognizes.
+  const exactMatches: Array<{ item: WixProduct; matchedName: string }> = [];
+  for (const item of allProducts) {
+    const matchedName = extractItemData(item).names.find((n) => matchKey(normalizeName(n)) === targetKey);
+    if (matchedName) exactMatches.push({ item, matchedName });
   }
+
+  if (exactMatches.length === 1) {
+    const { id } = extractItemData(exactMatches[0].item);
+    return {
+      status: "matched",
+      itemId: id,
+      productName: exactMatches[0].matchedName,
+    };
+  }
+
+  if (exactMatches.length > 1) {
+    // Same normalized name shared by >1 CMS item (e.g. same model under
+    // different brands/categories) — ambiguous, let the user pick.
+    const suggestions: CmsSuggestion[] = exactMatches
+      .map(({ item, matchedName }) => {
+        const { id, brandName: itemBrand } = extractItemData(item);
+        return {
+          itemId: id,
+          productName: matchedName,
+          brandName: itemBrand,
+          score: 100,
+        };
+      })
+      .slice(0, 3);
+
+    return { status: "multiple_match", suggestions };
+  }
+
+  // No exact normalized match — offer fuzzy suggestions from the full list.
+  const candidateSuggestions: CmsSuggestion[] = [];
+  for (const item of allProducts) {
+    const { id, brandName: itemBrand, names } = extractItemData(item);
+
+    // Best-scoring of the item's candidate names
+    let best: { name: string; score: number } | null = null;
+    for (const name of names) {
+      const score = computeSimilarity(normalizedProduct, name);
+      if (!best || score > best.score) best = { name, score };
+    }
+    if (best && best.score >= 30) {
+      candidateSuggestions.push({ itemId: id, productName: best.name, brandName: itemBrand, score: best.score });
+    }
+  }
+
+  candidateSuggestions.sort((a, b) => b.score - a.score);
+  const topSuggestions = candidateSuggestions.slice(0, 3);
+
+  return {
+    status: "no_match",
+    suggestions: topSuggestions.length > 0 ? topSuggestions : undefined,
+  };
 }

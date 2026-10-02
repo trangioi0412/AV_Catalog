@@ -25,6 +25,11 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
   search: z.string().max(200).optional().default(""),
   targetLocale: z.string().min(1).max(20),
+  /** Comma-separated brand item _ids to filter products by (only applies to the products collection). */
+  brandIds: z
+    .string()
+    .regex(/^[a-zA-Z0-9-]{1,64}(,[a-zA-Z0-9-]{1,64}){0,99}$/)
+    .optional(),
 });
 
 function noStore(json: unknown, init?: ResponseInit) {
@@ -67,7 +72,7 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) {
     return noStore({ error: "Invalid query parameters.", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { collectionKey, page, limit, search, targetLocale } = parsed.data;
+  const { collectionKey, page, limit, search, targetLocale, brandIds } = parsed.data;
 
   const collection = resolveCollection(collectionKey);
   if (!collection) {
@@ -76,7 +81,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const [page_, schema] = await Promise.all([
-      getWixCmsItems({ collectionId: collection.collectionId, page, limit, search }),
+      getWixCmsItems({
+        collectionId: collection.collectionId,
+        page,
+        limit,
+        search,
+        // Only products reference a brand; the brand collection itself has no such field.
+        brandIds: collectionKey === "products" && brandIds ? brandIds.split(",") : undefined,
+      }),
       getWixCollectionSchema(collection.collectionId).catch(() => null),
     ]);
     const fieldDefs = schema ? getTranslatableFields(schema) : [];
