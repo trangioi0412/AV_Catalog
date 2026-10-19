@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   ImageIcon,
@@ -553,14 +554,11 @@ export default function ImageSyncPage() {
 
         {/* ── Page Header ── */}
         <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
-              Image Sync
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Upload product images from your local folder to Wix Media Manager and sync with CMS.
-            </p>
-          </div>
+          <PageHeader
+            title="Đồng bộ hình ảnh"
+            description="Tải ảnh sản phẩm từ thư mục máy lên Wix Media Manager và đồng bộ với CMS."
+            icon={<ImageIcon className="w-5 h-5" />}
+          />
           {phase !== "select" && (
             <Button variant="outline" size="sm" className="gap-2" onClick={handleReset}>
               <RotateCcw className="w-4 h-4" />
@@ -908,12 +906,12 @@ export default function ImageSyncPage() {
                       <code className="font-mono text-foreground bg-muted px-1 rounded">{matchField}</code>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-primary inline-block shrink-0" />
                       <span>Image Field:</span>
                       <code className="font-mono text-foreground bg-muted px-1 rounded">{imageField}</code>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-purple-500 inline-block shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-highlight inline-block shrink-0" />
                       <span>Gallery Field:</span>
                       <code className="font-mono text-foreground bg-muted px-1 rounded">{galleryField}</code>
                     </div>
@@ -923,19 +921,19 @@ export default function ImageSyncPage() {
                       <code className="font-mono text-foreground bg-muted px-1 rounded">{mediaFolder}</code>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-primary inline-block shrink-0" />
                       <span>Sản phẩm trong CMS:</span>
                       <span className="font-bold text-foreground">
                         {scanInfo.totalProducts.toLocaleString()}
                         {scanInfo.productsWithImagesCount !== undefined && (
-                          <span className="text-[10px] font-normal text-muted-foreground ml-1">
+                          <span className="text-xs font-normal text-muted-foreground ml-1">
                             (Đã có ảnh: {scanInfo.productsWithImagesCount.toLocaleString()})
                           </span>
                         )}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-purple-500 inline-block shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-highlight inline-block shrink-0" />
                       <span>File ảnh đã quét:</span>
                       <span className="font-bold text-foreground">{scanInfo.totalFiles.toLocaleString()}</span>
                     </div>
@@ -1030,14 +1028,14 @@ export default function ImageSyncPage() {
                               <p className="text-xs text-muted-foreground truncate">
                                 {item.mainFileName}
                                 {item.galleryFileNames.length > 0 && (
-                                  <span className="ml-1 text-blue-500">+{item.galleryFileNames.length} gallery</span>
+                                  <span className="ml-1 text-primary">+{item.galleryFileNames.length} gallery</span>
                                 )}
                               </p>
                             </div>
                             <div className="text-right shrink-0">
-                              <Badge variant="outline" className="text-[10px] font-mono">{item.cmsId.slice(0, 8)}…</Badge>
+                              <Badge variant="outline" className="text-xs font-mono">{item.cmsId.slice(0, 8)}…</Badge>
                               {item.existingImageUrl && (
-                                <p className="text-[10px] text-amber-500 mt-0.5">⚠ Has existing image</p>
+                                <p className="inline-flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400 mt-0.5"><AlertTriangle className="w-3 h-3" aria-hidden="true" />Đã có ảnh</p>
                               )}
                             </div>
                           </div>
@@ -1054,8 +1052,9 @@ export default function ImageSyncPage() {
                   <ScrollArea className="h-80">
                     <div className="p-3 space-y-2">
                       {scanPreview.unmatched.length === 0 && (
-                        <p className="p-6 text-center text-muted-foreground text-sm">
-                          🎉 All files matched a CMS product.
+                        <p className="p-6 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" aria-hidden="true" />
+                          Tất cả file đều khớp với sản phẩm CMS.
                         </p>
                       )}
                       {scanPreview.unmatched.map((item) => (
@@ -1069,18 +1068,18 @@ export default function ImageSyncPage() {
                                 Key tìm kiếm: <span className="text-amber-600 dark:text-amber-400">&quot;{item.normalizedKey}&quot;</span>
                               </p>
                             </div>
-                            <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
+                            <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
                               Unmatched
                             </Badge>
                           </div>
                           {/* Suggestion */}
                           {item.suggestion && (
-                            <div className="ml-5 flex items-center gap-2 p-2 rounded-md bg-blue-500/5 border border-blue-500/15">
-                              <span className="text-[10px] text-blue-500 font-semibold uppercase tracking-wide shrink-0">Gần nhất:</span>
+                            <div className="ml-5 flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/15">
+                              <span className="text-xs text-primary font-semibold uppercase tracking-wide shrink-0">Gần nhất:</span>
                               <span className="text-xs truncate">{item.suggestion.label}</span>
                               <span
                                 className={cn(
-                                  "ml-auto text-[10px] font-bold shrink-0",
+                                  "ml-auto text-xs font-bold shrink-0",
                                   item.suggestion.score >= 0.6 ? "text-green-500" :
                                     item.suggestion.score >= 0.4 ? "text-amber-500" : "text-muted-foreground"
                                 )}
@@ -1090,7 +1089,7 @@ export default function ImageSyncPage() {
                             </div>
                           )}
                           {/* Reason */}
-                          <p className="ml-5 text-[11px] text-muted-foreground leading-relaxed">{item.reason}</p>
+                          <p className="ml-5 text-xs text-muted-foreground leading-relaxed">{item.reason}</p>
                         </div>
                       ))}
                     </div>
@@ -1104,8 +1103,9 @@ export default function ImageSyncPage() {
                   <ScrollArea className="h-80">
                     <div className="p-3 space-y-2">
                       {scanPreview.missing.length === 0 && (
-                        <p className="p-6 text-center text-muted-foreground text-sm">
-                          🎉 All CMS products have a corresponding image.
+                        <p className="p-6 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" aria-hidden="true" />
+                          Tất cả sản phẩm CMS đều đã có ảnh tương ứng.
                         </p>
                       )}
                       {scanPreview.missing.map((item) => (
@@ -1119,18 +1119,18 @@ export default function ImageSyncPage() {
                                 Cần file có key: <span className="text-red-500 dark:text-red-400">&quot;{item.normalizedKey}&quot;</span>
                               </p>
                             </div>
-                            <Badge variant="outline" className="text-[10px] border-red-500/30 text-red-500 shrink-0">
+                            <Badge variant="outline" className="text-xs border-red-500/30 text-red-500 shrink-0">
                               No image
                             </Badge>
                           </div>
                           {/* Suggestion */}
                           {item.suggestion && (
-                            <div className="ml-5 flex items-center gap-2 p-2 rounded-md bg-blue-500/5 border border-blue-500/15">
-                              <span className="text-[10px] text-blue-500 font-semibold uppercase tracking-wide shrink-0">File gần nhất:</span>
+                            <div className="ml-5 flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/15">
+                              <span className="text-xs text-primary font-semibold uppercase tracking-wide shrink-0">File gần nhất:</span>
                               <span className="text-xs truncate">{item.suggestion.label}</span>
                               <span
                                 className={cn(
-                                  "ml-auto text-[10px] font-bold shrink-0",
+                                  "ml-auto text-xs font-bold shrink-0",
                                   item.suggestion.score >= 0.6 ? "text-green-500" :
                                     item.suggestion.score >= 0.4 ? "text-amber-500" : "text-muted-foreground"
                                 )}
@@ -1140,7 +1140,7 @@ export default function ImageSyncPage() {
                             </div>
                           )}
                           {/* Reason */}
-                          <p className="ml-5 text-[11px] text-muted-foreground leading-relaxed">{item.reason}</p>
+                          <p className="ml-5 text-xs text-muted-foreground leading-relaxed">{item.reason}</p>
                         </div>
                       ))}
                     </div>
@@ -1253,7 +1253,7 @@ export default function ImageSyncPage() {
                     <p className="text-xs text-muted-foreground">Unmatched</p>
                   </div>
                   <div className="text-center p-3 rounded-lg bg-muted/50">
-                    <p className="text-2xl font-bold text-slate-500">{syncReport.summary.missing}</p>
+                    <p className="text-2xl font-bold text-muted-foreground">{syncReport.summary.missing}</p>
                     <p className="text-xs text-muted-foreground">Missing</p>
                   </div>
                 </div>
@@ -1285,10 +1285,10 @@ export default function ImageSyncPage() {
                             <p className="text-sm font-medium">{item.productName}</p>
                             <p className="text-xs text-muted-foreground font-mono truncate">{item.wixUrl}</p>
                             {item.galleryWixUrls && item.galleryWixUrls.length > 0 && (
-                              <p className="text-xs text-blue-500 mt-0.5">+{item.galleryWixUrls.length} gallery image{item.galleryWixUrls.length !== 1 ? "s" : ""}</p>
+                              <p className="text-xs text-primary mt-0.5">+{item.galleryWixUrls.length} gallery image{item.galleryWixUrls.length !== 1 ? "s" : ""}</p>
                             )}
                           </div>
-                          <Badge variant="outline" className="text-[10px] font-mono shrink-0">{item.cmsId.slice(0, 8)}…</Badge>
+                          <Badge variant="outline" className="text-xs font-mono shrink-0">{item.cmsId.slice(0, 8)}…</Badge>
                         </div>
                       ))}
                       {syncReport.matched.filter(m => m.status === "success").length === 0 && (
@@ -1313,7 +1313,7 @@ export default function ImageSyncPage() {
                         </div>
                       ))}
                       {syncReport.matched.filter(m => m.status === "error").length === 0 && (
-                        <p className="p-6 text-center text-muted-foreground text-sm">🎉 No errors!</p>
+                        <p className="p-6 flex items-center justify-center gap-2 text-muted-foreground text-sm"><CheckCircle2 className="w-4 h-4 text-emerald-600" aria-hidden="true" />Không có lỗi!</p>
                       )}
                     </div>
                   </ScrollArea>

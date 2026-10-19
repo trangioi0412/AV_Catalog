@@ -65,12 +65,12 @@ export function MergeSettings({
                   <TooltipTrigger asChild>
                     <HelpCircle className="w-3.5 h-3.5 text-muted-foreground opacity-60 cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent side="right" className="text-[10px] max-w-[200px]">
+                  <TooltipContent side="right" className="text-xs max-w-[200px]">
                     If enabled, values from the SEO file will replace existing data in the Products file. If disabled, only empty fields in Products are filled.
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <p className="text-[10px] text-muted-foreground leading-normal">
+              <p className="text-xs text-muted-foreground leading-normal">
                 {overwriteExisting
                   ? "Always replace product values with SEO values."
                   : "Only fill in empty cells; do not replace existing values."}
@@ -99,12 +99,12 @@ export function MergeSettings({
                   <TooltipTrigger asChild>
                     <HelpCircle className="w-3.5 h-3.5 text-muted-foreground opacity-60 cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent side="right" className="text-[10px] max-w-[200px]">
+                  <TooltipContent side="right" className="text-xs max-w-[200px]">
                     If enabled, a separate list of SEO IDs that were not found in the Products file will be made available for download.
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <p className="text-[10px] text-muted-foreground leading-normal">
+              <p className="text-xs text-muted-foreground leading-normal">
                 Identify source records that don't match target rows.
               </p>
             </div>

@@ -5,10 +5,11 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WixProduct, WixBrand, isValidProductImageFormat } from "@/lib/services/wixCms";
-import { transformWixImageUrl } from "@/lib/utils";
+import { transformWixImageUrl, wixImageThumbUrl } from "@/lib/utils";
 import { 
   X, 
   Search, 
+  Loader2,
   Eye, 
   ExternalLink, 
   ChevronLeft, 
@@ -40,10 +41,12 @@ import {
   type DocumentEntry,
 } from "@/lib/utils/documentFields";
 import { TranslationReviewModal } from "@/components/data/translation/TranslationReviewModal";
+import { getCmsPopupDataAction } from "@/app/actions/discovery";
 
 interface CmsProductsPopupTriggerProps {
-  products: WixProduct[];
-  brands: WixBrand[];
+  /** Omit both to load them on demand when the popup is first opened. */
+  products?: WixProduct[];
+  brands?: WixBrand[];
   showOnlyNoImages?: boolean;
   showOnlyWithImages?: boolean;
   showOnlyNoDocuments?: boolean;
@@ -51,9 +54,12 @@ interface CmsProductsPopupTriggerProps {
   triggerLabel?: string;
 }
 
+const EMPTY_PRODUCTS: WixProduct[] = [];
+const EMPTY_BRANDS: WixBrand[] = [];
+
 export function CmsProductsPopupTrigger({ 
-  products, 
-  brands, 
+  products: productsProp, 
+  brands: brandsProp, 
   showOnlyNoImages = false, 
   showOnlyWithImages = false,
   showOnlyNoDocuments = false,
@@ -62,6 +68,34 @@ export function CmsProductsPopupTrigger({
 }: CmsProductsPopupTriggerProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+
+  // Lazy mode: no lists passed in — fetch them when the popup is opened.
+  const isLazy = productsProp === undefined;
+  const [lazyData, setLazyData] = useState<{ products: WixProduct[]; brands: WixBrand[] } | null>(null);
+  const [isLoadingData, startLoadingData] = useTransition();
+  const products = productsProp ?? lazyData?.products ?? EMPTY_PRODUCTS;
+  const brands = brandsProp ?? lazyData?.brands ?? EMPTY_BRANDS;
+
+  const loadLazyData = (fresh: boolean) =>
+    new Promise<boolean>((resolve) => {
+      startLoadingData(async () => {
+        try {
+          const data = await getCmsPopupDataAction(fresh);
+          setLazyData(data);
+          resolve(true);
+        } catch (err) {
+          console.error("[CmsProductsPopupTrigger] load failed:", err);
+          toast.error("Không tải được danh sách sản phẩm từ Wix CMS.");
+          resolve(false);
+        }
+      });
+    });
+
+  /** After a CMS write: re-render server data and, in lazy mode, refetch the lists live. */
+  const refreshAfterWrite = () => {
+    router.refresh();
+    if (isLazy) void loadLazyData(true);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -204,7 +238,7 @@ export function CmsProductsPopupTrigger({
           }
           return prev;
         });
-        router.refresh();
+        refreshAfterWrite();
       }
       if (failCount > 0) {
         toast.warning(`${failCount} sản phẩm gặp lỗi khi xóa document.`);
@@ -538,7 +572,7 @@ export function CmsProductsPopupTrigger({
           {urls.map((url, idx) => (
             <div key={idx} className="relative w-12 h-10 border rounded bg-card flex items-center justify-center p-0.5 overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={transformWixImageUrl(url)} alt="preview" className="max-h-full max-w-full object-contain" />
+              <img src={wixImageThumbUrl(url, 96, 80)} alt="preview" loading="lazy" decoding="async" className="max-h-full max-w-full object-contain" />
             </div>
           ))}
         </div>
@@ -547,7 +581,7 @@ export function CmsProductsPopupTrigger({
 
     if (typeof val === "object") {
       return (
-        <pre className="text-[10px] bg-muted p-2 rounded overflow-x-auto font-mono max-h-32">
+        <pre className="text-xs bg-muted p-2 rounded overflow-x-auto font-mono max-h-32">
           {JSON.stringify(val, null, 2)}
         </pre>
       );
@@ -559,7 +593,7 @@ export function CmsProductsPopupTrigger({
           href={transformWixImageUrl(val)} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-primary hover:underline flex items-center gap-1 text-[11px] font-semibold"
+          className="text-primary hover:underline flex items-center gap-1 text-xs font-semibold"
         >
           <FileText className="w-3.5 h-3.5" />
           Tải Tài Liệu
@@ -570,13 +604,13 @@ export function CmsProductsPopupTrigger({
     if (String(val).includes("<") && String(val).includes(">")) {
       return (
         <div 
-          className="prose prose-xs border p-2 rounded bg-card text-muted-foreground text-[11px] leading-relaxed max-h-32 overflow-y-auto"
+          className="prose prose-xs border p-2 rounded bg-card text-muted-foreground text-xs leading-relaxed max-h-32 overflow-y-auto"
           dangerouslySetInnerHTML={{ __html: String(val) }}
         />
       );
     }
 
-    return <span className="whitespace-pre-wrap break-all text-[11px] font-medium text-foreground">{String(val)}</span>;
+    return <span className="whitespace-pre-wrap break-all text-xs font-medium text-foreground">{String(val)}</span>;
   };
 
   return (
@@ -586,7 +620,10 @@ export function CmsProductsPopupTrigger({
         size="sm" 
         variant="outline" 
         className="h-7 text-xs px-3 border-primary/20 text-primary hover:bg-primary/5 cursor-pointer flex items-center gap-1.5 shadow-xs"
-        onClick={() => {
+        disabled={isLoadingData}
+        aria-busy={isLoadingData}
+        onClick={async () => {
+          if (isLazy && !lazyData && !(await loadLazyData(false))) return;
           setIsOpen(true);
           setSearchQuery("");
           setSelectedBrandId("all");
@@ -595,7 +632,7 @@ export function CmsProductsPopupTrigger({
           handleSelectProduct(null);
         }}
       >
-        <ListFilter className="w-3.5 h-3.5" />
+        {isLoadingData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListFilter className="w-3.5 h-3.5" />}
         {triggerLabel || "Xem chi tiết CMS"}
       </Button>
 
@@ -662,7 +699,7 @@ export function CmsProductsPopupTrigger({
                     <div className="flex gap-2 items-center">
                       <div className="flex items-center gap-1.5 bg-card border border-border/80 rounded-xl px-2.5 py-1 text-muted-foreground">
                         <Filter className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Lọc</span>
+                        <span className="text-xs font-bold uppercase tracking-wider">Lọc</span>
                       </div>
 
                       {/* Brand Select */}
@@ -715,7 +752,7 @@ export function CmsProductsPopupTrigger({
                   {/* Quick Batch Selection & Bulk Actions Sub-bar */}
                   <div className="px-6 py-2.5 border-b bg-card flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         <Sparkles className="w-3.5 h-3.5 text-primary" />
                         Thao tác hàng loạt:
                       </span>
@@ -737,7 +774,7 @@ export function CmsProductsPopupTrigger({
                         <Button
                           size="sm"
                           variant="default"
-                          className="h-7 text-xs gap-1.5 cursor-pointer font-bold shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white"
+                          className="h-7 text-xs gap-1.5 cursor-pointer font-bold shadow-sm bg-primary hover:bg-primary/90"
                           onClick={() => {
                             const chosen = filteredProducts.filter(
                               (p) => p._id && checkedProductIds.has(p._id)
@@ -771,7 +808,7 @@ export function CmsProductsPopupTrigger({
                         </button>
                       </div>
                     ) : (
-                      <span className="text-[11px] text-muted-foreground italic">
+                      <span className="text-xs text-muted-foreground italic">
                         Bấm &quot;Chọn toàn bộ&quot; hoặc tick chọn sản phẩm để thực hiện xóa hàng loạt.
                       </span>
                     )}
@@ -830,8 +867,10 @@ export function CmsProductsPopupTrigger({
                                   <div className="w-10 h-8 rounded border bg-card flex items-center justify-center p-0.5 overflow-hidden shadow-xs">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img 
-                                      src={transformWixImageUrl(prod.image)} 
+                                      src={wixImageThumbUrl(prod.image, 80, 64)} 
                                       alt="thumb" 
+                                      loading="lazy"
+                                      decoding="async"
                                       className="max-h-full max-w-full object-contain"
                                     />
                                   </div>
@@ -844,7 +883,7 @@ export function CmsProductsPopupTrigger({
                                       {prod.Title || prod.Product || "Sản phẩm chưa đặt tên"}
                                     </span>
                                     {hasDocuments && (
-                                      <span className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold">
+                                      <span className="flex items-center gap-1 text-xs text-emerald-600 font-semibold">
                                         <FileText className="w-2.5 h-2.5" />
                                         {docEntries.map((d) => d.label).join(", ")}
                                       </span>
@@ -852,7 +891,7 @@ export function CmsProductsPopupTrigger({
                                   </div>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className="px-2 py-0.5 rounded-md bg-secondary text-secondary-foreground text-[10px] font-bold uppercase tracking-wider">
+                                  <span className="px-2 py-0.5 rounded-md bg-secondary text-secondary-foreground text-xs font-bold uppercase tracking-wider">
                                     {prod.Category || "Device"}
                                   </span>
                                 </td>
@@ -861,7 +900,7 @@ export function CmsProductsPopupTrigger({
                                     <Button
                                       size="xs"
                                       variant="outline"
-                                      className="h-7 text-[10px] gap-1 cursor-pointer border-primary/20 text-primary hover:bg-primary/5 shadow-xs"
+                                      className="h-7 text-xs gap-1 cursor-pointer border-primary/20 text-primary hover:bg-primary/5 shadow-xs"
                                       onClick={() => handleSelectProduct(prod)}
                                       title="Xem chi tiết dữ liệu thuộc tính"
                                     >
@@ -886,6 +925,7 @@ export function CmsProductsPopupTrigger({
                                       className="h-7 w-7 p-0 cursor-pointer"
                                       asChild
                                       title="Xem trang sản phẩm chính thức"
+                                      aria-label="Xem trang sản phẩm chính thức"
                                     >
                                       <Link href={`/products/${slug}`} target="_blank">
                                         <ExternalLink className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
@@ -954,14 +994,14 @@ export function CmsProductsPopupTrigger({
                     </Button>
                     
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-muted-foreground bg-muted border border-border/40 px-2.5 py-1 rounded-md">
+                      <span className="text-xs font-mono text-muted-foreground bg-muted border border-border/40 px-2.5 py-1 rounded-md">
                         ID: {selectedProduct._id}
                       </span>
 
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 text-xs gap-1.5 border-indigo-400/40 hover:bg-indigo-500/10 text-indigo-600"
+                        className="h-8 text-xs gap-1.5 border-primary/40 hover:bg-primary/10 text-primary"
                         onClick={() => setTranslateProducts([selectedProduct])}
                       >
                         <Languages className="w-3.5 h-3.5" />
@@ -1016,7 +1056,7 @@ export function CmsProductsPopupTrigger({
                           {allProductImages.length > 0 ? (
                             /* eslint-disable-next-line @next/next/no-img-element */
                             <img 
-                              src={transformWixImageUrl(allProductImages[activeImageIdx])} 
+                              src={wixImageThumbUrl(allProductImages[activeImageIdx], 800, 800)} 
                               alt={selectedProduct.Product || "product preview"}
                               className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover/img:scale-105"
                             />
@@ -1029,7 +1069,7 @@ export function CmsProductsPopupTrigger({
                           
                           {/* Floating Image Counter */}
                           {allProductImages.length > 1 && (
-                            <span className="absolute bottom-3 right-3 text-[10px] font-bold bg-black/60 text-white backdrop-blur-md px-2.5 py-0.5 rounded-full">
+                            <span className="absolute bottom-3 right-3 text-xs font-bold bg-black/60 text-white backdrop-blur-md px-2.5 py-0.5 rounded-full">
                               {activeImageIdx + 1} / {allProductImages.length}
                             </span>
                           )}
@@ -1048,8 +1088,10 @@ export function CmsProductsPopupTrigger({
                               >
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img 
-                                  src={transformWixImageUrl(imgUrl)} 
+                                  src={wixImageThumbUrl(imgUrl, 96, 96)} 
                                   alt={`thumb-${idx}`} 
+                                  loading="lazy"
+                                  decoding="async"
                                   className="max-h-full max-w-full object-contain"
                                 />
                               </button>
@@ -1064,7 +1106,7 @@ export function CmsProductsPopupTrigger({
                             if (docEntries.length === 0) return null;
                             return (
                               <div className="border border-border/60 rounded-xl bg-card p-3 space-y-2">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                   <FileText className="w-3.5 h-3.5" />
                                   Tài liệu đính kèm ({docEntries.length})
                                 </p>
@@ -1075,7 +1117,7 @@ export function CmsProductsPopupTrigger({
                                       href={transformWixImageUrl(entry.url)}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center gap-2 text-[11px] text-emerald-600 hover:text-emerald-700 hover:underline truncate"
+                                      className="flex items-center gap-2 text-xs text-emerald-600 hover:text-emerald-700 hover:underline truncate"
                                     >
                                       <FileText className="w-3 h-3 shrink-0" />
                                       <span className="font-semibold font-mono mr-1 text-muted-foreground shrink-0">[{entry.label}]</span>
@@ -1105,16 +1147,16 @@ export function CmsProductsPopupTrigger({
                         {/* Header Details */}
                         <div className="space-y-3">
                           <div className="flex flex-wrap gap-1.5 items-center">
-                            <span className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full">
+                            <span className="text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full">
                               {brandMap.get(selectedProduct.Brand) || "AV Brand"}
                             </span>
                             {selectedProduct.Category && (
-                              <span className="text-[10px] font-bold uppercase tracking-wider bg-secondary text-secondary-foreground px-2.5 py-0.5 rounded-full">
+                              <span className="text-xs font-bold uppercase tracking-wider bg-secondary text-secondary-foreground px-2.5 py-0.5 rounded-full">
                                 {selectedProduct.Category}
                               </span>
                             )}
                             {selectedProduct.Series && (
-                              <span className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border border-border/80 px-2.5 py-0.5 rounded-full">
+                              <span className="text-xs font-bold uppercase tracking-wider bg-muted text-muted-foreground border border-border/80 px-2.5 py-0.5 rounded-full">
                                 Series: {selectedProduct.Series}
                               </span>
                             )}
@@ -1134,7 +1176,7 @@ export function CmsProductsPopupTrigger({
                         {/* Product Overview Section */}
                         {selectedProduct.ProductOverview && (
                           <div className="space-y-2 bg-card p-4 rounded-2xl border border-border/60 shadow-2xs">
-                            <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                            <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                               <Info className="w-3.5 h-3.5 text-primary" />
                               Mô tả sản phẩm
                             </h4>
@@ -1146,7 +1188,7 @@ export function CmsProductsPopupTrigger({
 
                         {/* Technical Specs section */}
                         <div className="space-y-2.5">
-                          <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-primary" />
                             Thông số kỹ thuật chính
                           </h4>
@@ -1180,7 +1222,7 @@ export function CmsProductsPopupTrigger({
                       >
                         <div className="flex items-center gap-2">
                           <Layers className="w-4 h-4 text-primary" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                          <span className="text-xs font-bold uppercase tracking-wider text-foreground">
                             Thông tin dữ liệu gốc từ CMS (Raw Metadata)
                           </span>
                         </div>
@@ -1207,7 +1249,7 @@ export function CmsProductsPopupTrigger({
                               size="xs"
                               variant="outline"
                               onClick={() => handleCopy(JSON.stringify(selectedProduct, null, 2), "json")}
-                              className="h-8 gap-1.5 cursor-pointer ml-auto border-primary/20 text-primary text-[10px]"
+                              className="h-8 gap-1.5 cursor-pointer ml-auto border-primary/20 text-primary text-xs"
                             >
                               {copiedId === "json" ? (
                                 <>
@@ -1223,7 +1265,7 @@ export function CmsProductsPopupTrigger({
                             </Button>
                           </div>
 
-                          <div className="max-h-96 overflow-y-auto divide-y divide-border/40 font-mono text-[11px] pr-1 mt-2 border rounded-lg bg-card/60 shadow-inner">
+                          <div className="max-h-96 overflow-y-auto divide-y divide-border/40 font-mono text-xs pr-1 mt-2 border rounded-lg bg-card/60 shadow-inner">
                             {Object.entries(selectedProduct)
                               .filter(([key]) => {
                                 if (!rawSearchQuery.trim()) return true;
@@ -1277,7 +1319,7 @@ export function CmsProductsPopupTrigger({
                         {deleteConfirmProducts.map((p) => {
                           const docEntries = getProductDocumentEntries(p);
                           return (
-                            <div key={p._id} className="text-[11px] bg-muted/40 px-2 py-1.5 rounded-lg">
+                            <div key={p._id} className="text-xs bg-muted/40 px-2 py-1.5 rounded-lg">
                               <p className="font-semibold text-foreground">{p.Product || p.Title || p._id}</p>
                               {docEntries.length > 0 ? (
                                 <p className="text-muted-foreground">
@@ -1327,7 +1369,7 @@ export function CmsProductsPopupTrigger({
           open={!!translateProducts}
           products={translateProducts}
           onClose={() => setTranslateProducts(null)}
-          onSaved={() => router.refresh()}
+          onSaved={refreshAfterWrite}
         />
       )}
     </>

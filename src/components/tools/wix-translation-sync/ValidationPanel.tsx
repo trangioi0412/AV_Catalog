@@ -86,8 +86,8 @@ export function ValidationPanel({ errors, totalWixRows, hasProcessed }: Validati
             variant={hasIssues ? "outline" : "default"}
             className={
               hasIssues
-                ? "bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] px-2"
-                : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] px-2 hover:bg-emerald-500/10"
+                ? "bg-amber-500/10 text-amber-500 border-amber-500/20 text-xs px-2"
+                : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs px-2 hover:bg-emerald-500/10"
             }
           >
             {hasIssues ? `${errors.length} cảnh báo/lỗi` : "Hợp lệ"}
@@ -98,7 +98,7 @@ export function ValidationPanel({ errors, totalWixRows, hasProcessed }: Validati
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
           {/* Valid Rows */}
           <div className="p-3 rounded-lg border bg-background/25 flex flex-col justify-between">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Valid Rows</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Valid Rows</span>
             <div className="flex items-center gap-1.5 mt-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
               <span className="text-base font-bold text-foreground">{validRowsCount}</span>
@@ -107,7 +107,7 @@ export function ValidationPanel({ errors, totalWixRows, hasProcessed }: Validati
 
           {/* Parse Errors */}
           <div className="p-3 rounded-lg border bg-background/25 flex flex-col justify-between">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Parse Errors</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Parse Errors</span>
             <div className="flex items-center gap-1.5 mt-2">
               <FileX className={parseErrors > 0 ? "w-4 h-4 text-red-500 shrink-0" : "w-4 h-4 text-muted-foreground opacity-40 shrink-0"} />
               <span className={parseErrors > 0 ? "text-base font-bold text-red-500" : "text-base font-bold text-foreground"}>
@@ -118,7 +118,7 @@ export function ValidationPanel({ errors, totalWixRows, hasProcessed }: Validati
 
           {/* Missing IDs */}
           <div className="p-3 rounded-lg border bg-background/25 flex flex-col justify-between">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Missing IDs</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Missing IDs</span>
             <div className="flex items-center gap-1.5 mt-2">
               <AlertCircle className={missingIds > 0 ? "w-4 h-4 text-amber-500 shrink-0" : "w-4 h-4 text-muted-foreground opacity-40 shrink-0"} />
               <span className={missingIds > 0 ? "text-base font-bold text-amber-500" : "text-base font-bold text-foreground"}>
@@ -129,7 +129,7 @@ export function ValidationPanel({ errors, totalWixRows, hasProcessed }: Validati
 
           {/* Unsupported Fields */}
           <div className="p-3 rounded-lg border bg-background/25 flex flex-col justify-between">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Unsupported Fields</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Unsupported Fields</span>
             <div className="flex items-center gap-1.5 mt-2">
               <HelpCircle className={unsupportedFields > 0 ? "w-4 h-4 text-amber-500 shrink-0" : "w-4 h-4 text-muted-foreground opacity-40 shrink-0"} />
               <span className={unsupportedFields > 0 ? "text-base font-bold text-amber-500" : "text-base font-bold text-foreground"}>
@@ -140,7 +140,7 @@ export function ValidationPanel({ errors, totalWixRows, hasProcessed }: Validati
 
           {/* Empty CMS Values */}
           <div className="p-3 rounded-lg border bg-background/25 flex flex-col justify-between">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Empty CMS Values</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Empty CMS Values</span>
             <div className="flex items-center gap-1.5 mt-2">
               <AlertTriangle className={emptyValues > 0 ? "w-4 h-4 text-amber-500 shrink-0" : "w-4 h-4 text-muted-foreground opacity-40 shrink-0"} />
               <span className={emptyValues > 0 ? "text-base font-bold text-amber-500" : "text-base font-bold text-foreground"}>
@@ -151,7 +151,7 @@ export function ValidationPanel({ errors, totalWixRows, hasProcessed }: Validati
 
           {/* Duplicate Records */}
           <div className="p-3 rounded-lg border bg-background/25 flex flex-col justify-between">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Duplicate Records</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Duplicate Records</span>
             <div className="flex items-center gap-1.5 mt-2">
               <AlertTriangle className={duplicateRecords > 0 ? "w-4 h-4 text-amber-500 shrink-0" : "w-4 h-4 text-muted-foreground opacity-40 shrink-0"} />
               <span className={duplicateRecords > 0 ? "text-base font-bold text-amber-500" : "text-base font-bold text-foreground"}>

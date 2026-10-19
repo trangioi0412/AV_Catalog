@@ -70,7 +70,7 @@ export function TranslatedContentViewer({ open, itemId, collectionKey, targetLoc
             <Languages className="w-5 h-5 text-primary" />
             {data ? data.itemName : "Bản dịch đã lưu"}
             {status && (
-              <Badge variant="outline" className={cn("text-[10px] font-bold ml-1", status.className)}>
+              <Badge variant="outline" className={cn("text-xs font-bold ml-1", status.className)}>
                 {status.label}
               </Badge>
             )}
@@ -112,7 +112,7 @@ export function TranslatedContentViewer({ open, itemId, collectionKey, targetLoc
                     <p className="text-xs font-bold text-foreground mb-3">{field.displayName}</p>
                     <div className={cn("grid gap-4", isStacked ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2")}>
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Gốc</label>
+                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Gốc</label>
                         <div
                           className={cn(
                             "w-full p-3 text-sm leading-relaxed rounded-lg border bg-muted/50 text-foreground overflow-y-auto",
@@ -129,13 +129,13 @@ export function TranslatedContentViewer({ open, itemId, collectionKey, targetLoc
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                           <span>{targetLocale.toUpperCase()}</span>
                           {field.translatedValue != null && (
                             <Badge
                               variant="outline"
                               className={cn(
-                                "text-[9px] font-bold",
+                                "text-xs font-bold",
                                 field.published
                                   ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                                   : "bg-amber-500/10 text-amber-600 border-amber-500/20"

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { runProductDiscovery, runProductDiscoveryForBrand, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
-import { getActiveBrands, getAllProducts, insertProduct, WixProduct, isValidProductImageFormat, isProductImageAccessible, compareProductWithCms, CmsCompareResult, updateCmsProductFields } from "@/lib/services/wixCms";
+import { getActiveBrands, getAllProducts, getActiveBrandsCached, getAllProductsCached, invalidateAdminCmsCache, insertProduct, WixBrand, WixProduct, isValidProductImageFormat, isProductImageAccessible, compareProductWithCms, CmsCompareResult, updateCmsProductFields } from "@/lib/services/wixCms";
 import { getProductDocumentEntries, hasProductDocument } from "@/lib/utils/documentFields";
 import { pullCmsCatalogAsSheets } from "@/lib/services/cmsCatalogPull";
 import type { SheetData } from "@/types";
@@ -116,14 +116,33 @@ export async function runBrandDiscoveryAction(
 /**
  * Gathers stats for the /admin/dashboard page.
  */
+/**
+ * Full product + brand lists for the dashboard's CMS popups. Loaded on demand
+ * when a popup opens (instead of being serialized into the dashboard HTML) and
+ * served from the 60s admin read cache. Pass `fresh` after a CMS write.
+ */
+export async function getCmsPopupDataAction(
+  fresh = false
+): Promise<{ products: WixProduct[]; brands: WixBrand[] }> {
+  if (fresh) invalidateAdminCmsCache();
+  const [products, brands] = await Promise.all([getAllProductsCached(), getActiveBrandsCached()]);
+  return { products, brands };
+}
+
+/** Clears the admin read cache so the next dashboard render is live. */
+export async function refreshDashboardStatsAction(): Promise<void> {
+  invalidateAdminCmsCache();
+  revalidatePath("/admin/dashboard");
+}
+
 export async function getDashboardStatsAction(): Promise<DashboardStats> {
   try {
     const [brands, products, sheetNew, sheetDelete, config] = await Promise.all([
-      getActiveBrands().catch((err) => {
+      getActiveBrandsCached().catch((err) => {
         console.error("Wix Brands fetch error:", err);
         return [];
       }),
-      getAllProducts().catch((err) => {
+      getAllProductsCached().catch((err) => {
         console.error("Wix Products fetch error:", err);
         return [];
       }),

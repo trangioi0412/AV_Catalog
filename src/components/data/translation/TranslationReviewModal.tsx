@@ -319,7 +319,7 @@ export function TranslationReviewModal({ open, products, onClose, onSaved }: Tra
                     <StatusIcon status={item.status} />
                     <span className="font-semibold text-sm">{item.name}</span>
                     {item.hasExistingTranslation && (
-                      <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                      <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
                         Đã có bản dịch
                       </span>
                     )}
@@ -354,7 +354,7 @@ export function TranslationReviewModal({ open, products, onClose, onSaved }: Tra
                     {item.fields.map((field) => (
                       <React.Fragment key={field.key}>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                             {field.displayName} (VI · gốc)
                           </label>
                           <div className="min-h-[70px] w-full p-3 text-xs rounded-xl border bg-muted/20 whitespace-pre-wrap text-foreground/80">
@@ -362,7 +362,7 @@ export function TranslationReviewModal({ open, products, onClose, onSaved }: Tra
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                             {field.displayName} (EN · bản dịch)
                           </label>
                           <textarea
@@ -434,7 +434,7 @@ function StatusIcon({ status }: { status: ItemState["status"] }) {
     case "saving":
       return <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />;
     case "translated":
-      return <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />;
+      return <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />;
     case "saved":
       return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
     case "failed":

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { MediaFileCard } from "@/components/data/MediaFileCard";
 import { useWixMediaManager } from "@/hooks/useWixMediaManager";
@@ -38,6 +39,7 @@ import {
   LogIn,
   Tag,
   X,
+  HardDrive,
 } from "lucide-react";
 import type { MediaFileItem } from "@/types/media-manager";
 
@@ -118,12 +120,11 @@ export default function WixMediaManagerPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Wix Media Manager</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Quản lý hình ảnh, PDF và tài liệu trong Wix Media Manager. File bị xóa sẽ được chuyển vào Trash, không xóa vĩnh viễn.
-          </p>
-        </div>
+        <PageHeader
+          title="Quản lý Wix Media"
+          description="Quản lý hình ảnh, PDF và tài liệu trong Wix Media Manager. File bị xóa sẽ được chuyển vào Trash, không xóa vĩnh viễn."
+          icon={<HardDrive className="w-5 h-5" />}
+        />
 
         {/* ── Toolbar ─────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 ring-1 ring-foreground/10 md:flex-row md:items-center md:justify-between">

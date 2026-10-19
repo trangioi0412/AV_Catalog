@@ -447,6 +447,79 @@ describe("translateCmsEnglishToVietnamese", () => {
       expect(translated[6].value).toBe("VI: per-user/month, tùy tier.");
     });
 
+    it("Technical Specifications array: translates it as one 'Label: Value' text block, then converts the result back to an array", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({
+        technicalSpecifications: [
+          { label: "Power", value: "220V AC" },
+          { label: "Ports", value: "HDMI: 3, LAN: 1" },
+        ],
+      });
+      const translateMock = vi.fn().mockResolvedValue({
+        fields: { technicalSpecifications_VI: "Nguồn điện: 220V AC\nCổng kết nối: HDMI: 3, LAN: 1" },
+        warnings: [],
+      });
+      vi.mocked(getTranslationProvider).mockReturnValue({ translate: translateMock });
+
+      const result = await translateCmsEnglishToVietnamese(
+        previewOptions({
+          fieldMappings: [{ sourceField: "technicalSpecifications", targetField: "technicalSpecifications_VI", type: "json" }],
+        })
+      );
+
+      expect(translateMock.mock.calls[0][0].fields).toEqual({
+        technicalSpecifications_VI: "Power: 220V AC\nPorts: HDMI: 3, LAN: 1",
+      });
+      expect(result.items[0].status).toBe("translated");
+      expect(JSON.parse(result.items[0].fieldValues?.technicalSpecifications_VI.translated ?? "null")).toEqual([
+        { label: "Nguồn điện", value: "220V AC" },
+        { label: "Cổng kết nối", value: "HDMI: 3, LAN: 1" },
+      ]);
+    });
+
+    it('Technical Specifications plain text + mapping "json": translates the text and returns an array', async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ technicalSpecifications: "Power: 220V AC\nWeight: 2kg" });
+      const translateMock = vi.fn().mockResolvedValue({
+        fields: { technicalSpecifications: "Nguồn điện: 220V AC\nTrọng lượng: 2kg" },
+        warnings: [],
+      });
+      vi.mocked(getTranslationProvider).mockReturnValue({ translate: translateMock });
+
+      const result = await translateCmsEnglishToVietnamese(
+        previewOptions({
+          overwrite: true,
+          fieldMappings: [{ sourceField: "technicalSpecifications", targetField: "technicalSpecifications", type: "json" }],
+        })
+      );
+
+      expect(translateMock.mock.calls[0][0].fields).toEqual({ technicalSpecifications: "Power: 220V AC\nWeight: 2kg" });
+      expect(JSON.parse(result.items[0].fieldValues?.technicalSpecifications.translated ?? "null")).toEqual([
+        { label: "Nguồn điện", value: "220V AC" },
+        { label: "Trọng lượng", value: "2kg" },
+      ]);
+    });
+
+    it("Technical Specifications array: fails the item when the translation loses a 'Label: Value' line", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({
+        TechnicalSpecifications: [
+          { label: "Power", value: "220V AC" },
+          { label: "Weight", value: "2kg" },
+        ],
+      });
+      vi.mocked(getTranslationProvider).mockReturnValue({
+        translate: vi.fn().mockResolvedValue({ fields: { TechnicalSpecifications: "Nguồn điện 220V AC\nTrọng lượng: 2kg" }, warnings: [] }),
+      });
+
+      const result = await translateCmsEnglishToVietnamese(
+        previewOptions({
+          overwrite: true,
+          fieldMappings: [{ sourceField: "TechnicalSpecifications", targetField: "TechnicalSpecifications", type: "text" }],
+        })
+      );
+
+      expect(result.items[0].status).toBe("failed");
+      expect(result.items[0].error).toContain("1/2");
+    });
+
     it('type "json": auto-detects and translates a source field stored as a JSON-encoded STRING (a Text column, not a real Array/Object column)', async () => {
       const specsAsString = JSON.stringify([{ label: "Pricing", value: "per-user/month" }]);
       vi.mocked(getWixCmsItemById).mockResolvedValue({ specs_EN: specsAsString });
@@ -610,6 +683,42 @@ describe("translateCmsEnglishToVietnamese", () => {
 
       expect(byId.good.status).toBe("updated");
       expect(byId.broken.status).toBe("skipped");
+    });
+
+    it("Technical Specifications: writes a reviewed spec array as a native array even when the mapping is declared \"text\"", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ technicalSpecifications: [{ label: "Power", value: "220V AC" }] });
+      vi.mocked(updateWixCmsItemFields).mockResolvedValue({ success: true });
+      const reviewed = JSON.stringify([{ label: "Nguồn điện", value: "220V AC" }]);
+
+      const result = await translateCmsEnglishToVietnamese(
+        writeOptions({
+          overwrite: true,
+          fieldMappings: [{ sourceField: "technicalSpecifications", targetField: "technicalSpecifications", type: "text" }],
+          items: [{ itemId: "item-1", fieldValues: { technicalSpecifications: reviewed } }],
+        })
+      );
+
+      expect(result.items[0].status).toBe("updated");
+      expect(updateWixCmsItemFields).toHaveBeenCalledWith(expect.any(String), "item-1", {
+        technicalSpecifications: [{ label: "Nguồn điện", value: "220V AC" }],
+      });
+    });
+
+    it("Technical Specifications: writes a native array even when the target currently stores a JSON-encoded string", async () => {
+      vi.mocked(getWixCmsItemById).mockResolvedValue({ technicalSpecifications: JSON.stringify([{ label: "Power", value: "220V AC" }]) });
+      vi.mocked(updateWixCmsItemFields).mockResolvedValue({ success: true });
+
+      await translateCmsEnglishToVietnamese(
+        writeOptions({
+          overwrite: true,
+          fieldMappings: [{ sourceField: "technicalSpecifications", targetField: "technicalSpecifications", type: "json" }],
+          items: [{ itemId: "item-1", fieldValues: { technicalSpecifications: JSON.stringify([{ label: "Nguồn điện", value: "220V AC" }]) } }],
+        })
+      );
+
+      expect(updateWixCmsItemFields).toHaveBeenCalledWith(expect.any(String), "item-1", {
+        technicalSpecifications: [{ label: "Nguồn điện", value: "220V AC" }],
+      });
     });
 
     it('type "json": parses the reviewed JSON text back into a real array/object before writing', async () => {

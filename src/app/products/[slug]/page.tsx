@@ -202,3 +202,13 @@ export default async function ProductDetailPage(props: PageProps) {
 // Enable ISR revalidation
 export const revalidate = 3600; // revalidate cache every hour
 export const dynamicParams = true; // allow request-time generation of new product pages
+
+/**
+ * Required for ISR on a dynamic segment: without generateStaticParams the
+ * route is rendered on every request and `revalidate` above has no effect.
+ * Returning [] prerenders nothing at build time; each product page is
+ * rendered on its first visit, then served from cache and revalidated hourly.
+ */
+export async function generateStaticParams() {
+  return [];
+}

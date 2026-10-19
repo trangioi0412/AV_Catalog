@@ -9,6 +9,7 @@
  */
 
 import React, { useCallback, useRef, useState, useMemo } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   FileText,
@@ -114,25 +115,26 @@ function getCmsMatchBadge(status: CatalogPreviewRow["cmsMatchStatus"]) {
   switch (status) {
     case "matched":
       return (
-        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
+        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
           ✓ Khớp CMS
         </Badge>
       );
     case "no_match":
       return (
-        <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-semibold">
-          ⚠ Không tìm thấy
+        <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-semibold gap-1">
+          <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+          Không tìm thấy
         </Badge>
       );
     case "multiple_match":
       return (
-        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-semibold">
+        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-semibold">
           ✕ Trùng nhiều
         </Badge>
       );
     case "pending":
       return (
-        <Badge className="bg-muted text-muted-foreground border border-border text-[10px]">
+        <Badge className="bg-muted text-muted-foreground border border-border text-xs">
           Đang kiểm tra
         </Badge>
       );
@@ -266,8 +268,8 @@ function SelectPhase({ onFilesSelected }: { onFilesSelected: (files: FileList) =
           onClick={() => folderRef.current?.click()}
           className="group flex flex-col gap-3 p-6 rounded-2xl bg-card border border-border/60 hover:border-primary/40 hover:bg-accent/40 transition-all duration-200 cursor-pointer text-left shadow-sm"
         >
-          <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
-            <FolderOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+            <FolderOpen className="w-5 h-5 text-primary" />
           </div>
           <div>
             <p className="font-semibold text-foreground text-sm">Chọn toàn bộ folder</p>
@@ -455,7 +457,7 @@ function PreviewPhase({
               placeholder="Tìm kiếm hãng, danh mục, sản phẩm..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-card border border-border/60 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary transition-colors shadow-sm"
+              className="w-full pl-9 pr-4 py-2 bg-card border border-border/60 rounded-xl text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors shadow-sm"
             />
           </div>
 
@@ -464,7 +466,7 @@ function PreviewPhase({
             {[
               { id: "all", label: "Tất cả", count: rows.length },
               { id: "matched", label: "✓ Khớp CMS", count: matchedCount },
-              { id: "no_match", label: "⚠ Không thấy", count: noMatchCount },
+              { id: "no_match", label: "Không thấy", count: noMatchCount },
               { id: "multiple_match", label: "✕ Trùng nhiều", count: multipleCount },
             ].map((tab) => (
               <button
@@ -478,7 +480,7 @@ function PreviewPhase({
                     : "text-muted-foreground hover:text-foreground hover:bg-card/50"
                 )}
               >
-                {tab.label} <span className="opacity-60 text-[10px]">({tab.count})</span>
+                {tab.label} <span className="opacity-60 text-xs">({tab.count})</span>
               </button>
             ))}
           </div>
@@ -510,7 +512,7 @@ function PreviewPhase({
                   </button>
                 </th>
                 {["Hãng", "Danh mục", "Sản phẩm", "Tên file", "Dung lượng", "Trạng thái CMS", "Folder đích"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
+                  <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wider text-xs">
                     {h}
                   </th>
                 ))}
@@ -563,12 +565,12 @@ function PreviewPhase({
                         <div className="flex flex-col gap-1">
                           {getCmsMatchBadge(row.cmsMatchStatus)}
                           {row.cmsProductName && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[170px]">
+                            <span className="text-xs text-muted-foreground truncate max-w-[170px]">
                               {row.cmsProductName}
                             </span>
                           )}
                           {row.warning && row.cmsMatchStatus !== "matched" && (
-                            <span className="text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[170px]" title={row.warning}>
+                            <span className="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[170px]" title={row.warning}>
                               {row.warning}
                             </span>
                           )}
@@ -576,7 +578,7 @@ function PreviewPhase({
                           {/* Fuzzy Suggestions */}
                           {row.cmsMatchStatus !== "matched" && row.cmsSuggestions && row.cmsSuggestions.length > 0 && (
                             <div className="mt-1.5 space-y-1 pt-1 border-t border-border/40">
-                              <span className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                              <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                                 <Sparkles className="w-3 h-3 text-amber-500" />
                                 Gợi ý gần giống:
                               </span>
@@ -586,13 +588,13 @@ function PreviewPhase({
                                     key={sugg.itemId}
                                     type="button"
                                     onClick={() => onSelectSuggestion(originalIndex, sugg)}
-                                    className="w-full text-left flex items-center justify-between gap-1.5 px-2 py-1 rounded bg-muted/60 hover:bg-primary/15 hover:border-primary/40 border border-border/40 transition-colors text-[10px] group cursor-pointer"
+                                    className="w-full text-left flex items-center justify-between gap-1.5 px-2 py-1 rounded bg-muted/60 hover:bg-primary/15 hover:border-primary/40 border border-border/40 transition-colors text-xs group cursor-pointer"
                                     title={`Bấm để chọn sản phẩm CMS này: ${sugg.productName} (${sugg.score}% khớp)`}
                                   >
                                     <span className="font-medium truncate group-hover:text-primary max-w-[120px]">
                                       {sugg.productName}
                                     </span>
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 shrink-0 bg-primary/10 text-primary border-primary/30">
+                                    <Badge variant="outline" className="text-xs px-1 py-0 h-3.5 shrink-0 bg-primary/10 text-primary border-primary/30">
                                       {sugg.score}%
                                     </Badge>
                                   </button>
@@ -712,7 +714,7 @@ function UploadPhase({
                     <div className="flex items-center gap-2 mt-1.5">
                       <span
                         className={cn(
-                          "text-[10px] px-2 py-0.5 rounded-full border font-bold",
+                          "text-xs px-2 py-0.5 rounded-full border font-bold",
                           item.status === "success"
                             ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                             : item.status === "failed"
@@ -726,8 +728,8 @@ function UploadPhase({
                       >
                         {getStatusLabel(item.status)}
                       </span>
-                      <span className="text-muted-foreground font-mono text-[11px]">{item.entry.fileName}</span>
-                      <span className="text-muted-foreground text-[11px]">{formatBytes(item.entry.sizeBytes)}</span>
+                      <span className="text-muted-foreground font-mono text-xs">{item.entry.fileName}</span>
+                      <span className="text-muted-foreground text-xs">{formatBytes(item.entry.sizeBytes)}</span>
                     </div>
 
                     {(item.status === "uploading" || item.status === "updating_cms") && (
@@ -737,7 +739,7 @@ function UploadPhase({
                     {item.status === "failed" && item.error && (
                       <div className="mt-2">
                         <button
-                          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                           onClick={() => toggleExpand(i)}
                         >
                           {expandedItems.has(i) ? (
@@ -883,8 +885,9 @@ function DonePhase({
           {(report.noMatchItems.length > 0 || report.multipleMatchItems.length > 0) && (
             <div className="mt-4 pt-4 border-t border-border/60 flex flex-wrap gap-4 text-xs font-medium">
               {report.noMatchItems.length > 0 && (
-                <span className="text-amber-600 dark:text-amber-400">
-                  ⚠ {report.noMatchItems.length} file không tìm thấy trong Wix CMS
+                <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                  {report.noMatchItems.length} file không tìm thấy trong Wix CMS
                 </span>
               )}
               {report.multipleMatchItems.length > 0 && (
@@ -1308,15 +1311,11 @@ export default function CatalogUploadPage() {
       <div className="space-y-6 max-w-6xl mx-auto pb-10">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gradient-brand flex items-center gap-2.5">
-              <FileText className="w-6 h-6 text-primary" />
-              Upload Catalog PDF
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Upload tài liệu PDF sản phẩm vào Wix Media Manager và tự động cập nhật Wix CMS (Import1).
-            </p>
-          </div>
+          <PageHeader
+            title="Tải lên Catalog PDF"
+            description="Upload tài liệu PDF sản phẩm vào Wix Media Manager và tự động cập nhật Wix CMS (Import1)."
+            icon={<FileText className="w-5 h-5" />}
+          />
         </div>
 
         {/* Step Indicator */}
@@ -1342,7 +1341,7 @@ export default function CatalogUploadPage() {
                     ) : isActive && phase === "validating" ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">
+                      <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-xs">
                         {i + 1}
                       </span>
                     )}

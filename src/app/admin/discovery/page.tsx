@@ -1,4 +1,6 @@
 import React from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { CheckSquare } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { DiscoveryQueueTable } from "./DiscoveryQueueTable";
 import { getPendingProductsAction } from "@/app/actions/discovery";
@@ -11,14 +13,11 @@ export default async function DiscoveryQueuePage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
-            Discovery Queue
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Review and approve newly discovered products before syncing them into Wix Studio CMS.
-          </p>
-        </div>
+        <PageHeader
+          title="Hàng đợi Discovery"
+          description="Xem xét và duyệt sản phẩm mới phát hiện trước khi đồng bộ vào Wix Studio CMS."
+          icon={<CheckSquare className="w-5 h-5" />}
+        />
 
         <DiscoveryQueueTable initialProducts={pendingProducts} />
       </div>

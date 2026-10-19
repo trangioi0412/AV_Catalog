@@ -1,6 +1,7 @@
 import React from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { getDashboardStatsAction } from "@/app/actions/discovery";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { getDashboardStatsAction, refreshDashboardStatsAction } from "@/app/actions/discovery";
 import { 
   Building2, 
   Package, 
@@ -11,13 +12,12 @@ import {
   FileMinus,
   RefreshCw,
   Languages,
-  ChevronRight
+  ChevronRight,
+  LayoutDashboard,
 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { revalidatePath } from "next/cache";
-import { getAllProducts, getActiveBrands } from "@/lib/services/wixCms";
 import { CmsProductsPopupTrigger } from "@/components/data/CmsProductsPopupTrigger";
 import { ImageSearchToggle } from "@/components/data/ImageSearchToggle";
 
@@ -25,18 +25,16 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminDashboardPage() {
-  const [stats, products, brands] = await Promise.all([
-    getDashboardStatsAction(),
-    getAllProducts(),
-    getActiveBrands()
-  ]);
+  // Product/brand lists are not fetched here: the CMS popups load them on
+  // demand (getCmsPopupDataAction), keeping them out of the page payload.
+  const stats = await getDashboardStatsAction();
   
   // Log dashboard stats to server terminal for administrative visibility
   console.log("[Admin Dashboard] Stats loaded from Wix CMS and Sheets:", stats);
 
   async function handleRefresh() {
     "use server";
-    revalidatePath("/admin/dashboard");
+    await refreshDashboardStatsAction();
   }
 
   // Format date helper
@@ -61,23 +59,19 @@ export default async function AdminDashboardPage() {
     <DashboardLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gradient-brand">
-              Discovery Dashboard
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Overview of product discovery queues, Wix CMS status, and automated runs.
-            </p>
-          </div>
-
-          <form action={handleRefresh}>
-            <Button type="submit" variant="outline" className="gap-2 shadow-sm">
-              <RefreshCw className="w-4 h-4" />
-              Refresh Stats
-            </Button>
-          </form>
-        </div>
+        <PageHeader
+          title="Tổng quan Discovery"
+          description="Tổng quan hàng đợi phát hiện sản phẩm, trạng thái Wix CMS và các lượt quét tự động."
+          icon={<LayoutDashboard className="w-5 h-5" />}
+          actions={
+            <form action={handleRefresh}>
+              <Button type="submit" variant="outline" className="gap-2 shadow-sm">
+                <RefreshCw className="w-4 h-4" />
+                Refresh Stats
+              </Button>
+            </form>
+          }
+        />
 
         {/* Timestamps & Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -178,7 +172,7 @@ export default async function AdminDashboardPage() {
                 </CardContent>
               </div>
               <CardContent className="pt-3 pb-4 flex justify-end border-t border-border/40">
-                <CmsProductsPopupTrigger products={products} brands={brands} />
+                <CmsProductsPopupTrigger />
               </CardContent>
             </Card>
 
@@ -211,14 +205,10 @@ export default async function AdminDashboardPage() {
                 </span>
                 <div className="flex flex-wrap gap-2">
                   <CmsProductsPopupTrigger
-                    products={products}
-                    brands={brands}
                     showOnlyWithImages={true}
                     triggerLabel="Đã có ảnh"
                   />
                   <CmsProductsPopupTrigger
-                    products={products}
-                    brands={brands}
                     showOnlyNoImages={true}
                     triggerLabel="Thiếu ảnh"
                   />
@@ -236,13 +226,13 @@ export default async function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-extrabold text-blue-600 dark:text-blue-400">
+                    <span className="text-4xl font-extrabold text-primary">
                       {(stats.productsWithDocumentsCount ?? 0).toLocaleString()}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       / {stats.totalProducts.toLocaleString()} items
                     </span>
-                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 ml-2">
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-2">
                       {stats.totalProducts > 0
                         ? Math.round(((stats.productsWithDocumentsCount ?? 0) / stats.totalProducts) * 100)
                         : 0}%
@@ -256,14 +246,10 @@ export default async function AdminDashboardPage() {
                 </span>
                 <div className="flex flex-wrap gap-2">
                   <CmsProductsPopupTrigger
-                    products={products}
-                    brands={brands}
                     showOnlyWithDocuments={true}
                     triggerLabel="Đã có tài liệu"
                   />
                   <CmsProductsPopupTrigger
-                    products={products}
-                    brands={brands}
                     showOnlyNoDocuments={true}
                     triggerLabel="Thiếu tài liệu"
                   />
@@ -284,12 +270,12 @@ export default async function AdminDashboardPage() {
             {/* Pending Approval */}
             <Card className="border-border/60 border-l-4 border-l-blue-500 card-hover">
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs font-bold text-blue-500 uppercase tracking-wider">
+                <CardDescription className="text-xs font-bold text-primary uppercase tracking-wider">
                   Pending Approval
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">
+                <div className="text-3xl font-extrabold text-primary">
                   {stats.pendingCount.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -335,12 +321,12 @@ export default async function AdminDashboardPage() {
             {/* Blacklist Total */}
             <Card className="border-border/60 border-l-4 border-l-slate-400 card-hover">
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <CardDescription className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   Blacklisted Total
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-extrabold text-slate-600 dark:text-slate-400">
+                <div className="text-3xl font-extrabold text-muted-foreground dark:text-muted-foreground">
                   {stats.deletedProductCount.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">

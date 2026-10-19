@@ -156,7 +156,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search brand, category, product..."
+            placeholder="Tìm theo hãng, danh mục, sản phẩm..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-background/50 focus-visible:ring-primary/20"
@@ -164,25 +164,25 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto sm:justify-end">
           <div className="text-sm text-muted-foreground whitespace-nowrap">
-            <span>Showing <strong>{filteredProducts.length}</strong> of <strong>{products.length}</strong> pending products</span>
+            <span>Hiển thị <strong>{filteredProducts.length}</strong> / <strong>{products.length}</strong> sản phẩm chờ duyệt</span>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsClearQueueConfirmOpen(true)}
-              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20 text-xs w-full sm:w-auto"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30 text-xs flex-1 sm:flex-none"
               disabled={products.length === 0}
             >
-              Clear Queue
+              Xoá hàng đợi
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsClearBlacklistConfirmOpen(true)}
-              className="text-slate-500 hover:text-slate-600 hover:bg-slate-500/10 border-slate-500/20 text-xs w-full sm:w-auto"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted border-border text-xs flex-1 sm:flex-none"
             >
-              Clear Blacklist
+              Xoá blacklist
             </Button>
           </div>
         </div>
@@ -206,7 +206,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
             {filteredProducts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-40 text-center text-muted-foreground italic">
-                  No products pending in discovery queue.
+                  Không có sản phẩm nào đang chờ duyệt.
                 </TableCell>
               </TableRow>
             ) : (
@@ -220,7 +220,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
                     <TableCell className="max-w-[200px] truncate" title={p.Title}>{p.Title}</TableCell>
                     <TableCell className="text-muted-foreground">{p.Series || "—"}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] font-bold uppercase tracking-wider">
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs font-bold uppercase tracking-wider">
                         Product_New
                       </Badge>
                     </TableCell>
@@ -278,7 +278,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
                           size="icon" 
                           onClick={() => handleAction(p, "delete")}
                           disabled={processingId !== null}
-                          className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-500/10"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
                           title="Delete Row"
                         >
                           {processingId === `${key}-delete` ? (
@@ -498,7 +498,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
       <Dialog open={isClearBlacklistConfirmOpen} onOpenChange={setIsClearBlacklistConfirmOpen}>
         <DialogContent className="max-w-md bg-card/95 border-primary/10 backdrop-blur-xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <DialogTitle className="text-xl font-bold text-foreground dark:text-muted-foreground flex items-center gap-2">
               <Ban className="w-5 h-5" />
               Clear Product Blacklist?
             </DialogTitle>

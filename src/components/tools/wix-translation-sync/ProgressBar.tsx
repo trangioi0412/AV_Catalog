@@ -22,7 +22,7 @@ export function ProgressBar({ progress, isProcessing }: ProgressBarProps) {
         <span className="text-xs font-bold text-primary">{progress}%</span>
       </div>
       <Progress value={progress} className="h-2" />
-      <span className="text-[10px] text-muted-foreground/80 leading-none">
+      <span className="text-xs text-muted-foreground/80 leading-none">
         Vui lòng không đóng tab trình duyệt trong lúc hệ thống đang chạy.
       </span>
     </div>

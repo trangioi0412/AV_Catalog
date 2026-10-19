@@ -87,11 +87,11 @@ export function ProductResources({ product }: ProductResourcesProps) {
           
           if (res.type === "video") {
             Icon = Video;
-            colorClass = "text-blue-500 bg-blue-500/10";
+            colorClass = "text-primary bg-primary/10";
             actionIcon = <ExternalLink className="w-4 h-4" />;
           } else if (res.type === "firmware") {
             Icon = Laptop;
-            colorClass = "text-purple-500 bg-purple-500/10";
+            colorClass = "text-highlight bg-highlight/10";
             actionIcon = <ExternalLink className="w-4 h-4" />;
           }
 

@@ -89,7 +89,7 @@ export function RelatedProducts({ currentProduct, allProducts, brands }: Related
               {/* Details Content */}
               <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-[10px]">
+                  <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-primary/80 uppercase">
                       {brandName}
                     </span>
@@ -104,7 +104,7 @@ export function RelatedProducts({ currentProduct, allProducts, brands }: Related
                 </div>
 
                 <div className="flex items-center justify-between pt-2 text-xs font-semibold text-primary border-t border-border/40">
-                  <span className="font-mono text-muted-foreground text-[10px]">
+                  <span className="font-mono text-muted-foreground text-xs">
                     Model: {product.Product}
                   </span>
                   <span className="flex items-center gap-0.5 group-hover:translate-x-1 transition-transform">

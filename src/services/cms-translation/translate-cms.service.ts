@@ -18,6 +18,9 @@
  * (e.g. a FAQ list, a spec array of `{key, value}` objects) — every string
  * leaf inside gets translated and the shape is preserved, see
  * `flattenTranslatableLeaves()`/`rebuildWithTranslations()`.
+ * Exception: a Technical Specifications field (`isTechSpecsField()`) holding a
+ * `{label, value}[]` array is converted to "Label: Value" text, translated as
+ * one block, then converted back to an array — regardless of mapping type.
  *
  * Two-step, human-in-the-loop flow — see `CmsTranslationMode`:
  *   - mode "preview": AI-translates the selected fields and returns them;
@@ -51,6 +54,7 @@ import { getWixCmsItems, getWixCmsItemById, updateWixCmsItemFields } from "@/ser
 import { sanitizeHtmlForPreview } from "@/services/wix-translation/translation-mapper.service";
 import { mapWithConcurrency } from "@/lib/utils/concurrencyLimit";
 import { getLastTranslatedAt, recordTranslated } from "./translation-timestamp-store";
+import { technicalSpecsToText, textToTechnicalSpecs, type TechnicalSpecification } from "@/lib/utils/specsTranslator";
 import {
   getTranslationProvider,
   getSafeConcurrency,
@@ -160,6 +164,20 @@ function parseIfJsonString(value: unknown): unknown {
   }
 }
 
+/** Technical Specifications field, whatever its casing/suffix (e.g. "technicalSpecifications", "TechnicalSpecifications_VI"). */
+function isTechSpecsField(fieldKey: string): boolean {
+  return /technical[\s_-]*spec/i.test(fieldKey);
+}
+
+/** Returns `value` as a non-empty `{label, value}[]` spec array, or null if it isn't one. */
+function asSpecArray(value: unknown): TechnicalSpecification[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const isSpecs = value.every(
+    (s) => !!s && typeof s === "object" && typeof (s as Record<string, unknown>).label === "string" && typeof (s as Record<string, unknown>).value === "string"
+  );
+  return isSpecs ? (value as TechnicalSpecification[]) : null;
+}
+
 /**
  * Collects every non-empty string leaf inside `value` (recursing through arrays/objects,
  * e.g. a FAQ list or a spec array of `{key, value}` objects) into `out`, keyed by its JSON
@@ -264,6 +282,8 @@ async function translateOneItemPreview(
     const fieldsToTranslate: Record<string, string> = {};
     const typeByTargetKey: Record<string, CmsFieldContentType> = {};
     const structuredSourceByTargetKey: Record<string, unknown> = {};
+    /** Technical Specifications arrays sent as "Label: Value" text — targetKey -> source spec count. */
+    const specsTextCountByTargetKey: Record<string, number> = {};
     let anyTargetHadData = false;
     let anyCooldownSkip = false;
     let cooldownMessage: string | undefined;
@@ -280,6 +300,37 @@ async function translateOneItemPreview(
 
       const sourceValue = rawItem[mapping.sourceField];
       const currentTargetValue = rawItem[mapping.targetField];
+
+      // Technical Specifications stored as a {label, value}[] array: convert it to
+      // "Label: Value" lines, translate that text as ONE field (the AI sees each label
+      // next to its value, instead of isolated leaves), then convert the translation
+      // back to an array below — whatever the mapping's declared type. A mapping declared
+      // "json" (array) also takes plain "Label: Value" text as its source, so the result is
+      // still stored as an array.
+      let specs: TechnicalSpecification[] | null = null;
+      if (isTechSpecsField(mapping.sourceField)) {
+        const parsedSource = parseIfJsonString(sourceValue);
+        specs = asSpecArray(parsedSource);
+        if (!specs && mapping.type === "json" && typeof parsedSource === "string") {
+          const fromText = textToTechnicalSpecs(parsedSource);
+          specs = fromText.length > 0 ? fromText : null;
+        }
+      }
+      if (specs) {
+        const specsText = technicalSpecsToText(specs);
+        if (!specsText) continue;
+        const structuredTarget = parseIfJsonString(currentTargetValue);
+        const targetHasData =
+          (typeof structuredTarget === "string" && structuredTarget.trim() !== "") ||
+          (isStructuredValue(structuredTarget) && !isEmptyStructuredValue(structuredTarget));
+        if (targetHasData) anyTargetHadData = true;
+        if (targetHasData && !overwrite) continue;
+
+        fieldsToTranslate[mapping.targetField] = specsText;
+        typeByTargetKey[mapping.targetField] = "json";
+        specsTextCountByTargetKey[mapping.targetField] = textToTechnicalSpecs(specsText).length;
+        continue;
+      }
 
       if (mapping.type === "json") {
         // The Wix field may be a real Array/Object column (comes back already parsed) or a
@@ -338,6 +389,24 @@ async function translateOneItemPreview(
 
     for (const targetKey of Object.keys(typeByTargetKey)) {
       const type = typeByTargetKey[targetKey];
+
+      if (targetKey in specsTextCountByTargetKey) {
+        const cleaned = stripCodeFence(String(result.fields[targetKey] ?? "")).trim();
+        if (!cleaned) {
+          throw new Error(`Translation provider returned an empty response for field "${targetKey}".`);
+        }
+        const translatedSpecs = textToTechnicalSpecs(cleaned);
+        const expected = specsTextCountByTargetKey[targetKey];
+        // A dropped colon or merged line would silently lose a spec row once parsed back.
+        if (translatedSpecs.length !== expected) {
+          throw new Error(
+            `Field "${targetKey}": bản dịch có ${translatedSpecs.length}/${expected} dòng "Label: Value" hợp lệ — không thể chuyển ngược về array, hãy dịch lại.`
+          );
+        }
+        translatedFieldValues[targetKey] = JSON.stringify(translatedSpecs, null, 2);
+        sourcePreviewByTargetKey[targetKey] = JSON.stringify(textToTechnicalSpecs(fieldsToTranslate[targetKey]), null, 2);
+        continue;
+      }
 
       if (type === "json") {
         const structuredSource = structuredSourceByTargetKey[targetKey];
@@ -410,11 +479,16 @@ async function translateOneItemWrite(
       if (!cleaned) continue; // the admin cleared this field during review — treat as "don't write it"
 
       const currentTargetValue = rawItem[key];
-      const type = typeByTargetKey[key];
+      // A Technical Specifications preview is always a JSON spec array (see translateOneItemPreview),
+      // so write it as one even if the mapping was declared "text".
+      const isSpecsArray = isTechSpecsField(key) && asSpecArray(parseIfJsonString(cleaned)) !== null;
+      const type = isSpecsArray ? "json" : typeByTargetKey[key];
 
       if (type === "json") {
         const structuredCurrentTarget = parseIfJsonString(currentTargetValue);
-        const targetHasData = isStructuredValue(structuredCurrentTarget) && !isEmptyStructuredValue(structuredCurrentTarget);
+        const targetHasData =
+          (isStructuredValue(structuredCurrentTarget) && !isEmptyStructuredValue(structuredCurrentTarget)) ||
+          (isSpecsArray && typeof structuredCurrentTarget === "string" && structuredCurrentTarget.trim() !== "");
         if (targetHasData && !overwrite) continue;
         let parsed: unknown;
         try {
@@ -427,7 +501,9 @@ async function translateOneItemWrite(
         // may reject), while a real Array/Object-typed column keeps getting the native value.
         // With no prior value to go by (first-time write), default to native — matches a real
         // Wix Array/Object field, the more common case for a genuinely structured collection.
-        fieldsToWrite[key] = typeof currentTargetValue === "string" && isStructuredValue(structuredCurrentTarget) ? cleaned : parsed;
+        // Technical Specifications is always stored as a native array.
+        fieldsToWrite[key] =
+          !isSpecsArray && typeof currentTargetValue === "string" && isStructuredValue(structuredCurrentTarget) ? cleaned : parsed;
         continue;
       }
 

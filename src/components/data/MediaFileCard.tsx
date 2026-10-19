@@ -76,7 +76,7 @@ export function MediaFileCard({ file, selected, onToggleSelect, onDeleteSingle }
             loading="lazy"
           />
         ) : (
-          <Icon className="h-10 w-10 text-muted-foreground/60" />
+          <Icon className="h-10 w-10 text-muted-foreground" />
         )}
       </div>
 
@@ -85,7 +85,7 @@ export function MediaFileCard({ file, selected, onToggleSelect, onDeleteSingle }
         <p className="truncate text-xs font-medium" title={file.displayName}>
           {file.displayName}
         </p>
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{formatFileSize(file.size)}</span>
           <span>{formatDate(file.createdDate)}</span>
         </div>

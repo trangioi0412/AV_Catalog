@@ -29,8 +29,8 @@ const REQUEST_STATUS_PENDING = "Chờ duyệt";
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
   "Chờ duyệt": "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  "Duyệt": "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  "Đang cào dữ liệu": "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  "Duyệt": "bg-primary/10 text-primary border-primary/20",
+  "Đang cào dữ liệu": "bg-primary/10 text-primary border-primary/20",
   "Đã cào xong": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
   "Lỗi cào dữ liệu": "bg-destructive/10 text-destructive border-destructive/20",
   "Từ chối": "bg-destructive/10 text-destructive border-destructive/20",
@@ -41,7 +41,7 @@ const SYNC_POLL_INTERVAL_MS = 2000;
 
 const SYNC_STATUS_BADGE_CLASSES: Record<string, string> = {
   queued: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  running: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  running: "bg-primary/10 text-primary border-primary/20",
   completed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
   completed_with_warnings: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20",
   failed: "bg-destructive/10 text-destructive border-destructive/20",
@@ -310,7 +310,7 @@ export function ManufacturerRequestForm() {
                             {approve?.loading ? "Đang duyệt..." : "Duyệt & đồng bộ (AI)"}
                           </Button>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           AI đọc thử vài trang sản phẩm bằng model cục bộ (chậm, có thể mất vài phút) -- xem trước
                           trước khi duyệt để tránh dữ liệu sai bị đồng bộ vào hệ thống chính.
                         </p>

@@ -105,7 +105,7 @@ export function UploadCard({
             <p className="text-xs font-semibold mb-1">
               {isLoading ? "Đang xử lý file..." : "Kéo & thả file hoặc click để tải lên"}
             </p>
-            <p className="text-[10px] text-muted-foreground/80 max-w-[200px] leading-relaxed">
+            <p className="text-xs text-muted-foreground/80 max-w-[200px] leading-relaxed">
               {helpText}
             </p>
           </div>
@@ -120,7 +120,7 @@ export function UploadCard({
                   <p className="text-xs font-bold truncate max-w-[170px]" title={file.name}>
                     {file.name}
                   </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     {formatSize(file.size)}
                   </p>
                 </div>
@@ -149,7 +149,7 @@ export function UploadCard({
         )}
 
         {error && (
-          <div className="mt-3 p-2.5 rounded-lg bg-destructive/5 border border-destructive/15 flex items-start gap-2 text-[11px] text-destructive font-medium leading-relaxed">
+          <div className="mt-3 p-2.5 rounded-lg bg-destructive/5 border border-destructive/15 flex items-start gap-2 text-xs text-destructive font-medium leading-relaxed">
             <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>

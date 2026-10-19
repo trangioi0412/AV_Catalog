@@ -2,7 +2,6 @@
 
 import React from "react";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
 
 // ─── Route labels ─────────────────────────────────────────────────────────────
@@ -44,16 +43,7 @@ export function useNavLoading() {
 function ShimmerBar() {
   return (
     <div className="w-full h-1 bg-primary/15 rounded-full overflow-hidden relative">
-      <motion.div
-        className="absolute top-0 bottom-0 left-0 w-[35%] bg-primary rounded-full"
-        animate={{ left: ["-35%", "105%"] }}
-        transition={{
-          repeat: Infinity,
-          duration: 1.4,
-          ease: "easeInOut",
-          repeatDelay: 0.2,
-        }}
-      />
+      <div className="nav-shimmer absolute top-0 bottom-0 left-0 w-[35%] bg-primary rounded-full" />
     </div>
   );
 }
@@ -65,11 +55,7 @@ function SpinnerLogo() {
       {/* Static ring */}
       <div className="absolute inset-0 rounded-full border-4 border-primary/15" />
       {/* Spinning arc */}
-      <motion.div
-        className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary"
-        animate={{ rotate: 360 }}
-        transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
-      />
+      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary animate-spin [animation-duration:0.9s]" />
       {/* Center logo */}
       <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
         <Zap className="w-4 h-4 text-primary-foreground" />
@@ -87,23 +73,14 @@ function LoadingOverlay({
   destination: string;
 }) {
   return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
+    visible && (
+        <div
           key="nav-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/70 backdrop-blur-sm animate-in fade-in-0 duration-200"
         >
           {/* Card popup */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.93, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 6 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="flex flex-col items-center gap-5 px-10 py-8 rounded-2xl bg-card border border-border/60 shadow-2xl shadow-black/10 w-[280px]"
+          <div
+            className="flex flex-col items-center gap-5 px-10 py-8 rounded-2xl bg-card border border-border/60 shadow-2xl shadow-black/10 w-[280px] animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200"
           >
             <SpinnerLogo />
 
@@ -118,38 +95,26 @@ function LoadingOverlay({
 
             <ShimmerBar />
 
-            <p className="text-[10px] text-muted-foreground/60 -mt-1">
+            <p className="text-xs text-muted-foreground -mt-1">
               Đang tải dữ liệu từ server
             </p>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </div>
+        </div>
+      )
   );
 }
 
 // ─── Top progress bar (NProgress-style) ──────────────────────────────────────
 function TopProgressBar({ visible }: { visible: boolean }) {
   return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
+    visible && (
+        <div
           key="top-bar"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed top-0 left-0 right-0 z-[10000] h-[3px] overflow-hidden"
+          className="fixed top-0 left-0 right-0 z-[10000] h-[3px] overflow-hidden animate-in fade-in-0 duration-150"
         >
-          <motion.div
-            className="h-full bg-primary rounded-r-full shadow-lg shadow-primary/40"
-            initial={{ width: "0%" }}
-            animate={{ width: "88%" }}
-            transition={{ duration: 3, ease: [0.1, 0.4, 0.6, 1] }}
-          />
-        </motion.div>
-      )}
-    </AnimatePresence>
+          <div className="nav-progress h-full bg-primary rounded-r-full shadow-lg shadow-primary/40" />
+        </div>
+      )
   );
 }
 

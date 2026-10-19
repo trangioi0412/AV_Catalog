@@ -47,7 +47,7 @@ export function DownloadSection({
             </div>
             <div className="text-left leading-normal">
               <p className="font-bold">Merged Dataset</p>
-              <p className="text-[10px] text-white/70 font-medium">
+              <p className="text-xs text-white/70 font-medium">
                 Save as .{outputFormat.toUpperCase()}
               </p>
             </div>
@@ -66,7 +66,7 @@ export function DownloadSection({
             </div>
             <div className="text-left leading-normal">
               <p className="font-bold text-foreground">Missing IDs List</p>
-              <p className="text-[10px] text-muted-foreground font-medium">
+              <p className="text-xs text-muted-foreground font-medium">
                 {!hasResults ? "Awaiting merge..." : hasMissing ? "Download unmatched IDs" : "No missing records"}
               </p>
             </div>
@@ -85,7 +85,7 @@ export function DownloadSection({
             </div>
             <div className="text-left leading-normal">
               <p className="font-bold text-foreground">Merge Log Report</p>
-              <p className="text-[10px] text-muted-foreground font-medium">
+              <p className="text-xs text-muted-foreground font-medium">
                 Download JSON diagnostic report
               </p>
             </div>

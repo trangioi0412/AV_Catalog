@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-be-vietnam), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -24,6 +24,8 @@
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
@@ -49,108 +51,126 @@
 }
 
 :root {
-  /* Brand indigo-based primary */
-  --primary: oklch(0.51 0.22 263);
-  --primary-foreground: oklch(0.985 0 0);
+  /* AVS-TEK brand — primary blue #0057F9, navy #0F3086, sky #1890FF */
+  --brand-blue: oklch(0.531 0.25 262.3);
+  --brand-navy: oklch(0.349 0.149 264);
+  --brand-sky: oklch(0.651 0.191 252.8);
 
-  /* Backgrounds */
-  --background: oklch(0.985 0.004 258);
-  --foreground: oklch(0.15 0.02 258);
+  --primary: var(--brand-blue);
+  --primary-foreground: oklch(0.99 0 0);
+
+  /* Backgrounds — near-neutral greys (AVS site uses #F5F5F5 / #343434) */
+  --background: oklch(0.985 0.002 262);
+  --foreground: oklch(0.21 0.012 262);
 
   /* Card & Popover */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.02 258);
+  --card-foreground: oklch(0.21 0.012 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.02 258);
+  --popover-foreground: oklch(0.21 0.012 262);
 
   /* Secondary & Muted */
-  --secondary: oklch(0.94 0.015 258);
-  --secondary-foreground: oklch(0.25 0.04 258);
-  --muted: oklch(0.94 0.008 258);
-  --muted-foreground: oklch(0.52 0.025 258);
+  --secondary: oklch(0.955 0.008 262);
+  --secondary-foreground: oklch(0.349 0.149 264);
+  --muted: oklch(0.955 0.004 262);
+  --muted-foreground: oklch(0.48 0.014 262);
 
   /* Accent */
-  --accent: oklch(0.92 0.03 263);
-  --accent-foreground: oklch(0.25 0.08 263);
+  --accent: oklch(0.94 0.03 262);
+  --accent-foreground: oklch(0.349 0.149 264);
+
+  /* Highlight — secondary brand accent (AI features, 2nd category) */
+  --highlight: var(--brand-navy);
+  --highlight-foreground: oklch(0.99 0 0);
 
   /* Destructive */
   --destructive: oklch(0.577 0.245 27.325);
 
   /* Borders & Ring */
-  --border: oklch(0.88 0.012 258);
-  --input: oklch(0.88 0.012 258);
-  --ring: oklch(0.51 0.22 263);
+  --border: oklch(0.9 0.006 262);
+  --input: oklch(0.88 0.008 262);
+  --ring: var(--brand-blue);
 
   /* Charts */
-  --chart-1: oklch(0.51 0.22 263);
-  --chart-2: oklch(0.62 0.18 220);
-  --chart-3: oklch(0.55 0.16 185);
-  --chart-4: oklch(0.68 0.18 145);
-  --chart-5: oklch(0.70 0.19 30);
+  --chart-1: oklch(0.531 0.25 262.3);
+  --chart-2: oklch(0.651 0.191 252.8);
+  --chart-3: oklch(0.349 0.149 264);
+  --chart-4: oklch(0.68 0.16 160);
+  --chart-5: oklch(0.72 0.17 60);
 
   /* Radius */
   --radius: 0.625rem;
 
-  /* Sidebar — slightly off-white panel feel */
-  --sidebar: oklch(0.975 0.006 258);
-  --sidebar-foreground: oklch(0.15 0.02 258);
-  --sidebar-primary: oklch(0.51 0.22 263);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.92 0.03 263);
-  --sidebar-accent-foreground: oklch(0.25 0.08 263);
-  --sidebar-border: oklch(0.88 0.012 258);
-  --sidebar-ring: oklch(0.51 0.22 263);
+  /* Sidebar */
+  --sidebar: oklch(0.99 0.002 262);
+  --sidebar-foreground: oklch(0.21 0.012 262);
+  --sidebar-primary: var(--brand-blue);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.94 0.03 262);
+  --sidebar-accent-foreground: oklch(0.349 0.149 264);
+  --sidebar-border: oklch(0.9 0.006 262);
+  --sidebar-ring: var(--brand-blue);
+
+  /* Fixed mobile bottom-nav height (used for content padding) */
+  --bottom-nav-h: 4rem;
+
+  /* Page transition duration */
+  --page-transition: 0.25s;
 }
 
 .dark {
-  /* Brand indigo primary — slightly lighter in dark */
-  --primary: oklch(0.62 0.20 263);
-  --primary-foreground: oklch(0.10 0.02 258);
+  /* Lighter brand blue for dark surfaces; dark text on it keeps AA contrast */
+  --primary: oklch(0.654 0.184 261.6);
+  --primary-foreground: oklch(0.16 0.05 264);
 
-  /* Backgrounds */
-  --background: oklch(0.13 0.018 258);
-  --foreground: oklch(0.96 0.004 258);
+  /* Backgrounds — deep navy-tinted */
+  --background: oklch(0.15 0.02 264);
+  --foreground: oklch(0.96 0.004 262);
 
   /* Card & Popover */
-  --card: oklch(0.17 0.022 258);
-  --card-foreground: oklch(0.96 0.004 258);
-  --popover: oklch(0.17 0.022 258);
-  --popover-foreground: oklch(0.96 0.004 258);
+  --card: oklch(0.19 0.024 264);
+  --card-foreground: oklch(0.96 0.004 262);
+  --popover: oklch(0.19 0.024 264);
+  --popover-foreground: oklch(0.96 0.004 262);
 
   /* Secondary & Muted */
-  --secondary: oklch(0.22 0.028 258);
-  --secondary-foreground: oklch(0.96 0.004 258);
-  --muted: oklch(0.22 0.025 258);
-  --muted-foreground: oklch(0.60 0.025 258);
+  --secondary: oklch(0.24 0.03 264);
+  --secondary-foreground: oklch(0.96 0.004 262);
+  --muted: oklch(0.24 0.025 264);
+  --muted-foreground: oklch(0.7 0.02 262);
 
   /* Accent */
-  --accent: oklch(0.24 0.04 263);
-  --accent-foreground: oklch(0.88 0.06 263);
+  --accent: oklch(0.27 0.05 262);
+  --accent-foreground: oklch(0.9 0.06 262);
+
+  /* Highlight */
+  --highlight: oklch(0.8 0.11 252.8);
+  --highlight-foreground: oklch(0.16 0.05 264);
 
   /* Destructive */
   --destructive: oklch(0.704 0.191 22.216);
 
   /* Borders & Ring */
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.62 0.20 263);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.654 0.184 261.6);
 
   /* Charts */
-  --chart-1: oklch(0.62 0.20 263);
-  --chart-2: oklch(0.65 0.18 220);
-  --chart-3: oklch(0.60 0.16 185);
-  --chart-4: oklch(0.68 0.18 145);
-  --chart-5: oklch(0.72 0.19 30);
+  --chart-1: oklch(0.654 0.184 261.6);
+  --chart-2: oklch(0.72 0.16 252.8);
+  --chart-3: oklch(0.55 0.15 264);
+  --chart-4: oklch(0.72 0.15 160);
+  --chart-5: oklch(0.76 0.16 60);
 
   /* Sidebar */
-  --sidebar: oklch(0.16 0.02 258);
-  --sidebar-foreground: oklch(0.96 0.004 258);
-  --sidebar-primary: oklch(0.62 0.20 263);
-  --sidebar-primary-foreground: oklch(0.10 0.02 258);
-  --sidebar-accent: oklch(0.24 0.04 263);
-  --sidebar-accent-foreground: oklch(0.88 0.06 263);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.62 0.20 263);
+  --sidebar: oklch(0.17 0.022 264);
+  --sidebar-foreground: oklch(0.96 0.004 262);
+  --sidebar-primary: oklch(0.654 0.184 261.6);
+  --sidebar-primary-foreground: oklch(0.16 0.05 264);
+  --sidebar-accent: oklch(0.27 0.05 262);
+  --sidebar-accent-foreground: oklch(0.9 0.06 262);
+  --sidebar-border: oklch(1 0 0 / 11%);
+  --sidebar-ring: oklch(0.654 0.184 261.6);
 }
 
 @layer base {
@@ -163,11 +183,41 @@
   }
   html {
     @apply font-sans;
+    /* Smoother font rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ── Accessible focus-visible ring ────────────────────────────────────── */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: calc(var(--radius) * 0.6);
+  }
+
+  /* Minimum 44×44 touch target on mobile for primary navigation controls.
+   * Opt-in via .touch-target so dense tables/badges/inline links are unaffected. */
+  @media (max-width: 768px) {
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /* Respect users who prefer reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer utilities {
-  /* Glassmorphism */
+  /* ── Glassmorphism ─────────────────────────────────────────────────────── */
   .glass {
     @apply bg-background/60 backdrop-blur-md border-white/10;
   }
@@ -176,22 +226,48 @@
     @apply bg-black/40 backdrop-blur-lg border-white/5;
   }
 
-  /* Gradient text */
+  /* ── Gradient text ─────────────────────────────────────────────────────── */
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/70;
   }
 
   .text-gradient-brand {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70;
+    background: linear-gradient(
+      120deg,
+      var(--brand-navy) 0%,
+      var(--brand-blue) 70%,
+      var(--brand-sky) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
   }
 
-  /* Fade-in animations */
+  .dark .text-gradient-brand {
+    background: linear-gradient(
+      120deg,
+      oklch(0.85 0.08 262) 0%,
+      oklch(0.75 0.15 262) 60%,
+      oklch(0.78 0.13 252.8) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* ── Page entry animations ─────────────────────────────────────────────── */
   .animate-in-fade {
-    animation: fade-in 0.5s ease-out forwards;
+    animation: fade-in 0.4s ease-out forwards;
   }
 
   .animate-in-slide {
-    animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-in-up {
+    animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
   @keyframes fade-in {
@@ -204,21 +280,65 @@
     to   { opacity: 1; transform: translateX(0); }
   }
 
-  /* Sidebar nav active indicator */
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Shimmer skeleton effect */
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      oklch(0.88 0.008 258 / 60%) 25%,
+      oklch(0.92 0.005 258 / 80%) 50%,
+      oklch(0.88 0.008 258 / 60%) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite linear;
+  }
+
+  .dark .skeleton {
+    background: linear-gradient(
+      90deg,
+      oklch(0.22 0.025 258 / 60%) 25%,
+      oklch(0.26 0.020 258 / 80%) 50%,
+      oklch(0.22 0.025 258 / 60%) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite linear;
+  }
+
+  /* ── Sidebar nav active indicator ─────────────────────────────────────── */
   .nav-active {
     @apply relative bg-primary/10 text-primary font-semibold;
   }
   .nav-active::before {
     content: '';
     @apply absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full;
+    transition: height 0.2s ease;
+  }
+  .nav-active:hover::before {
+    height: 28px;
   }
 
-  /* Card hover lift */
+  /* ── Card hover lift ───────────────────────────────────────────────────── */
   .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
+    @apply transition-[box-shadow,border-color] duration-200;
+  }
+  .card-hover:hover {
+    @apply border-primary/30;
+    box-shadow: 0 4px 16px oklch(0.531 0.25 262.3 / 10%);
+  }
+  .dark .card-hover:hover {
+    box-shadow: 0 4px 16px oklch(0.654 0.184 261.6 / 15%);
   }
 
-  /* Status badge base */
+  /* ── Status badge base ─────────────────────────────────────────────────── */
   .status-valid {
     @apply bg-emerald-500/10 text-emerald-700 border-emerald-500/25 dark:text-emerald-400;
   }
@@ -232,16 +352,82 @@
     @apply bg-primary/10 text-primary border-primary/20;
   }
 
-  /* Subtle page background grid */
+  /* ── Subtle page background grid ──────────────────────────────────────── */
   .bg-grid {
     background-image:
       linear-gradient(to right, oklch(0.5 0.1 263 / 3%) 1px, transparent 1px),
       linear-gradient(to bottom, oklch(0.5 0.1 263 / 3%) 1px, transparent 1px);
     background-size: 32px 32px;
   }
+
+  /* ── Gradient border on hover (premium feel) ──────────────────────────── */
+  .border-gradient-hover {
+    position: relative;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+  .border-gradient-hover::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, oklch(0.531 0.25 262.3 / 0%), oklch(0.531 0.25 262.3 / 30%));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+  }
+  .border-gradient-hover:hover::after {
+    opacity: 1;
+  }
+
+  /* ── Navigation loading indicators (CSS-only, no JS animation lib) ───── */
+  .nav-shimmer {
+    animation: nav-shimmer 1.6s ease-in-out infinite;
+  }
+  @keyframes nav-shimmer {
+    from { left: -40%; }
+    to   { left: 110%; }
+  }
+  .nav-progress {
+    animation: nav-progress 3s cubic-bezier(0.1, 0.4, 0.6, 1) forwards;
+  }
+  @keyframes nav-progress {
+    from { width: 0%; }
+    to   { width: 88%; }
+  }
+
+  /* ── Mobile bottom nav: safe-area + content clearance ─────────────────── */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pb-bottom-nav {
+    padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
+  }
+
+  /* ── Section divider with label ───────────────────────────────────────── */
+  .section-label {
+    @apply text-xs font-bold tracking-widest text-muted-foreground uppercase;
+  }
+
+  /* ── Pulsing dot indicator ─────────────────────────────────────────────── */
+  .pulse-dot {
+    @apply relative flex h-2 w-2;
+  }
+  .pulse-dot::before {
+    content: '';
+    @apply absolute inline-flex h-full w-full rounded-full bg-current opacity-75;
+    animation: ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .pulse-dot::after {
+    content: '';
+    @apply relative inline-flex rounded-full h-2 w-2 bg-current;
+  }
+  @keyframes ping {
+    75%, 100% { transform: scale(2); opacity: 0; }
+  }
 }
 
-/* Custom Scrollbar */
+/* ── Custom Scrollbar ──────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -258,4 +444,10 @@
 
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-primary/40;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.531 0.25 262.3 / 20%) transparent;
 }

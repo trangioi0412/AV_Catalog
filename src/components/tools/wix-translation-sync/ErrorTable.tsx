@@ -67,14 +67,14 @@ export function ErrorTable({ errors }: ErrorTableProps) {
                       variant="outline"
                       className={
                         err.severity === "error"
-                          ? "bg-red-500/10 text-red-500 border-red-500/20 text-[10px] px-1.5 py-0 hover:bg-red-500/10"
-                          : "bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] px-1.5 py-0 hover:bg-amber-500/10"
+                          ? "bg-red-500/10 text-red-500 border-red-500/20 text-xs px-1.5 py-0 hover:bg-red-500/10"
+                          : "bg-amber-500/10 text-amber-500 border-amber-500/20 text-xs px-1.5 py-0 hover:bg-amber-500/10"
                       }
                     >
                       {err.severity === "error" ? "Error" : "Warning"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono font-bold text-[10px] text-muted-foreground">
+                  <TableCell className="font-mono font-bold text-xs text-muted-foreground">
                     {err.type}
                   </TableCell>
                   <TableCell className="font-medium text-foreground flex items-center gap-1.5 py-3">

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeader } from "@/components/layout/PageHeader";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -658,15 +659,11 @@ export function WixTranslationPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
-          <Languages className="w-6 h-6 text-primary" />
-          Dịch đa ngôn ngữ Wix CMS
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Lấy nội dung từ Wix CMS, dịch và đồng bộ bản dịch vào Wix Multilingual.
-        </p>
-      </div>
+      <PageHeader
+        title="Dịch đa ngôn ngữ Wix CMS"
+        description="Lấy nội dung từ Wix CMS, dịch và đồng bộ bản dịch vào Wix Multilingual."
+        icon={<Languages className="w-5 h-5" />}
+      />
 
       {configError && <Alert message={configError} onRetry={loadConfig} />}
 
@@ -963,12 +960,12 @@ export function WixTranslationPage() {
                           ) : (
                             <div className="flex flex-wrap gap-1" title={item.untranslatedFields.join(", ")}>
                               {shownMissing.map((f) => (
-                                <Badge key={f} variant="outline" className="text-[10px] font-normal bg-red-500/5 text-red-600 border-red-500/20">
+                                <Badge key={f} variant="outline" className="text-xs font-normal bg-red-500/5 text-red-600 border-red-500/20">
                                   {f}
                                 </Badge>
                               ))}
                               {extraMissing > 0 && (
-                                <Badge variant="outline" className="text-[10px] font-normal">
+                                <Badge variant="outline" className="text-xs font-normal">
                                   +{extraMissing}
                                 </Badge>
                               )}
@@ -977,7 +974,7 @@ export function WixTranslationPage() {
                         </TableCell>
                         <TableCell>
                           {item.translationStatus === "none" ? (
-                            <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
+                            <Badge variant="outline" className={cn("text-xs font-bold", status.className)}>{status.label}</Badge>
                           ) : (
                             <button
                               type="button"
@@ -987,7 +984,7 @@ export function WixTranslationPage() {
                             >
                               <Badge
                                 variant="outline"
-                                className={cn("text-[10px] font-bold cursor-pointer hover:opacity-80", status.className)}
+                                className={cn("text-xs font-bold cursor-pointer hover:opacity-80", status.className)}
                               >
                                 {status.label}
                               </Badge>
@@ -1058,7 +1055,7 @@ export function WixTranslationPage() {
               </div>
               <Progress value={(translateProgress.done / Math.max(1, translateProgress.total)) * 100} />
               {translateProgress.lastItemName && (
-                <p className="text-[11px] text-muted-foreground truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   {isTranslating ? "Vừa dịch xong" : "Sản phẩm cuối"}: <span className="font-medium text-foreground">{translateProgress.lastItemName}</span>
                 </p>
               )}
@@ -1102,7 +1099,7 @@ export function WixTranslationPage() {
               </div>
               <Progress value={(saveProgress.done / Math.max(1, saveProgress.total)) * 100} />
               {saveProgress.lastItemName && (
-                <p className="text-[11px] text-muted-foreground truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   Vừa đẩy xong: <span className="font-medium text-foreground">{saveProgress.lastItemName}</span>
                 </p>
               )}
@@ -1145,7 +1142,7 @@ export function WixTranslationPage() {
                     <StatusIcon status={currentReviewItem.status} />
                     <span className="font-semibold text-sm">{currentReviewItem.itemName}</span>
                     {currentReviewItem.status === "saved" && (
-                      <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                      <Badge variant="outline" className="text-xs font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
                         Đã đẩy lên Wix
                       </Badge>
                     )}
@@ -1190,7 +1187,7 @@ export function WixTranslationPage() {
                       <p className="text-xs font-bold text-foreground mb-3">{field.displayName}</p>
                       <div className={cn("grid gap-4", isStacked ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2")}>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             {sourceLocale.toUpperCase()} · gốc (chỉ đọc)
                           </label>
                           <div
@@ -1212,9 +1209,9 @@ export function WixTranslationPage() {
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                             <span>{targetLocale.toUpperCase()} · bản dịch (có thể sửa)</span>
-                            <span className="normal-case font-medium text-muted-foreground/70">{translated.length} ký tự</span>
+                            <span className="normal-case font-medium text-muted-foreground">{translated.length} ký tự</span>
                           </label>
                           <textarea
                             value={translated}
@@ -1259,7 +1256,7 @@ export function WixTranslationPage() {
                             <Badge
                               variant="outline"
                               className={cn(
-                                "text-[10px] font-bold",
+                                "text-xs font-bold",
                                 item.status === "failed"
                                   ? "bg-red-500/10 text-red-600 border-red-500/20"
                                   : "bg-amber-500/10 text-amber-600 border-amber-500/20"
@@ -1395,7 +1392,7 @@ function StatusIcon({ status }: { status: ReviewItemStatus }) {
     case "saving":
       return <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />;
     case "translated":
-      return <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />;
+      return <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />;
     case "saved":
       return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
     case "failed":

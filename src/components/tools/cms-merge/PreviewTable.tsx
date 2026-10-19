@@ -54,7 +54,7 @@ export function PreviewTable({ mergedRecords }: PreviewTableProps) {
   }, [filteredResults, currentPage]);
 
   const truncate = (str: string | undefined, maxLen = 60) => {
-    if (!str) return <span className="text-muted-foreground/45 italic">(Empty)</span>;
+    if (!str) return <span className="text-muted-foreground italic">(Trống)</span>;
     const cleanStr = str.toString().replace(/[\n\r]+/g, " "); // Flatten multiline just for table view
     if (cleanStr.length <= maxLen) return cleanStr;
     return cleanStr.slice(0, maxLen) + "...";
@@ -121,20 +121,20 @@ export function PreviewTable({ mergedRecords }: PreviewTableProps) {
                       </TableCell>
                       <TableCell className="text-center">
                         {status === "Updated" && (
-                          <Badge className="bg-orange-500/10 text-orange-500 border-orange-500/20 text-[10px] hover:bg-orange-500/10 gap-1 px-2 py-0.5 rounded-full font-bold">
+                          <Badge className="bg-orange-500/10 text-orange-500 border-orange-500/20 text-xs hover:bg-orange-500/10 gap-1 px-2 py-0.5 rounded-full font-bold">
                             <RefreshCw className="w-2.5 h-2.5 text-orange-500 animate-spin-slow" />
                             Updated
                           </Badge>
                         )}
                         {status === "Matched" && (
-                          <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] hover:bg-emerald-500/10 gap-1 px-2 py-0.5 rounded-full font-bold">
+                          <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs hover:bg-emerald-500/10 gap-1 px-2 py-0.5 rounded-full font-bold">
                             <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
                             Matched
                           </Badge>
                         )}
                         {status === "Unchanged" && (
-                          <Badge className="bg-muted text-muted-foreground border-border/40 text-[10px] hover:bg-muted/80 gap-1 px-2 py-0.5 rounded-full font-medium" variant="outline">
-                            <Minus className="w-2.5 h-2.5 text-muted-foreground/60" />
+                          <Badge className="bg-muted text-muted-foreground border-border/40 text-xs hover:bg-muted/80 gap-1 px-2 py-0.5 rounded-full font-medium" variant="outline">
+                            <Minus className="w-2.5 h-2.5 text-muted-foreground" />
                             Unchanged
                           </Badge>
                         )}

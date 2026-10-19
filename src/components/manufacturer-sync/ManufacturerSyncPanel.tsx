@@ -34,7 +34,7 @@ const POLL_INTERVAL_MS = 2000;
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
   queued: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  running: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  running: "bg-primary/10 text-primary border-primary/20",
   completed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
   completed_with_warnings: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20",
   failed: "bg-destructive/10 text-destructive border-destructive/20",
@@ -320,7 +320,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md bg-background/60 py-2">
       <div className="text-base font-semibold">{value}</div>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
     </div>
   );
 }

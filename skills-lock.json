@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "performance-optimization": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/performance-optimization/SKILL.md",
+      "computedHash": "8d39332e914fd8dd39626268fa262214282d898668d4bcf7c509c5c3bf62210c"
+    }
+  }
+}

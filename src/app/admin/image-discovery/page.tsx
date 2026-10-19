@@ -27,6 +27,7 @@
  */
 
 import React from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { runBrandDiscoveryAction, getDiscoveryLogsAction, stopDiscoveryAction, SyncLogEntry } from "@/app/actions/discovery";
 import { Button } from "@/components/ui/button";
@@ -183,15 +184,11 @@ export default function BrandDiscoveryPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8 max-w-6xl">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent flex items-center gap-2">
-            <Sparkles className="w-8 h-8 text-primary animate-pulse" />
-            Tra Cứu Sản Phẩm Bằng AI
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Nhập tên một hãng AV (không cần đã có trong hệ thống) — AI sẽ tra cứu trên mạng để tìm toàn bộ sản phẩm chuyên dụng AV của hãng đó và đưa vào Discovery Queue để duyệt.
-          </p>
-        </div>
+        <PageHeader
+          title="Tra Cứu Sản Phẩm Bằng AI"
+          description="Nhập tên một hãng AV (không cần đã có trong hệ thống) — AI sẽ tra cứu trên mạng để tìm toàn bộ sản phẩm chuyên dụng AV của hãng đó và đưa vào Discovery Queue để duyệt."
+          icon={<Sparkles className="w-5 h-5" />}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Search Controls */}
@@ -253,7 +250,7 @@ export default function BrandDiscoveryPage() {
                     Ollama qwen3.5:9b
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {provider === "gemini"
                     ? "Google Search Grounding thật — đáng tin cậy hơn cho việc tìm sản phẩm hoàn toàn mới."
                     : "Miễn phí, tự lưu trữ — tra cứu qua DuckDuckGo rồi để Ollama tổng hợp. Có thể bỏ sót sản phẩm so với Gemini."}
@@ -311,7 +308,7 @@ export default function BrandDiscoveryPage() {
 
               <div className="p-3.5 bg-muted/40 rounded-xl border border-primary/5 text-xs text-muted-foreground space-y-2">
                 <div className="flex items-center gap-2 font-medium text-foreground">
-                  <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <Info className="w-3.5 h-3.5 text-primary shrink-0" />
                   Cách hoạt động
                 </div>
                 <p>1. AI tra cứu Google Search để tìm các model sản phẩm AV chuyên dụng thật của hãng.</p>
@@ -354,7 +351,7 @@ export default function BrandDiscoveryPage() {
                         let color = "text-green-400";
                         if (log.includes("[ERROR]")) color = "text-red-400 font-semibold";
                         else if (log.includes("[WARN]")) color = "text-yellow-400 font-semibold";
-                        else if (log.includes("[SYSTEM]")) color = "text-blue-400 font-semibold";
+                        else if (log.includes("[SYSTEM]")) color = "text-primary font-semibold";
                         return (
                           <div key={index} className={color}>
                             {log}
@@ -378,12 +375,12 @@ export default function BrandDiscoveryPage() {
                           ) : log.level === "WARNING" ? (
                             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                           ) : (
-                            <Info className="w-4 h-4 text-blue-500 shrink-0" />
+                            <Info className="w-4 h-4 text-primary shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center gap-2">
                               <span className="font-bold text-foreground">{log.brand ? `[${log.brand}]` : "[SYSTEM]"}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono">{formatLogTime(log.timestamp)}</span>
+                              <span className="text-xs text-muted-foreground font-mono">{formatLogTime(log.timestamp)}</span>
                             </div>
                             <p className="text-muted-foreground mt-1 leading-relaxed break-words">{log.message}</p>
                           </div>

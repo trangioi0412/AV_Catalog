@@ -149,7 +149,7 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
       case "WARNING":
         return <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />;
       default:
-        return <Info className="w-4 h-4 text-blue-500 shrink-0" />;
+        return <Info className="w-4 h-4 text-primary shrink-0" />;
     }
   };
 
@@ -266,7 +266,7 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
                 scanLogs.map((log, idx) => {
                   let textClass = "text-zinc-300";
                   if (log.includes("[ERROR]")) textClass = "text-red-400 font-bold";
-                  else if (log.includes("[SYSTEM]")) textClass = "text-blue-400 font-semibold";
+                  else if (log.includes("[SYSTEM]")) textClass = "text-primary font-semibold";
                   else if (log.includes("Found") || log.includes("completed")) textClass = "text-green-400";
                   
                   return (
@@ -299,7 +299,7 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
                         <span className="font-bold text-foreground">
                           {log.brand ? `[${log.brand}]` : "[SYSTEM]"}
                         </span>
-                        <span className="text-[10px] text-muted-foreground font-mono">
+                        <span className="text-xs text-muted-foreground font-mono">
                           {formatLogTime(log.timestamp)}
                         </span>
                       </div>
@@ -351,10 +351,10 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
           </DialogHeader>
 
           <div className="mt-4 space-y-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-1">
               Trạng thái live:
             </span>
-            <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 font-mono text-[11px] text-zinc-400 min-h-[120px] flex flex-col justify-end shadow-inner gap-1.5 overflow-hidden">
+            <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 font-mono text-xs text-zinc-400 min-h-[120px] flex flex-col justify-end shadow-inner gap-1.5 overflow-hidden">
               {scanLogs.length === 0 ? (
                 <div className="w-full break-words leading-relaxed text-zinc-500">
                   <span className="text-zinc-500 mr-2 font-bold">&gt;</span>
@@ -364,7 +364,7 @@ export function ScannerConsole({ brands, initialLogs }: ScannerConsoleProps) {
                 scanLogs.slice(-4).map((log, idx) => {
                   let textClass = "text-zinc-400";
                   if (log.includes("[ERROR]")) textClass = "text-red-400 font-bold";
-                  else if (log.includes("[SYSTEM]")) textClass = "text-blue-400 font-semibold";
+                  else if (log.includes("[SYSTEM]")) textClass = "text-primary font-semibold";
                   else if (log.includes("Found") || log.includes("completed")) textClass = "text-green-400";
                   
                   return (

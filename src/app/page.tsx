@@ -2,6 +2,7 @@
 
 import React from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { FileUpload } from "@/components/data/FileUpload";
 import { DataTable } from "@/components/data/DataTable";
 import { StatisticsDashboard } from "@/components/data/StatisticsDashboard";
@@ -27,7 +28,8 @@ import {
   Search,
   Sparkles,
   Bot,
-  Wrench
+  Wrench,
+  Upload,
 } from "lucide-react";
 import { uploadCatalogToWixAction } from "@/app/actions/discovery";
 import { 
@@ -475,16 +477,15 @@ export default function DashboardPage() {
         {/* ── Top Section ─────────────────────────────────────────── */}
         <div className="flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                {fileName ? "Product Catalog Management" : "Welcome, Admin"}
-              </h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                {fileName
-                  ? `Managing · ${fileName}`
-                  : "Upload a catalog file to start transforming and syncing product data."}
-              </p>
-            </div>
+            <PageHeader
+              title={fileName ? "Quản lý Catalog sản phẩm" : "Chào mừng quay lại"}
+              description={
+                fileName
+                  ? `Đang làm việc với · ${fileName}`
+                  : "Tải lên file catalog để bắt đầu chuyển đổi và đồng bộ dữ liệu sản phẩm."
+              }
+              icon={<Upload className="w-5 h-5" />}
+            />
 
             {fileName && (
               <div className="flex flex-wrap items-center gap-2">
@@ -502,7 +503,7 @@ export default function DashboardPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="gap-1.5 text-violet-600 hover:bg-violet-500/10 hover:text-violet-600 dark:text-violet-400 h-7 px-2.5"
+                    className="gap-1.5 text-highlight hover:bg-highlight/10 hover:text-highlight h-7 px-2.5"
                     onClick={handleAiReview}
                     disabled={isAiReviewing}
                   >
@@ -516,7 +517,7 @@ export default function DashboardPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="gap-1.5 text-violet-600 hover:bg-violet-500/10 hover:text-violet-600 dark:text-violet-400 h-7 px-2.5"
+                    className="gap-1.5 text-highlight hover:bg-highlight/10 hover:text-highlight h-7 px-2.5"
                     onClick={handleAiFixAll}
                     disabled={isAiFixing || flaggedCount === 0}
                     title={flaggedCount === 0 ? "Chạy \"Kiểm tra AI\" trước để có sản phẩm cần sửa" : `Sửa ${flaggedCount} sản phẩm bị gắn cờ bằng qwen3.5:9b (local, không tra cứu internet)`}
@@ -567,7 +568,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2 border-violet-500/30 text-violet-600 hover:bg-violet-500/10 dark:text-violet-400"
+                  className="gap-2 border-highlight/30 text-highlight hover:bg-highlight/10"
                   onClick={handleUploadAiFixedToWix}
                   disabled={isUploadingToWix || aiFixedProductsCount === 0}
                   title={aiFixedProductsCount === 0 ? "Chưa có sản phẩm nào được AI sửa" : "Chỉ đẩy các sản phẩm đã AI sửa lên CMS (không đẩy toàn bộ catalog)"}
@@ -591,7 +592,7 @@ export default function DashboardPage() {
                       Excel Workbook (.xlsx)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleExport("csv")} className="gap-2">
-                      <FileCode className="w-4 h-4 text-blue-600" />
+                      <FileCode className="w-4 h-4 text-primary" />
                       Comma Separated (.csv)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleExport("json")} className="gap-2">
@@ -628,7 +629,7 @@ export default function DashboardPage() {
                       className="gap-2"
                       disabled={totalAiFixesCount === 0}
                     >
-                      <Bot className="w-4 h-4 text-violet-500" />
+                      <Bot className="w-4 h-4 text-highlight" />
                       Báo cáo AI đã sửa ({totalAiFixesCount})
                     </DropdownMenuItem>
                   </DropdownMenuContent>

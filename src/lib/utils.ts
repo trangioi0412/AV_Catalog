@@ -23,6 +23,19 @@ export function formatFileSize(bytes?: number): string {
  * Transforms a Wix media URL (image or document) to a standard public HTTPS URL.
  * Fallbacks to a placeholder image if undefined or empty.
  */
+/**
+ * Like transformWixImageUrl, but asks Wix's CDN for a resized rendition
+ * (/v1/fit/w_,h_/) when the image is hosted on static.wixstatic.com — a
+ * thumbnail then costs a few KB instead of the full-resolution original.
+ * Any other URL is returned unchanged.
+ */
+export function wixImageThumbUrl(wixUrl: unknown, width: number, height: number): string {
+  const url = transformWixImageUrl(wixUrl);
+  const match = url.match(/^https:\/\/static\.wixstatic\.com\/media\/([^/?#]+)$/);
+  if (!match) return url;
+  return `${url}/v1/fit/w_${width},h_${height},q_80/${match[1]}`;
+}
+
 export function transformWixImageUrl(wixUrl?: any): string {
   if (!wixUrl) return "/placeholder-image.png";
   

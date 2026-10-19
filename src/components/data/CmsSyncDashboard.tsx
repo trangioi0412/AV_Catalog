@@ -361,18 +361,18 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
 
   return (
     <>
-    <Card className="border border-blue-500/20 shadow-sm">
+    <Card className="border border-primary/20 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            <GitCompare className="w-4 h-4 text-blue-500" />
+            <GitCompare className="w-4 h-4 text-primary" />
             So sánh & Đồng bộ CMS
             {hasRun && (
               <>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{productOrder.length} sản phẩm khác biệt</Badge>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{entries.length} trường</Badge>
+                <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">{productOrder.length} sản phẩm khác biệt</Badge>
+                <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">{entries.length} trường</Badge>
                 {notFoundCount > 0 && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-slate-400/30 text-muted-foreground">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 border-border text-muted-foreground">
                     {notFoundCount} không khớp trong CSV
                   </Badge>
                 )}
@@ -394,7 +394,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 h-7 text-xs border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+              className="gap-1.5 h-7 text-xs border-primary/30 text-primary hover:bg-primary/10"
               onClick={() => csvInputRef.current?.click()}
               disabled={isChecking || !isUnlocked}
               title={isUnlocked ? "Chọn file CSV export từ Wix CMS (collection Import1)" : "Cần chạy \"Kiểm tra AI\" và \"Sửa bằng AI\" trước"}
@@ -405,7 +405,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
             {hasRun && entries.length > 0 && (
               <Button
                 size="sm"
-                className="gap-1.5 h-7 text-xs bg-blue-600 hover:bg-blue-700"
+                className="gap-1.5 h-7 text-xs bg-primary hover:bg-primary/90"
                 onClick={handlePushSelected}
                 disabled={isPushing || selectedCount === 0}
               >
@@ -454,12 +454,12 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
       {isUnlocked && hasRun && (
         <CardContent className="space-y-2">
           {csvMeta && (
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-1 pb-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-1 pb-1">
               <FileSpreadsheet className="w-3 h-3 shrink-0" />
               <span className="font-mono truncate max-w-[220px]">{csvMeta.fileName}</span>
               <span>— {csvMeta.rowCount} dòng, khớp {csvMeta.matchedColumnCount}/3 cột nội dung</span>
               {csvMeta.matchedColumnCount < 3 && (
-                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-0.5">
+                <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-0.5">
                   <FileWarning className="w-2.5 h-2.5" /> Thiếu cột
                 </Badge>
               )}
@@ -471,7 +471,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
                 <XCircle className="w-3.5 h-3.5 shrink-0" />
                 {pushReport.failures.length} sản phẩm ghi đè CMS thất bại ở lần gần nhất — nội dung trên CMS CHƯA được cập nhật cho các sản phẩm này.
               </span>
-              <Button variant="outline" size="sm" className="h-6 text-[11px] shrink-0 border-rose-500/30 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400" onClick={() => setIsPushReportOpen(true)}>
+              <Button variant="outline" size="sm" className="h-6 text-xs shrink-0 border-rose-500/30 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400" onClick={() => setIsPushReportOpen(true)}>
                 Xem chi tiết
               </Button>
             </div>
@@ -508,7 +508,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
                           </button>
                           <Checkbox checked={productAllSelected} onCheckedChange={(v) => toggleProduct(rowId, Boolean(v))} />
                           <span className="text-xs font-semibold">{brand} {product}</span>
-                          <span className="text-[10px] text-muted-foreground ml-auto">{productSelectedCount}/{productEntries.length}</span>
+                          <span className="text-xs text-muted-foreground ml-auto">{productSelectedCount}/{productEntries.length}</span>
                         </div>
 
                         {!isCollapsed && (
@@ -522,19 +522,19 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
                                 />
                                 <div className="flex-1 min-w-0 space-y-1">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{e.field}</span>
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{e.field}</span>
+                                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400">
                                       {e.status === "missing_in_cms" ? "CMS chưa có" : e.status === "missing_locally" ? "Local trống" : "Khác nhau"}
                                     </Badge>
                                     {e.wasTranslated && (
-                                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-0 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 gap-0.5">
+                                      <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-0 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 gap-0.5">
                                         <Languages className="w-2.5 h-2.5" /> Đã dịch sang Việt
                                       </Badge>
                                     )}
                                     {e.translationFailed && (
                                       <Badge
                                         variant="outline"
-                                        className="text-[9px] px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-0.5"
+                                        className="text-xs px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-0.5"
                                         title="Không kết nối được dịch vụ dịch (Ollama) — đang hiển thị nguyên văn chưa dịch, khác biệt này có thể chỉ do khác ngôn ngữ chứ không phải nội dung thật sự khác."
                                       >
                                         <AlertTriangle className="w-2.5 h-2.5" /> Dịch lỗi, hiện nguyên văn
@@ -542,12 +542,12 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
                                     )}
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                                    <div className="p-2 rounded bg-blue-500/5 border border-blue-500/20 break-words max-h-28 overflow-auto">
-                                      <span className="text-[9px] text-blue-600 dark:text-blue-400 block mb-0.5">CMS hiện tại</span>
+                                    <div className="p-2 rounded bg-primary/5 border border-primary/20 break-words max-h-28 overflow-auto">
+                                      <span className="text-xs text-primary block mb-0.5">CMS hiện tại</span>
                                       {e.cmsValue || <span className="italic text-muted-foreground">(trống)</span>}
                                     </div>
                                     <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20 break-words max-h-28 overflow-auto">
-                                      <span className="text-[9px] text-emerald-600 dark:text-emerald-400 block mb-0.5">Local (tiếng Việt, sẽ ghi đè)</span>
+                                      <span className="text-xs text-emerald-600 dark:text-emerald-400 block mb-0.5">Local (tiếng Việt, sẽ ghi đè)</span>
                                       {e.localValue || <span className="italic text-muted-foreground">(trống)</span>}
                                     </div>
                                   </div>
@@ -582,7 +582,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UploadCloud className="w-5 h-5 text-blue-500" />
+            <UploadCloud className="w-5 h-5 text-primary" />
             Kết quả ghi đè lên Wix CMS
           </DialogTitle>
           <DialogDescription>
@@ -594,15 +594,15 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
           <div className="flex-1 overflow-y-auto space-y-4 pb-2">
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-primary/80 font-medium block mb-1">Sản phẩm đã xử lý</span>
+                <span className="text-xs text-primary/80 font-medium block mb-1">Sản phẩm đã xử lý</span>
                 <strong className="text-xl font-extrabold text-primary">{pushReport.totalProducts}</strong>
               </div>
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium block mb-1">Trường thành công</span>
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium block mb-1">Trường thành công</span>
                 <strong className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{pushReport.successCount}</strong>
               </div>
               <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center">
-                <span className="text-[11px] text-rose-600 dark:text-rose-400 font-medium block mb-1">Trường thất bại</span>
+                <span className="text-xs text-rose-600 dark:text-rose-400 font-medium block mb-1">Trường thất bại</span>
                 <strong className="text-xl font-extrabold text-rose-600 dark:text-rose-400">{pushReport.failCount}</strong>
               </div>
             </div>
@@ -622,7 +622,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="text-[11px] h-7 gap-1.5"
+                    className="text-xs h-7 gap-1.5"
                     onClick={() => {
                       const text = pushReport.failures.map((f) => `${f.brand} ${f.product} [${f.fields.join(", ")}] - ${f.error}`).join("\n");
                       navigator.clipboard.writeText(text);
@@ -655,7 +655,7 @@ export function CmsSyncDashboard({ onActiveChange }: CmsSyncDashboardProps) {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold text-foreground">{f.brand} {f.product}</span>
                             {f.fields.map((field) => (
-                              <Badge key={field} variant="outline" className="text-[9px] px-1 py-0 h-4">{field}</Badge>
+                              <Badge key={field} variant="outline" className="text-xs px-1 py-0 h-4">{field}</Badge>
                             ))}
                           </div>
                           <span className="text-muted-foreground leading-relaxed break-words">{f.error}</span>

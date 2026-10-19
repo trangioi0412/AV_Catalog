@@ -115,8 +115,8 @@ export function PreviewTable({ mappingResults }: PreviewTableProps) {
                         variant="outline"
                         className={
                           item.cmsMatch
-                            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] px-1.5 py-0"
-                            : "bg-red-500/10 text-red-500 border-red-500/20 text-[10px] px-1.5 py-0"
+                            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs px-1.5 py-0"
+                            : "bg-red-500/10 text-red-500 border-red-500/20 text-xs px-1.5 py-0"
                         }
                       >
                         {item.cmsMatch ? "YES" : "NO"}
@@ -130,19 +130,19 @@ export function PreviewTable({ mappingResults }: PreviewTableProps) {
                     </TableCell>
                     <TableCell className="text-center">
                       {item.status === "success" && (
-                        <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] hover:bg-emerald-500/10 gap-1 px-1.5 py-0">
+                        <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs hover:bg-emerald-500/10 gap-1 px-1.5 py-0">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                           Success
                         </Badge>
                       )}
                       {item.status === "warning" && (
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] gap-1 px-1.5 py-0">
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-xs gap-1 px-1.5 py-0">
                           <AlertTriangle className="w-3 h-3 text-amber-500" />
                           Warn
                         </Badge>
                       )}
                       {item.status === "error" && (
-                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 text-[10px] gap-1 px-1.5 py-0">
+                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 text-xs gap-1 px-1.5 py-0">
                           <XCircle className="w-3 h-3 text-red-500" />
                           Error
                         </Badge>

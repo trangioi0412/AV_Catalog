@@ -62,7 +62,7 @@ export function DownloadSection({
           <Button
             variant="outline"
             onClick={onDownloadReport}
-            className="flex-1 min-w-[200px] text-xs font-bold gap-2 border-blue-500/20 text-blue-500 bg-blue-500/5 hover:bg-blue-500/10 rounded-lg h-10"
+            className="flex-1 min-w-[200px] text-xs font-bold gap-2 border-primary/20 text-primary bg-primary/5 hover:bg-primary/10 rounded-lg h-10"
           >
             <FileCode className="w-4 h-4 shrink-0" />
             Download Summary Report (JSON)

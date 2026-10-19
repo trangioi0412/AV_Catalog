@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { FileUploader } from "@/components/tools/wix-translation-sync/FileUploader";
 import { ValidationPanel } from "@/components/tools/wix-translation-sync/ValidationPanel";
@@ -65,15 +66,11 @@ export default function WixTranslationSyncPage() {
       <div className="space-y-6 max-w-6xl mx-auto pb-16">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
-              <Languages className="w-6 h-6 text-primary" />
-              Wix Translation Sync Tool
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Synchronize Wix Multilingual export files with AV_Catalog CMS data.
-            </p>
-          </div>
+          <PageHeader
+            title="Wix Translation Sync"
+            description="Đồng bộ file xuất từ Wix Multilingual với dữ liệu CMS của AV_Catalog."
+            icon={<Languages className="w-5 h-5" />}
+          />
           {hasResults && (
             <Button
               variant="outline"

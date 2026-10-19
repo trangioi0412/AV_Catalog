@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { UploadCard } from "@/components/tools/cms-merge/UploadCard";
 import { MergeSettings } from "@/components/tools/cms-merge/MergeSettings";
@@ -68,15 +69,11 @@ export default function CmsMergePage() {
       <div className="space-y-6 max-w-6xl mx-auto pb-16">
         {/* Page Title & Reset Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
-              <GitMerge className="w-6 h-6 text-primary animate-pulse" />
-              CMS Merge Tool
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Merge SEO and FAQ information into AV_Catalog Product Dataset.
-            </p>
-          </div>
+          <PageHeader
+            title="Gộp dữ liệu CMS"
+            description="Gộp thông tin SEO và FAQ vào bộ dữ liệu sản phẩm AV_Catalog."
+            icon={<GitMerge className="w-5 h-5" />}
+          />
           {hasResults && (
             <Button
               variant="outline"
@@ -181,7 +178,7 @@ export default function CmsMergePage() {
               <span className="text-xs font-bold text-primary">{mergeProcessor.progress}%</span>
             </div>
             <Progress value={mergeProcessor.progress} className="h-2" />
-            <span className="text-[10px] text-muted-foreground/85 leading-none">
+            <span className="text-xs text-muted-foreground/85 leading-none">
               Please keep this page open until the merge is completed.
             </span>
           </div>

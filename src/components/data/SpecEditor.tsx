@@ -40,7 +40,7 @@ export function SpecEditor({ sheetIndex, rowIndex, specifications }: SpecEditorP
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h4 className="font-semibold text-sm">Specification Editor</h4>
-          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
             JSON Mode
           </span>
         </div>
@@ -112,13 +112,13 @@ export function SpecEditor({ sheetIndex, rowIndex, specifications }: SpecEditorP
         </div>
       )}
 
-      <div className="flex items-center gap-4 text-[10px] text-muted-foreground px-1">
+      <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
         <div className="flex items-center gap-1">
           <Check className="w-3 h-3 text-green-500" />
           Changes tracked
         </div>
         <div className="flex items-center gap-1">
-          <RefreshCcw className="w-3 h-3 text-blue-500" />
+          <RefreshCcw className="w-3 h-3 text-primary" />
           Auto-saved to store
         </div>
       </div>

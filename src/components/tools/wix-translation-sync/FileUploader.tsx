@@ -34,7 +34,7 @@ export function FileUploader({
             </div>
             <div>
               <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Target Translation Locale</Label>
-              <p className="text-[11px] text-muted-foreground/90 mt-0.5">Select the target language to map from CMS columns to the Wix Export.</p>
+              <p className="text-xs text-muted-foreground/90 mt-0.5">Select the target language to map from CMS columns to the Wix Export.</p>
             </div>
           </div>
           <div className="w-full sm:w-[220px] shrink-0">

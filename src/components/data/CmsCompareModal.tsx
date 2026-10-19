@@ -35,7 +35,7 @@ const STATUS_META: Record<CmsCompareResult["diffs"][number]["status"], { label: 
   same: { label: "Trùng khớp", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   different: { label: "Khác nhau", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
   missing_in_cms: { label: "Thiếu trên CMS", className: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
-  missing_locally: { label: "Thiếu ở local", className: "bg-slate-500/10 text-slate-600 dark:text-slate-400" },
+  missing_locally: { label: "Thiếu ở local", className: "bg-muted text-muted-foreground dark:text-muted-foreground" },
 };
 
 export function CmsCompareModal({ open, onClose, row }: CmsCompareModalProps) {
@@ -84,7 +84,7 @@ export function CmsCompareModal({ open, onClose, row }: CmsCompareModalProps) {
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <GitCompare className="w-5 h-5 text-blue-500" />
+            <GitCompare className="w-5 h-5 text-primary" />
             So sánh với CMS: {getField(row, ["Brand"])} {getField(row, ["Product", "Model"])}
           </DialogTitle>
           <DialogDescription>
@@ -94,7 +94,7 @@ export function CmsCompareModal({ open, onClose, row }: CmsCompareModalProps) {
 
         {isLoading && (
           <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <p className="text-sm">Đang tra cứu CMS...</p>
           </div>
         )}
@@ -127,17 +127,17 @@ export function CmsCompareModal({ open, onClose, row }: CmsCompareModalProps) {
                 <div key={diff.field} className="border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{diff.field}</span>
-                    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 h-5 border-0", meta.className)}>
+                    <Badge variant="outline" className={cn("text-xs px-1.5 py-0 h-5 border-0", meta.className)}>
                       {meta.label}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                     <div className="p-2 rounded bg-muted/40 break-words max-h-32 overflow-auto">
-                      <span className="text-[10px] text-muted-foreground block mb-0.5">Local (catalog)</span>
+                      <span className="text-xs text-muted-foreground block mb-0.5">Local (catalog)</span>
                       {diff.localValue || <span className="italic text-muted-foreground">(trống)</span>}
                     </div>
-                    <div className="p-2 rounded bg-blue-500/5 border border-blue-500/20 break-words max-h-32 overflow-auto">
-                      <span className="text-[10px] text-blue-600 dark:text-blue-400 block mb-0.5">CMS (Wix)</span>
+                    <div className="p-2 rounded bg-primary/5 border border-primary/20 break-words max-h-32 overflow-auto">
+                      <span className="text-xs text-primary block mb-0.5">CMS (Wix)</span>
                       {diff.cmsValue || <span className="italic text-muted-foreground">(trống)</span>}
                     </div>
                   </div>

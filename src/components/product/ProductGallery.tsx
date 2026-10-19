@@ -69,7 +69,7 @@ export function ProductGallery({ mainImage, galleryImages = [], productName }: P
 
         {/* Floating Badges / Tools */}
         <div className="absolute top-4 right-4 flex gap-2">
-          <span className="text-[10px] px-2 py-1 font-semibold tracking-wider uppercase bg-black/60 text-white border border-white/10 rounded-full backdrop-blur-md">
+          <span className="text-xs px-2 py-1 font-semibold tracking-wider uppercase bg-black/60 text-white border border-white/10 rounded-full backdrop-blur-md">
             {activeIndex + 1} / {allImages.length}
           </span>
         </div>

@@ -15,20 +15,20 @@ export default function LoginPage() {
   }, [state]);
 
   return (
-    <div className="flex min-h-screen bg-[#0a0a18] text-foreground">
+    <div className="dark flex min-h-dvh bg-[#081028] text-foreground">
 
       {/* ── LEFT PANEL: Brand showcase ─────────────────────────── */}
       <div className="hidden lg:flex lg:w-[52%] relative flex-col overflow-hidden">
 
         {/* Layered background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a18] via-[#0f0f28] to-[#0a0a18]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#081028] via-[#0F3086]/40 to-[#081028]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(0.62_0.20_263/0.30),transparent)]" />
         <div className="absolute inset-0 bg-[linear-gradient(to_right,oklch(0.5_0.1_263/6%)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.5_0.1_263/6%)_1px,transparent_1px)] bg-[size:40px_40px]" />
 
         {/* Glowing orbs */}
         <div className="absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full bg-primary/10 blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-indigo-600/8 blur-[90px] pointer-events-none" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-violet-500/5 blur-[80px] pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-primary/8 blur-[90px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-highlight/5 blur-[80px] pointer-events-none" />
 
         {/* Content */}
         <div className="relative z-10 flex flex-col h-full p-12 justify-between">
@@ -39,20 +39,20 @@ export default function LoginPage() {
               <Zap className="w-4.5 h-4.5 text-primary" />
             </div>
             <span className="text-base font-black tracking-tight text-white/90 uppercase">
-              AV <span className="text-primary">Catalog</span>
+              AVS-TEK <span className="text-primary">Catalog</span>
             </span>
           </div>
 
           {/* Hero heading */}
           <div className="space-y-8">
             <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[11px] font-bold text-primary uppercase tracking-widest">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold text-primary uppercase tracking-widest">
                 <ShieldCheck className="w-3 h-3" />
                 Admin Portal
               </div>
               <h1 className="text-5xl font-black leading-[1.05] tracking-tight text-white">
                 Quản lý<br />
-                <span className="bg-gradient-to-r from-primary via-violet-400 to-indigo-300 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-primary via-highlight to-[var(--brand-sky)] bg-clip-text text-transparent">
                   danh mục sản phẩm
                 </span>
                 <br />
@@ -76,7 +76,7 @@ export default function LoginPage() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-white">{label}</p>
-                    <p className="text-[10px] text-white/55 mt-0.5">{desc}</p>
+                    <p className="text-xs text-white/55 mt-0.5">{desc}</p>
                   </div>
                 </div>
               ))}
@@ -84,8 +84,8 @@ export default function LoginPage() {
           </div>
 
           {/* Bottom attribution */}
-          <p className="text-[10px] text-white/40 tracking-wide">
-            © 2025 AV Catalog Management System. All rights reserved.
+          <p className="text-xs text-white/40 tracking-wide">
+            © 2026 AVS-TEK · AV Catalog Management System.
           </p>
         </div>
       </div>
@@ -109,7 +109,7 @@ export default function LoginPage() {
               <Zap className="w-4 h-4 text-primary" />
             </div>
             <span className="text-sm font-black tracking-tight text-white/90 uppercase">
-              AV <span className="text-primary">Catalog</span>
+              AVS-TEK <span className="text-primary">Catalog</span>
             </span>
           </div>
 
@@ -136,7 +136,7 @@ export default function LoginPage() {
 
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="block text-[11px] font-bold uppercase tracking-widest text-white/65">
+              <label className="block text-xs font-bold uppercase tracking-widest text-white/65">
                 Địa chỉ Email
               </label>
               <div className="relative group">
@@ -155,7 +155,7 @@ export default function LoginPage() {
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="block text-[11px] font-bold uppercase tracking-widest text-white/65">
+              <label className="block text-xs font-bold uppercase tracking-widest text-white/65">
                 Mật khẩu
               </label>
               <div className="relative group">
@@ -193,8 +193,8 @@ export default function LoginPage() {
           </form>
 
           {/* Footer note */}
-          <p className="mt-8 text-center text-[11px] text-white/40 tracking-wide">
-            AV Catalog Manager &nbsp;·&nbsp; v1.0.0
+          <p className="mt-8 text-center text-xs text-white/40 tracking-wide">
+            AVS-TEK Catalog Manager &nbsp;·&nbsp; v1.0.0
           </p>
         </div>
       </div>

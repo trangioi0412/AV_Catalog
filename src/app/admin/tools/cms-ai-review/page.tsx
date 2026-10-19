@@ -16,6 +16,7 @@
  */
 
 import React from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -638,21 +639,17 @@ export default function CmsAiReviewPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-5xl mx-auto pb-16">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
-            <Bot className="w-6 h-6 text-primary" />
-            AI Kiểm Tra Dữ Liệu CMS
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Tải sản phẩm trực tiếp từ Wix CMS, chọn cột cần kiểm tra, rồi để AI rà soát và báo lỗi. Công cụ độc lập — không ảnh hưởng tới dữ liệu đang mở ở Catalog Upload.
-          </p>
-        </div>
+        <PageHeader
+          title="AI Kiểm Tra Dữ Liệu CMS"
+          description="Tải sản phẩm trực tiếp từ Wix CMS, chọn cột cần kiểm tra, rồi để AI rà soát và báo lỗi. Công cụ độc lập — không ảnh hưởng tới dữ liệu đang mở ở Catalog Upload."
+          icon={<Bot className="w-5 h-5" />}
+        />
 
         {/* Bước 1 — Tải dữ liệu */}
         <Card className="border-border/60 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Database className="w-4 h-4 text-indigo-500" />
+              <Database className="w-4 h-4 text-primary" />
               Bước 1 — Tải dữ liệu từ Wix CMS
             </CardTitle>
           </CardHeader>
@@ -673,7 +670,7 @@ export default function CmsAiReviewPage() {
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-blue-500" />
+                  <Layers className="w-4 h-4 text-primary" />
                   Bước 2 — Đồng bộ hoá tên Category (tuỳ chọn)
                 </CardTitle>
                 <Button onClick={handleClusterCategories} disabled={isClustering} size="sm" variant="outline" className="gap-2">
@@ -731,20 +728,20 @@ export default function CmsAiReviewPage() {
                                 <div className="flex-1 min-w-0 space-y-2">
                                   <div className="flex flex-wrap items-center gap-1.5">
                                     {c.members.map((m, mi) => (
-                                      <Badge key={`${i}-${mi}-${m}`} variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+                                      <Badge key={`${i}-${mi}-${m}`} variant="outline" className="text-xs px-1.5 py-0 h-5">
                                         {m} ({productsByCategory.get(m)?.length ?? 0})
                                       </Badge>
                                     ))}
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[11px] text-muted-foreground shrink-0">Tên chuẩn:</span>
+                                    <span className="text-xs text-muted-foreground shrink-0">Tên chuẩn:</span>
                                     <input
                                       value={canonical}
                                       onChange={(e) => setClusterOverrides((prev) => ({ ...prev, [i]: e.target.value }))}
                                       className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-dashed border-border/60 focus:outline-none focus:border-primary px-1"
                                     />
                                   </div>
-                                  <p className="text-[11px] text-muted-foreground">
+                                  <p className="text-xs text-muted-foreground">
                                     Sẽ đổi Category cho {affectedCount} sản phẩm.
                                   </p>
                                 </div>
@@ -765,11 +762,11 @@ export default function CmsAiReviewPage() {
               )}
               {clusterSources.length > 0 && (
                 <div className="border-t pt-2 mt-2 space-y-1">
-                  <p className="text-[11px] font-medium text-muted-foreground">Nguồn AI đã tra cứu để xác thực:</p>
+                  <p className="text-xs font-medium text-muted-foreground">Nguồn AI đã tra cứu để xác thực:</p>
                   <ul className="space-y-0.5">
                     {clusterSources.map((s, i) => (
-                      <li key={i} className="text-[11px] truncate">
-                        <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                      <li key={i} className="text-xs truncate">
+                        <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                           {s.title || s.url}
                         </a>
                       </li>
@@ -786,7 +783,7 @@ export default function CmsAiReviewPage() {
           <Card className="border-border/60 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <ScanSearch className="w-4 h-4 text-violet-500" />
+                <ScanSearch className="w-4 h-4 text-highlight" />
                 Bước 3 — Chọn phạm vi và nội dung kiểm tra
               </CardTitle>
             </CardHeader>
@@ -844,7 +841,7 @@ export default function CmsAiReviewPage() {
               </div>
 
               <p className="text-xs font-semibold border-t pt-4 flex items-center gap-1.5">
-                <Bot className="w-3.5 h-3.5 text-violet-500" />
+                <Bot className="w-3.5 h-3.5 text-highlight" />
                 Kiểm tra bằng AI
               </p>
               <p className="text-xs text-muted-foreground">
@@ -896,7 +893,7 @@ export default function CmsAiReviewPage() {
               {findingCountsByCategory.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pb-1">
                   {findingCountsByCategory.map(([cat, count]) => (
-                    <Badge key={cat} variant="secondary" className="text-[10px]">
+                    <Badge key={cat} variant="secondary" className="text-xs">
                       {CATEGORY_LABELS[cat] || cat}: {count}
                     </Badge>
                   ))}
@@ -917,15 +914,15 @@ export default function CmsAiReviewPage() {
                         >
                           {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           <span className="text-xs font-semibold">{p.brand} {p.product}</span>
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 ml-auto">{findings.length} vấn đề</Badge>
+                          <Badge variant="outline" className="text-xs px-1.5 py-0 h-4 ml-auto">{findings.length} vấn đề</Badge>
                         </button>
                         {isOpen && (
                           <div className="divide-y">
                             {findings.map((f, i) => (
                               <div key={i} className="px-3 py-2.5 text-xs space-y-1">
                                 <div className="flex items-center gap-1.5">
-                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">{CATEGORY_LABELS[f.category] || f.category}</Badge>
-                                  <span className="text-[9px] text-muted-foreground">{f.source === "rule" ? "Quy tắc" : "AI"}</span>
+                                  <Badge variant="outline" className="text-xs px-1.5 py-0 h-4">{CATEGORY_LABELS[f.category] || f.category}</Badge>
+                                  <span className="text-xs text-muted-foreground">{f.source === "rule" ? "Quy tắc" : "AI"}</span>
                                 </div>
                                 <p className="text-muted-foreground">{f.message}</p>
                               </div>
@@ -943,14 +940,14 @@ export default function CmsAiReviewPage() {
 
         {/* Bước 5 — Sửa bằng AI */}
         {hasReviewed && aiFlaggedProducts.length > 0 && (
-          <Card className="border-violet-500/20 shadow-sm">
+          <Card className="border-highlight/20 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Wrench className="w-4 h-4 text-violet-500" />
+                  <Wrench className="w-4 h-4 text-highlight" />
                   Bước 5 — Sửa bằng AI (qwen3.5:9b)
                 </CardTitle>
-                <Button onClick={handleRunFix} disabled={isFixing} size="sm" className="gap-2 bg-violet-600 hover:bg-violet-700">
+                <Button onClick={handleRunFix} disabled={isFixing} size="sm" className="gap-2 bg-highlight hover:bg-highlight/90 text-highlight-foreground">
                   {isFixing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wrench className="w-3.5 h-3.5" />}
                   {isFixing
                     ? `Đang đề xuất (${fixProgress.done}/${fixProgress.total})`
@@ -983,10 +980,10 @@ export default function CmsAiReviewPage() {
                         <div key={productId} className="border rounded-lg overflow-hidden">
                           <div className="flex items-center gap-2 bg-muted/40 px-3 py-2">
                             <span className="text-xs font-semibold">{brand} {product}</span>
-                            <span className="text-[10px] text-muted-foreground ml-auto">{selectedCount}/{changes.length}</span>
+                            <span className="text-xs text-muted-foreground ml-auto">{selectedCount}/{changes.length}</span>
                           </div>
                           {note && (
-                            <p className="px-3 pt-2 text-[11px] text-muted-foreground italic">Ghi chú AI: {note}</p>
+                            <p className="px-3 pt-2 text-xs text-muted-foreground italic">Ghi chú AI: {note}</p>
                           )}
                           <div className="divide-y">
                             {changes.map((c) => (
@@ -997,14 +994,14 @@ export default function CmsAiReviewPage() {
                                   className="mt-1"
                                 />
                                 <div className="flex-1 min-w-0 space-y-1">
-                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{c.field}</span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{c.field}</span>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                                     <div className="p-2 rounded bg-muted/40 break-words max-h-28 overflow-auto">
-                                      <span className="text-[9px] text-muted-foreground block mb-0.5">Hiện tại (CMS)</span>
+                                      <span className="text-xs text-muted-foreground block mb-0.5">Hiện tại (CMS)</span>
                                       {c.oldValue || <span className="italic text-muted-foreground">(trống)</span>}
                                     </div>
-                                    <div className="p-2 rounded bg-violet-500/5 border border-violet-500/20 break-words max-h-28 overflow-auto">
-                                      <span className="text-[9px] text-violet-600 dark:text-violet-400 block mb-0.5">AI đề xuất</span>
+                                    <div className="p-2 rounded bg-highlight/5 border border-highlight/20 break-words max-h-28 overflow-auto">
+                                      <span className="text-xs text-highlight block mb-0.5">AI đề xuất</span>
                                       {c.newValue || <span className="italic text-muted-foreground">(xoá)</span>}
                                     </div>
                                   </div>
@@ -1017,7 +1014,7 @@ export default function CmsAiReviewPage() {
                     })}
                   </div>
                   <div className="flex items-center justify-end pt-2">
-                    <Button onClick={handleApplyFixes} disabled={isApplyingFixes} className="gap-2 bg-violet-600 hover:bg-violet-700">
+                    <Button onClick={handleApplyFixes} disabled={isApplyingFixes} className="gap-2 bg-highlight hover:bg-highlight/90 text-highlight-foreground">
                       {isApplyingFixes ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
                       Áp dụng đã chọn lên CMS
                     </Button>

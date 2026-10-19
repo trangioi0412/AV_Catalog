@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -84,7 +85,7 @@ interface RunSummary {
 }
 
 const STATUS_LABEL: Record<ItemStatus, { label: string; className: string }> = {
-  translated: { label: "Đã dịch — chờ duyệt", className: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  translated: { label: "Đã dịch — chờ duyệt", className: "bg-primary/10 text-primary border-primary/20" },
   updated: { label: "Đã ghi vào CMS", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
   skipped: { label: "Bỏ qua", className: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
   failed: { label: "Thất bại", className: "bg-red-500/10 text-red-600 border-red-500/20" },
@@ -630,15 +631,11 @@ export default function CmsTranslatePage() {
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-6xl mx-auto pb-16">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
-            <Languages className="w-6 h-6 text-primary" />
-            Dịch CMS Anh → Việt
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Đọc field trực tiếp từ Wix CMS, dịch bằng AI để xem trước, rồi chỉ ghi vào field còn lại sau khi bạn đã kiểm tra và duyệt — không dùng Wix Multilingual. Hỗ trợ cả 2 chiều Anh ↔ Việt.
-          </p>
-        </div>
+        <PageHeader
+          title="Dịch CMS Anh → Việt"
+          description="Đọc field trực tiếp từ Wix CMS, dịch bằng AI để xem trước, rồi chỉ ghi vào field còn lại sau khi bạn đã kiểm tra và duyệt — không dùng Wix Multilingual. Hỗ trợ cả 2 chiều Anh ↔ Việt."
+          icon={<Languages className="w-5 h-5" />}
+        />
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
@@ -687,6 +684,7 @@ export default function CmsTranslatePage() {
                     className="shrink-0"
                     onClick={reverseDirection}
                     title="Đảo chiều và đổi field nguồn/đích cho từng cặp đã chọn"
+                    aria-label="Đảo chiều dịch"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5" />
                   </Button>
@@ -713,7 +711,7 @@ export default function CmsTranslatePage() {
               ) : fieldsError ? (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-600">
                   <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" />{fieldsError}</span>
-                  <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={() => loadFields()}>Thử lại</Button>
+                  <Button size="sm" variant="outline" className="h-6 text-xs shrink-0" onClick={() => loadFields()}>Thử lại</Button>
                 </div>
               ) : availableFields.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">Collection này chưa có field nào để chọn.</p>
@@ -730,7 +728,7 @@ export default function CmsTranslatePage() {
                               {availableFields.map((f) => (
                                 <SelectItem key={f.key} value={f.key}>
                                   {f.displayName}
-                                  <span className="text-muted-foreground text-[10px] ml-1">({f.key} · {f.type})</span>
+                                  <span className="text-muted-foreground text-xs ml-1">({f.key} · {f.type})</span>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -756,7 +754,7 @@ export default function CmsTranslatePage() {
                               {availableFields.map((f) => (
                                 <SelectItem key={f.key} value={f.key}>
                                   {f.displayName}
-                                  <span className="text-muted-foreground text-[10px] ml-1">({f.key} · {f.type})</span>
+                                  <span className="text-muted-foreground text-xs ml-1">({f.key} · {f.type})</span>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -780,14 +778,14 @@ export default function CmsTranslatePage() {
                           </Button>
                         </div>
                         {isInPlace && (
-                          <p className="text-[11px] text-amber-700 flex items-center gap-1.5 pl-1">
+                          <p className="text-xs text-amber-700 flex items-center gap-1.5 pl-1">
                             <AlertTriangle className="w-3 h-3 shrink-0" />
                             Field này không có bản {targetLocale.toUpperCase()} riêng — bản dịch sẽ GHI ĐÈ vĩnh viễn lên nội dung {sourceLocale.toUpperCase()} gốc.
                             {!overwrite && ' Cần bật "Ghi đè nội dung hiện có" bên dưới, nếu không field này sẽ bị bỏ qua.'}
                           </p>
                         )}
                         {mapping.type === "json" && (
-                          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pl-1">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5 pl-1">
                             Field này phải là mảng/object (VD: danh sách FAQ) — mọi chuỗi text bên trong sẽ được dịch, giữ nguyên cấu trúc. Ở bước duyệt, nội dung hiện dưới dạng JSON, sửa tay vẫn phải là JSON hợp lệ.
                           </p>
                         )}
@@ -910,19 +908,19 @@ export default function CmsTranslatePage() {
                               <span>{item.name}</span>
                               {item.translated ? (
                                 <div>
-                                  <Badge variant="outline" className="text-[9px] font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                  <Badge variant="outline" className="text-xs font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
                                     Đã dịch đủ
                                   </Badge>
                                 </div>
                               ) : item.untranslatedFields.length > 0 ? (
                                 <div className="flex flex-wrap gap-1" title={item.untranslatedFields.map((k) => fieldDisplayNameByKey[k] || k).join(", ")}>
                                   {shownMissing.map((key) => (
-                                    <Badge key={key} variant="outline" className="text-[9px] font-normal bg-red-500/5 text-red-600 border-red-500/20">
+                                    <Badge key={key} variant="outline" className="text-xs font-normal bg-red-500/5 text-red-600 border-red-500/20">
                                       {fieldDisplayNameByKey[key] || key}
                                     </Badge>
                                   ))}
                                   {extraMissing > 0 && (
-                                    <Badge variant="outline" className="text-[9px] font-normal">+{extraMissing}</Badge>
+                                    <Badge variant="outline" className="text-xs font-normal">+{extraMissing}</Badge>
                                   )}
                                 </div>
                               ) : null}
@@ -962,7 +960,7 @@ export default function CmsTranslatePage() {
                 </div>
                 <Progress value={(previewProgress.done / Math.max(1, previewProgress.total)) * 100} />
                 {previewProgress.lastItemName && (
-                  <p className="text-[11px] text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground truncate">
                     Vừa xử lý xong: <span className="font-medium text-foreground">{previewProgress.lastItemName}</span>
                   </p>
                 )}
@@ -1062,7 +1060,7 @@ export default function CmsTranslatePage() {
                 </div>
                 <Progress value={(writeProgress.done / Math.max(1, writeProgress.total)) * 100} />
                 {writeProgress.lastItemName && (
-                  <p className="text-[11px] text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground truncate">
                     Vừa ghi xong: <span className="font-medium text-foreground">{writeProgress.lastItemName}</span>
                   </p>
                 )}
@@ -1126,7 +1124,7 @@ export default function CmsTranslatePage() {
                 <div className="rounded-xl border p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold text-sm">{currentReviewItem.name}</span>
-                    <Badge variant="outline" className={cn("text-[10px] font-bold", STATUS_LABEL[currentReviewItem.status].className)}>
+                    <Badge variant="outline" className={cn("text-xs font-bold", STATUS_LABEL[currentReviewItem.status].className)}>
                       {STATUS_LABEL[currentReviewItem.status].label}
                     </Badge>
                   </div>
@@ -1141,17 +1139,17 @@ export default function CmsTranslatePage() {
                           <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
                             <Checkbox checked={included} onCheckedChange={() => toggleFieldIncluded(currentReviewItem.itemId, key)} />
                             Ghi field &quot;{fieldDisplayNameByKey[key] || key}&quot; cho sản phẩm này
-                            {isJson && <span className="text-[10px] font-normal text-muted-foreground">(JSON)</span>}
+                            {isJson && <span className="text-xs font-normal text-muted-foreground">(JSON)</span>}
                           </label>
                           <div className={cn("grid grid-cols-1 lg:grid-cols-2 gap-3", !included && "opacity-40")}>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{key} (gốc {sourceLocale.toUpperCase()})</label>
+                              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{key} (gốc {sourceLocale.toUpperCase()})</label>
                               <div className={cn(boxHeight, "w-full p-2.5 text-xs rounded-lg border bg-muted/40 whitespace-pre-wrap", isJson && "font-mono overflow-y-auto max-h-64")}>
                                 {field.source || <span className="italic text-muted-foreground">(Trống)</span>}
                               </div>
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{key} (bản dịch {targetLocale.toUpperCase()} — có thể sửa)</label>
+                              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{key} (bản dịch {targetLocale.toUpperCase()} — có thể sửa)</label>
                               <textarea
                                 value={field.translated}
                                 onChange={(e) => handleEditTranslated(currentReviewItem.itemId, key, e.target.value)}
@@ -1195,9 +1193,9 @@ export default function CmsTranslatePage() {
                           return (
                             <TableRow key={item.itemId}>
                               <TableCell className="font-medium max-w-[220px] truncate" title={item.name}>{item.name}</TableCell>
-                              <TableCell className="font-mono text-[11px] text-muted-foreground max-w-[160px] truncate" title={item.itemId}>{item.itemId}</TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground max-w-[160px] truncate" title={item.itemId}>{item.itemId}</TableCell>
                               <TableCell>
-                                <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
+                                <Badge variant="outline" className={cn("text-xs font-bold", status.className)}>{status.label}</Badge>
                               </TableCell>
                               <TableCell className="text-xs text-muted-foreground max-w-[420px]">
                                 {item.error ? (
@@ -1258,9 +1256,9 @@ export default function CmsTranslatePage() {
                       return (
                         <TableRow key={item.itemId}>
                           <TableCell className="font-medium max-w-[220px] truncate" title={item.name}>{item.name}</TableCell>
-                          <TableCell className="font-mono text-[11px] text-muted-foreground max-w-[160px] truncate" title={item.itemId}>{item.itemId}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground max-w-[160px] truncate" title={item.itemId}>{item.itemId}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={cn("text-[10px] font-bold", status.className)}>{status.label}</Badge>
+                            <Badge variant="outline" className={cn("text-xs font-bold", status.className)}>{status.label}</Badge>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[420px]">
                             {item.error ? (

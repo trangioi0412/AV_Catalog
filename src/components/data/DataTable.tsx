@@ -347,7 +347,7 @@ export function DataTable() {
             <Badge
               variant="outline"
               className={cn(
-                "text-[10px] px-1.5 py-0 h-4",
+                "text-xs px-1.5 py-0 h-4",
                 isAllSheets ? "border-primary-foreground/30 text-primary-foreground" : ""
               )}
             >
@@ -367,7 +367,7 @@ export function DataTable() {
               <Badge
                 variant="outline"
                 className={cn(
-                  "text-[10px] px-1.5 py-0 h-4",
+                  "text-xs px-1.5 py-0 h-4",
                   activeSheetIndex === index ? "border-primary-foreground/30 text-primary-foreground" : ""
                 )}
               >
@@ -470,13 +470,13 @@ export function DataTable() {
               animate={{ opacity: 1, scale: 1 }}
               className="flex items-center gap-1.5 bg-primary/5 pl-2.5 pr-1.5 py-0.5 rounded-lg border border-primary/20 h-8 shrink-0 shadow-sm"
             >
-              <span className="text-[11px] font-semibold text-primary px-1">
+              <span className="text-xs font-semibold text-primary px-1">
                 {selectedRows.size} selected
               </span>
               <Button 
                 size="sm" 
                 variant="destructive" 
-                className="h-7 gap-1 text-[11px] px-2.5"
+                className="h-7 gap-1 text-xs px-2.5"
                 onClick={() => setDeleteTarget({ type: "bulk" })}
               >
                 <Trash2 className="w-3 h-3" />
@@ -485,7 +485,7 @@ export function DataTable() {
               <Button 
                 size="sm" 
                 variant="secondary" 
-                className="h-7 gap-1 text-[11px] px-2.5"
+                className="h-7 gap-1 text-xs px-2.5"
                 onClick={() => toast.info("Bulk edit feature coming soon")}
               >
                 <Settings2 className="w-3 h-3" />
@@ -629,7 +629,7 @@ export function DataTable() {
                               String(row[col])
                             )}
                             {isModified && (
-                              <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-primary/5 text-primary border-primary/20">
+                              <Badge variant="outline" className="text-xs h-3.5 px-1 bg-primary/5 text-primary border-primary/20">
                                 Mapped
                               </Badge>
                             )}
@@ -643,7 +643,7 @@ export function DataTable() {
                         <Badge
                           variant="outline"
                           className={cn(
-                            "text-[10px] px-1.5 py-0 h-5 capitalize font-medium",
+                            "text-xs px-1.5 py-0 h-5 capitalize font-medium",
                             row.validationState === "valid" && "status-valid",
                             row.validationState === "warning" && "status-warning",
                             row.validationState === "error" && "status-error"
@@ -652,12 +652,12 @@ export function DataTable() {
                           {row.validationState}
                         </Badge>
                         {row.isEdited && (
-                          <Badge variant="outline" className="status-edited text-[10px] px-1.5 py-0 h-5">
+                          <Badge variant="outline" className="status-edited text-xs px-1.5 py-0 h-5">
                             Edited
                           </Badge>
                         )}
                         {(row.aiAppliedFixes?.length ?? 0) > 0 && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-violet-500/30 text-violet-600 dark:text-violet-400">
+                          <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 border-highlight/30 text-highlight">
                             AI đã sửa ({row.aiAppliedFixes!.length})
                           </Badge>
                         )}
@@ -675,7 +675,8 @@ export function DataTable() {
                               size="icon" 
                               className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
                               asChild
-                              title="View Detail"
+                              title="Xem chi tiết"
+                              aria-label="Xem chi tiết sản phẩm"
                             >
                               <Link href={`/products/${slug}`} target="_blank">
                                 <Eye className="w-4 h-4" />
@@ -685,7 +686,7 @@ export function DataTable() {
                         })()}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Thao tác khác">
                               <MoreHorizontal className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -711,7 +712,7 @@ export function DataTable() {
                               <FileJson className="w-4 h-4 mr-2" />
                               Copy as JSON
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setAiFixTargetId(row.id)} className="text-violet-600 dark:text-violet-400">
+                            <DropdownMenuItem onClick={() => setAiFixTargetId(row.id)} className="text-highlight">
                               <Bot className="w-4 h-4 mr-2" />
                               AI Sửa (tra cứu theo hãng)
                             </DropdownMenuItem>
@@ -719,7 +720,7 @@ export function DataTable() {
                               <Languages className="w-4 h-4 mr-2" />
                               Dịch đồng nhất (lẫn Anh/Việt)
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setCmsCompareTargetId(row.id)} className="text-blue-600 dark:text-blue-400">
+                            <DropdownMenuItem onClick={() => setCmsCompareTargetId(row.id)} className="text-primary">
                               <GitCompare className="w-4 h-4 mr-2" />
                               So sánh với CMS
                             </DropdownMenuItem>
@@ -755,7 +756,7 @@ export function DataTable() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="gap-2 border-violet-500/30 text-violet-600 hover:bg-violet-500/10 dark:text-violet-400"
+                                  className="gap-2 border-highlight/30 text-highlight hover:bg-highlight/10"
                                   onClick={() => setAiFixTargetId(row.id)}
                                 >
                                   <Bot className="w-3.5 h-3.5" />
@@ -772,7 +773,7 @@ export function DataTable() {
                               {/* Left side: Original raw data preview */}
                               <div className="space-y-4">
                                 <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Raw Product Data</Label>
-                                <div className="p-4 rounded-xl border bg-background/50 font-mono text-[11px] space-y-2 max-h-[400px] overflow-auto">
+                                <div className="p-4 rounded-xl border bg-background/50 font-mono text-xs space-y-2 max-h-[400px] overflow-auto">
                                   {Object.entries(row).map(([key, val]) => {
                                     if (["id", "parsedSpecifications", "transformedSpecifications", "validationState", "parsingErrors", "isEdited", "originalValues", "lastModified", "aiReviewFindings", "aiFixSuggestion", "aiAppliedFixes"].includes(key)) return null;
                                     return (
@@ -811,21 +812,21 @@ export function DataTable() {
                                   </div>
                                 )}
                                 {(row.aiAppliedFixes?.length ?? 0) > 0 && (
-                                  <div className="p-4 rounded-lg bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 text-violet-800 dark:text-violet-200 text-xs">
+                                  <div className="p-4 rounded-lg bg-highlight/5 dark:bg-highlight/10 border border-highlight/30 dark:border-highlight/20 text-highlight text-xs">
                                     <div className="flex items-center gap-2 font-bold mb-2">
-                                      <Bot className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                                      <Bot className="w-4 h-4 text-highlight" />
                                       AI đã sửa ({row.aiAppliedFixes!.length} trường)
                                     </div>
                                     <div className="max-h-[200px] overflow-y-auto pr-1 space-y-2">
                                       {row.aiAppliedFixes!.map((fix, i) => (
-                                        <div key={i} className="border-b border-violet-200/50 dark:border-violet-500/20 pb-1.5 last:border-0">
+                                        <div key={i} className="border-b border-highlight/30 dark:border-highlight/20 pb-1.5 last:border-0">
                                           <div className="font-semibold flex items-center gap-1.5">
                                             {fix.field}
-                                            <span className="text-[9px] px-1 rounded bg-violet-500/15 font-normal">
+                                            <span className="text-xs px-1 rounded bg-highlight/15 font-normal">
                                               {fix.engine === "gemini" ? "Gemini" : fix.engine === "translation" ? "Dịch AI" : "qwen3.5:9b"}
                                             </span>
                                           </div>
-                                          <div className="text-[10px] opacity-80 break-words">
+                                          <div className="text-xs opacity-80 break-words">
                                             <span className="line-through opacity-60">{fix.oldValue || "(trống)"}</span>
                                             {" → "}
                                             <span>{fix.newValue || "(trống)"}</span>

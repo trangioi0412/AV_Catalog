@@ -40,7 +40,7 @@ export function Pager({
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-1 pt-1">
-      <p className="text-[11px] text-muted-foreground order-2 sm:order-1">
+      <p className="text-xs text-muted-foreground order-2 sm:order-1">
         {isShowingAll ? (
           <>Hiển thị tất cả <strong>{total}</strong> {unitLabel}</>
         ) : (
@@ -51,7 +51,7 @@ export function Pager({
       </p>
       <div className="flex items-center gap-2 order-1 sm:order-2">
         <Select value={String(pageSize)} onValueChange={(val) => onPageSizeChange(val === "all" ? PAGER_SHOW_ALL : Number(val))}>
-          <SelectTrigger size="sm" className="h-7 w-[86px] text-[11px]">
+          <SelectTrigger size="sm" className="h-7 w-[86px] text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -66,17 +66,17 @@ export function Pager({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-[11px]"
+              className="h-7 px-2 text-xs"
               disabled={page <= 1}
               onClick={() => onPageChange(Math.max(1, page - 1))}
             >
               Trước
             </Button>
-            <span className="text-[11px] text-muted-foreground px-1">{page}/{totalPages}</span>
+            <span className="text-xs text-muted-foreground px-1">{page}/{totalPages}</span>
             <Button
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-[11px]"
+              className="h-7 px-2 text-xs"
               disabled={page >= totalPages}
               onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             >

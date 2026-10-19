@@ -13,7 +13,7 @@ const CATEGORY_META: Record<AiReviewCategory, { label: string; color: string }> 
   missing_specs: { label: "Thông số thiếu/sơ sài", color: "bg-amber-500" },
   invalid_name: { label: "Tên sản phẩm lỗi", color: "bg-orange-500" },
   placeholder_data: { label: "Còn sót placeholder", color: "bg-yellow-500" },
-  duplicate_content: { label: "Nội dung trùng lặp", color: "bg-purple-500" },
+  duplicate_content: { label: "Nội dung trùng lặp", color: "bg-highlight" },
   mixed_language: { label: "Lẫn Anh/Việt", color: "bg-cyan-500" },
   other: { label: "Khác", color: "bg-slate-500" },
 };
@@ -69,9 +69,9 @@ export function AiReviewDashboard() {
 
   if (stats.scannedCount === 0) {
     return (
-      <Card className="border-dashed border-violet-500/30 bg-violet-500/5">
+      <Card className="border-dashed border-highlight/30 bg-highlight/5">
         <CardContent className="py-6 flex items-center gap-3 text-sm text-muted-foreground">
-          <Bot className="w-5 h-5 text-violet-500 shrink-0" />
+          <Bot className="w-5 h-5 text-highlight shrink-0" />
           Chưa chạy AI Review — nhấn <span className="font-semibold text-foreground">&quot;Kiểm tra AI&quot;</span> ở trên để rà soát chất lượng dữ liệu cho {stats.totalProducts.toLocaleString()} sản phẩm.
         </CardContent>
       </Card>
@@ -86,8 +86,8 @@ export function AiReviewDashboard() {
     {
       title: "Đã quét bằng AI",
       value: stats.scannedCount,
-      icon: <ScanSearch className="w-5 h-5 text-violet-500" />,
-      color: "from-violet-500/20 to-violet-500/5",
+      icon: <ScanSearch className="w-5 h-5 text-highlight" />,
+      color: "from-highlight/20 to-highlight/5",
       note: `${scannedPct}% trong ${stats.totalProducts.toLocaleString()} sản phẩm`,
     },
     {

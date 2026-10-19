@@ -164,11 +164,11 @@ export function AiFixDashboard() {
     : appliedFixes.slice((effectiveAppliedPage - 1) * appliedPageSize, effectiveAppliedPage * appliedPageSize);
 
   return (
-    <Card className="border border-violet-500/20 shadow-sm">
+    <Card className="border border-highlight/20 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            <Bot className="w-4 h-4 text-violet-500" />
+            <Bot className="w-4 h-4 text-highlight" />
             AI Fix
           </CardTitle>
           <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ export function AiFixDashboard() {
                 </Button>
                 <Button
                   size="sm"
-                  className="gap-1.5 h-7 text-xs bg-violet-600 hover:bg-violet-700"
+                  className="gap-1.5 h-7 text-xs bg-highlight hover:bg-highlight/90 text-highlight-foreground"
                   onClick={handleApplySelected}
                   disabled={selectedCount === 0}
                 >
@@ -206,7 +206,7 @@ export function AiFixDashboard() {
           >
             <Wrench className="w-3 h-3" />
             Đang chờ duyệt
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{productCount}</Badge>
+            <Badge variant="outline" className="text-xs px-1 py-0 h-4">{productCount}</Badge>
           </button>
           <button
             onClick={() => setView("applied")}
@@ -217,7 +217,7 @@ export function AiFixDashboard() {
           >
             <History className="w-3 h-3" />
             Đã áp dụng
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{appliedProductCount}</Badge>
+            <Badge variant="outline" className="text-xs px-1 py-0 h-4">{appliedProductCount}</Badge>
           </button>
         </div>
       </CardHeader>
@@ -236,19 +236,19 @@ export function AiFixDashboard() {
                     <div key={f.key} className="border rounded-lg p-2.5">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-xs font-semibold">{f.brand} {f.product}</span>
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{f.field}</span>
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{f.field}</span>
+                        <Badge variant="outline" className="text-xs px-1.5 py-0 h-4">
                           {f.engine === "gemini" ? "Gemini" : f.engine === "translation" ? "Dịch AI" : "qwen3.5:9b"}
                         </Badge>
-                        <span className="text-[9px] text-muted-foreground ml-auto">{new Date(f.appliedAt).toLocaleString("vi-VN")}</span>
+                        <span className="text-xs text-muted-foreground ml-auto">{new Date(f.appliedAt).toLocaleString("vi-VN")}</span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                         <div className="p-2 rounded bg-muted/40 break-words max-h-28 overflow-auto">
-                          <span className="text-[9px] text-muted-foreground block mb-0.5">Trước</span>
+                          <span className="text-xs text-muted-foreground block mb-0.5">Trước</span>
                           {f.oldValue || <span className="italic text-muted-foreground">(trống)</span>}
                         </div>
                         <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20 break-words max-h-28 overflow-auto">
-                          <span className="text-[9px] text-emerald-600 dark:text-emerald-400 block mb-0.5">Sau</span>
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400 block mb-0.5">Sau</span>
                           {f.newValue || <span className="italic text-muted-foreground">(đã xoá)</span>}
                         </div>
                       </div>
@@ -282,7 +282,7 @@ export function AiFixDashboard() {
                 {allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
               </span>
               {declinedCount > 0 && (
-                <span className="text-muted-foreground/70 ml-2">({declinedCount} sản phẩm AI không sửa được gì)</span>
+                <span className="text-muted-foreground ml-2">({declinedCount} sản phẩm AI không sửa được gì)</span>
               )}
             </div>
 
@@ -306,10 +306,10 @@ export function AiFixDashboard() {
                           onCheckedChange={(v) => toggleProduct(rowId, Boolean(v))}
                         />
                         <span className="text-xs font-semibold">{brand} {product}</span>
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 ml-auto">
+                        <Badge variant="outline" className="text-xs px-1.5 py-0 h-4 ml-auto">
                           {engine === "gemini" ? "Gemini" : "qwen3.5:9b"}
                         </Badge>
-                        <span className="text-[10px] text-muted-foreground">{productSelectedCount}/{productChanges.length}</span>
+                        <span className="text-xs text-muted-foreground">{productSelectedCount}/{productChanges.length}</span>
                       </div>
 
                       {!isCollapsed && (
@@ -322,14 +322,14 @@ export function AiFixDashboard() {
                                 className="mt-1"
                               />
                               <div className="flex-1 min-w-0 space-y-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{c.field}</span>
+                                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{c.field}</span>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                                   <div className="p-2 rounded bg-muted/40 break-words max-h-28 overflow-auto">
-                                    <span className="text-[9px] text-muted-foreground block mb-0.5">Trước</span>
+                                    <span className="text-xs text-muted-foreground block mb-0.5">Trước</span>
                                     {c.oldValue || <span className="italic text-muted-foreground">(trống)</span>}
                                   </div>
-                                  <div className="p-2 rounded bg-violet-500/5 border border-violet-500/20 break-words max-h-28 overflow-auto">
-                                    <span className="text-[9px] text-violet-600 dark:text-violet-400 block mb-0.5">Sau (AI đề xuất)</span>
+                                  <div className="p-2 rounded bg-highlight/5 border border-highlight/20 break-words max-h-28 overflow-auto">
+                                    <span className="text-xs text-highlight block mb-0.5">Sau (AI đề xuất)</span>
                                     {c.newValue || <span className="italic text-muted-foreground">(xoá)</span>}
                                   </div>
                                 </div>

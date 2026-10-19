@@ -340,7 +340,12 @@ export const getActiveBrandsForPublicPage = cache(async (): Promise<WixBrand[]> 
  * exists — admin tools want `getAllProducts()` (always live); the public
  * product page wants `getAllProductsForPublicPage()` (ISR-cached) instead.
  */
-async function queryAllProducts(fetchCacheInit: Pick<RequestInit, "cache" | "next">): Promise<WixProduct[]> {
+async function queryAllProducts(
+  fetchCacheInit: Pick<RequestInit, "cache" | "next">,
+  // Wix accepts up to 1000 per page. Cached (fetch-cache) callers must keep
+  // pages small: Next's data cache rejects entries over 2MB.
+  pageSize = 100
+): Promise<WixProduct[]> {
   const headers = getWixHeaders();
   if (!headers) {
     console.warn("Wix credentials not configured — skipping getAllProducts");
@@ -351,7 +356,7 @@ async function queryAllProducts(fetchCacheInit: Pick<RequestInit, "cache" | "nex
   let allProducts: WixProduct[] = [];
   let offset = 0;
   let hasMore = true;
-  const limit = 100;
+  const limit = pageSize;
 
   while (hasMore) {
     const response = await fetch(url, {
@@ -395,7 +400,55 @@ async function queryAllProducts(fetchCacheInit: Pick<RequestInit, "cache" | "nex
 
 /** Admin/tooling use — always live data, never cached. */
 export async function getAllProducts(): Promise<WixProduct[]> {
-  return queryAllProducts({ cache: "no-store" });
+  // no-store is not subject to the fetch-cache 2MB limit, so use max-size
+  // pages: ~1,300 products is 2 requests instead of 13 sequential ones.
+  return queryAllProducts({ cache: "no-store" }, 1000);
+}
+
+// ─── Short-lived admin read cache ─────────────────────────────────────────
+// The admin dashboard reads the whole product + brand collections on every
+// visit. Next's data cache (unstable_cache / fetch cache) rejects entries over
+// 2MB and the full product list is several MB, so this is a plain in-process
+// TTL cache. Concurrent callers share one in-flight request; failures are not
+// cached. CMS writes in this module call invalidateAdminCmsCache().
+const ADMIN_CACHE_TTL_MS = 60_000;
+
+type AdminCacheEntry = { value?: unknown; expiresAt: number; inflight?: Promise<unknown> };
+const adminCache = new Map<string, AdminCacheEntry>();
+
+function readThroughAdminCache<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const entry = adminCache.get(key);
+  if (entry?.inflight) return entry.inflight as Promise<T>;
+  if (entry && "value" in entry && entry.expiresAt > Date.now()) {
+    return Promise.resolve(entry.value as T);
+  }
+  const inflight = load().then(
+    (value) => {
+      adminCache.set(key, { value, expiresAt: Date.now() + ADMIN_CACHE_TTL_MS });
+      return value;
+    },
+    (err) => {
+      adminCache.delete(key);
+      throw err;
+    }
+  );
+  adminCache.set(key, { expiresAt: 0, inflight });
+  return inflight;
+}
+
+/** Drops cached admin reads so the next dashboard load fetches live data. */
+export function invalidateAdminCmsCache(): void {
+  adminCache.clear();
+}
+
+/** getAllProducts() behind the 60s admin read cache (dashboard use). */
+export function getAllProductsCached(): Promise<WixProduct[]> {
+  return readThroughAdminCache("products", getAllProducts);
+}
+
+/** getActiveBrands() behind the 60s admin read cache (dashboard use). */
+export function getActiveBrandsCached(): Promise<WixBrand[]> {
+  return readThroughAdminCache("brands", getActiveBrands);
 }
 
 /**
@@ -659,6 +712,7 @@ export async function updateCmsProductFields(
   fields: Partial<Pick<WixProduct, "Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications">>,
   options?: { itemId?: string }
 ): Promise<{ found: boolean; success: boolean; itemId?: string; error?: string }> {
+  invalidateAdminCmsCache();
   const headers = getWixHeaders();
   if (!headers) return { found: false, success: false, error: "Wix credentials not configured." };
 
@@ -811,6 +865,7 @@ async function buildCmsData(product: WixProduct, existingItemData?: any): Promis
  * Inserts or updates (upserts) a product into the Wix "Products" collection (Import1).
  */
 export async function insertProduct(product: WixProduct): Promise<WixProduct> {
+  invalidateAdminCmsCache();
   const headers = getWixHeaders();
   if (!headers) {
     throw new Error("Wix credentials not configured. Cannot insert product.");
@@ -1278,6 +1333,7 @@ export async function updateProductImages(
   imageField = "image",
   galleryField = "galleryImages"
 ): Promise<WixPatchResult> {
+  invalidateAdminCmsCache();
   const headers = getWixHeaders();
   if (!headers) {
     return { _id: itemId, success: false, error: "Wix credentials not configured." };
@@ -1584,6 +1640,7 @@ export async function clearProductDocumentFields(
   collectionId = "Import1",
   fieldsToClear: string[]
 ): Promise<{ success: boolean; error?: string }> {
+  invalidateAdminCmsCache();
   const headers = getWixHeaders();
   if (!headers) {
     return { success: false, error: "Wix credentials not configured." };
@@ -1646,6 +1703,7 @@ export async function deleteProductFromCms(
   itemId: string,
   collectionId = "Import1"
 ): Promise<{ success: boolean; error?: string }> {
+  invalidateAdminCmsCache();
   const headers = getWixHeaders();
   if (!headers) {
     return { success: false, error: "Wix credentials not configured." };

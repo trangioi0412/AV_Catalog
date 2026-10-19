@@ -23,8 +23,8 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
       value: summary.totalProducts,
       description: "Total rows in products database",
       icon: FileSpreadsheet,
-      colorClass: "text-blue-500 bg-blue-500/10 border-blue-500/20",
-      gradient: "from-blue-500/5 to-transparent",
+      colorClass: "text-primary bg-primary/10 border-primary/20",
+      gradient: "from-primary/5 to-transparent",
     },
     {
       title: "Matched Records",
@@ -47,8 +47,8 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
       value: summary.missingCount,
       description: "IDs in SEO missing in products",
       icon: HelpCircle,
-      colorClass: "text-purple-500 bg-purple-500/10 border-purple-500/20",
-      gradient: "from-purple-500/5 to-transparent",
+      colorClass: "text-highlight bg-highlight/10 border-highlight/20",
+      gradient: "from-highlight/5 to-transparent",
     },
     {
       title: "Duplicate IDs",
@@ -81,7 +81,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
           <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
           <CardContent className="p-4 flex flex-col justify-between h-full space-y-3 relative z-10">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 {item.title}
               </span>
               <div className={`p-1.5 rounded-lg border shrink-0 ${item.colorClass}`}>
@@ -92,7 +92,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
               <h3 className="text-xl font-extrabold tracking-tight text-foreground">
                 {item.value.toLocaleString()}
               </h3>
-              <p className="text-[9px] text-muted-foreground mt-0.5 leading-normal">
+              <p className="text-xs text-muted-foreground mt-0.5 leading-normal">
                 {item.description}
               </p>
             </div>

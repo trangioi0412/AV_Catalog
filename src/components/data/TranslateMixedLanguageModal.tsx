@@ -268,11 +268,11 @@ export function TranslateMixedLanguageModal({ open, onClose, row, columns, onApp
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{f.label}</span>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                         <div className="p-2 rounded bg-muted/40 break-words">
-                          <span className="text-[10px] text-muted-foreground block mb-0.5">Hiện tại (lẫn ngôn ngữ)</span>
+                          <span className="text-xs text-muted-foreground block mb-0.5">Hiện tại (lẫn ngôn ngữ)</span>
                           {currentVal}
                         </div>
                         <div className="p-2 rounded bg-cyan-500/5 border border-cyan-500/20 break-words">
-                          <span className="text-[10px] text-cyan-600 dark:text-cyan-400 block mb-0.5">Bản dịch AI</span>
+                          <span className="text-xs text-cyan-600 dark:text-cyan-400 block mb-0.5">Bản dịch AI</span>
                           {newVal}
                         </div>
                       </div>
@@ -293,14 +293,14 @@ export function TranslateMixedLanguageModal({ open, onClose, row, columns, onApp
             )}
 
             {Array.isArray(cmsDiffs) && cmsDiffs.length > 0 && (
-              <div className="border rounded-lg p-3 bg-blue-500/5 border-blue-500/20 space-y-2">
+              <div className="border rounded-lg p-3 bg-primary/5 border-primary/20 space-y-2">
                 <div className="flex items-center gap-2">
-                  <UploadCloud className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                  <UploadCloud className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-primary">
                     Bản dịch khác với CMS hiện tại ({cmsDiffs.length})
                   </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Đề xuất ghi đè các trường sau lên Wix CMS cho khớp với bản dịch mới:</p>
+                <p className="text-xs text-muted-foreground">Đề xuất ghi đè các trường sau lên Wix CMS cho khớp với bản dịch mới:</p>
                 {cmsDiffs.map((d) => (
                   <div key={d.field} className="flex items-start gap-3 bg-background/60 rounded p-2">
                     <Checkbox
@@ -310,12 +310,12 @@ export function TranslateMixedLanguageModal({ open, onClose, row, columns, onApp
                     />
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{d.field}</span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{d.field}</span>
+                        <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400">
                           {d.status === "missing_in_cms" ? "CMS chưa có" : "Khác CMS"}
                         </Badge>
                       </div>
-                      <div className="text-[10px] text-muted-foreground break-words">
+                      <div className="text-xs text-muted-foreground break-words">
                         <span className="opacity-70">CMS hiện tại:</span> {d.cmsValue || <span className="italic">(trống)</span>}
                       </div>
                     </div>
@@ -340,7 +340,7 @@ export function TranslateMixedLanguageModal({ open, onClose, row, columns, onApp
               variant="outline"
               onClick={handlePushToCms}
               disabled={isPushingToCms}
-              className="gap-2 border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+              className="gap-2 border-primary/30 text-primary hover:bg-primary/10"
             >
               {isPushingToCms ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
               Ghi đè lên CMS

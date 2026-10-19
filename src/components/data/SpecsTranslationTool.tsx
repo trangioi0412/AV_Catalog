@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { 
   Card, 
   CardHeader, 
@@ -27,7 +27,9 @@ import {
   RefreshCw,
   CloudUpload,
   Search,
-  FileCheck
+  FileCheck,
+  CloudDownload,
+  Database
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
@@ -46,7 +48,68 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { uploadCatalogToWixAction } from "@/app/actions/discovery";
+import {
+  pullCmsSpecsAction,
+  uploadCmsSpecsAction,
+  type CmsSpecsProduct,
+  type SpecsStorageFormat,
+} from "@/app/actions/specsTranslator";
+import { mapWithConcurrency } from "@/lib/utils/concurrencyLimit";
+
+const ALL = "__all__";
+const NO_BRAND = "__none__";
+
+const FORMAT_LABELS: Record<SpecsStorageFormat, string> = {
+  text: "Text",
+  array: "Array",
+  empty: "Trống",
+};
+
+/** Normalizes any stored Technical Specifications shape (array, object, JSON string, plain text) to a spec array. */
+function toSpecsArray(raw: unknown): TechnicalSpecification[] {
+  if (Array.isArray(raw)) {
+    return raw.filter(
+      (s): s is TechnicalSpecification =>
+        !!s && typeof s === "object" && typeof s.label === "string" && typeof s.value === "string"
+    );
+  }
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    return typeof o.label === "string" && typeof o.value === "string" ? [{ label: o.label, value: o.value }] : [];
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        return toSpecsArray(JSON.parse(trimmed));
+      } catch {
+        // Not JSON despite the bracket — treat as plain text.
+      }
+    }
+    return textToTechnicalSpecs(trimmed);
+  }
+  return [];
+}
+
+interface PendingUpload {
+  target: "array" | "text";
+  items: { product: CmsSpecsProduct; value: string }[];
+  skipped: number;
+}
 
 interface ParsedRow {
   [key: string]: any;
@@ -88,6 +151,196 @@ export function SpecsTranslationTool() {
   } | null>(null);
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [errorSearchQuery, setErrorSearchQuery] = useState<string>("");
+
+  // CMS source state (Interactive tab)
+  const [cmsProducts, setCmsProducts] = useState<CmsSpecsProduct[] | null>(null);
+  const [isLoadingCms, setIsLoadingCms] = useState<boolean>(false);
+  const [brandFilter, setBrandFilter] = useState<string>(ALL);
+  const [formatFilter, setFormatFilter] = useState<string>(ALL);
+  const [cmsSearch, setCmsSearch] = useState<string>("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
+  const [isUploadingSpecs, setIsUploadingSpecs] = useState<boolean>(false);
+
+  const selectedProduct = cmsProducts?.find((p) => p.cmsItemId === selectedId) ?? null;
+
+  const brands = useMemo(() => {
+    if (!cmsProducts) return [];
+    return Array.from(new Set(cmsProducts.map((p) => p.Brand).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [cmsProducts]);
+
+  const filteredProducts = useMemo(() => {
+    if (!cmsProducts) return [];
+    const q = cmsSearch.trim().toLowerCase();
+    return cmsProducts.filter((p) => {
+      if (brandFilter === NO_BRAND ? !!p.Brand : brandFilter !== ALL && p.Brand !== brandFilter) return false;
+      if (formatFilter !== ALL && p.format !== formatFilter) return false;
+      if (q && !`${p.Product} ${p.Title} ${p.Brand}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [cmsProducts, brandFilter, formatFilter, cmsSearch]);
+
+  const formatCounts = useMemo(() => {
+    const counts: Record<SpecsStorageFormat, number> = { text: 0, array: 0, empty: 0 };
+    cmsProducts?.forEach((p) => counts[p.format]++);
+    return counts;
+  }, [cmsProducts]);
+
+  const checkedInView = filteredProducts.filter((p) => checkedIds.has(p.cmsItemId));
+  const allInViewChecked = filteredProducts.length > 0 && checkedInView.length === filteredProducts.length;
+
+  const loadCmsProducts = async () => {
+    setIsLoadingCms(true);
+    try {
+      const result = await pullCmsSpecsAction();
+      if (!result.success) {
+        toast.error(`Không tải được dữ liệu CMS: ${result.error}`);
+        return;
+      }
+      setCmsProducts(result.products);
+      setCheckedIds(new Set());
+      setSelectedId(null);
+      toast.success(`Đã tải ${result.products.length} sản phẩm từ CMS!`);
+    } catch (err) {
+      toast.error(`Lỗi tải dữ liệu CMS: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoadingCms(false);
+    }
+  };
+
+  /** Loads one CMS product's stored specs into the matching editor side. */
+  const selectCmsProduct = (product: CmsSpecsProduct) => {
+    setSelectedId(product.cmsItemId);
+    const raw = product.rawSpecs;
+    if (product.format === "array") {
+      setJsonText(JSON.stringify(raw, null, 2));
+      setPlainText("");
+    } else if (typeof raw === "string" && /^\s*[[{]/.test(raw)) {
+      // Legacy stringified JSON stored as text — show it in the JSON editor.
+      setJsonText(JSON.stringify(toSpecsArray(raw), null, 2));
+      setPlainText("");
+    } else {
+      setPlainText(typeof raw === "string" ? raw : "");
+      setJsonText("");
+    }
+    setJsonError(null);
+  };
+
+  const toggleChecked = (id: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllInView = () => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (allInViewChecked) filteredProducts.forEach((p) => next.delete(p.cmsItemId));
+      else filteredProducts.forEach((p) => next.add(p.cmsItemId));
+      return next;
+    });
+  };
+
+  /** Single-product upload of the editor content — opens the overwrite confirmation. */
+  const requestSingleUpload = (target: "array" | "text") => {
+    if (!selectedProduct) return;
+    let value: string;
+    if (target === "array") {
+      try {
+        const parsed = JSON.parse(jsonText);
+        if (!Array.isArray(parsed)) throw new Error("JSON phải là một mảng");
+        value = JSON.stringify(parsed);
+      } catch (e) {
+        toast.error(`JSON không hợp lệ: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
+    } else {
+      value = plainText.trim();
+    }
+    if (!value || value === "[]") {
+      toast.error("Dữ liệu rỗng — không upload để tránh xóa thông số trên CMS.");
+      return;
+    }
+    setPendingUpload({ target, items: [{ product: selectedProduct, value }], skipped: 0 });
+  };
+
+  /** Bulk-converts the checked products to `target` and opens the overwrite confirmation. */
+  const requestBulkUpload = (target: "array" | "text") => {
+    const items: PendingUpload["items"] = [];
+    let skipped = 0;
+    for (const product of checkedInView) {
+      // Already in the target format, or nothing to convert.
+      if (product.format === "empty" || product.format === target) {
+        skipped++;
+        continue;
+      }
+      const specs = toSpecsArray(product.rawSpecs);
+      if (specs.length === 0) {
+        skipped++;
+        continue;
+      }
+      items.push({
+        product,
+        value: target === "array" ? JSON.stringify(specs) : technicalSpecsToText(specs),
+      });
+    }
+    if (items.length === 0) {
+      toast.info(`Không có sản phẩm nào cần chuyển sang ${FORMAT_LABELS[target]} (${skipped} đã bỏ qua).`);
+      return;
+    }
+    setPendingUpload({ target, items, skipped });
+  };
+
+  const confirmUpload = async () => {
+    if (!pendingUpload) return;
+    const { target, items } = pendingUpload;
+    setPendingUpload(null);
+    setIsUploadingSpecs(true);
+    const toastId = toast.loading(`Đang ghi đè Technical Specifications cho ${items.length} sản phẩm...`);
+
+    const errors: string[] = [];
+    const succeeded = new Map<string, unknown>();
+    let done = 0;
+
+    await mapWithConcurrency(items, 4, async ({ product, value }) => {
+      try {
+        const result = await uploadCmsSpecsAction(product.cmsItemId, target, value);
+        if (result.success) succeeded.set(product.cmsItemId, target === "array" ? JSON.parse(value) : value);
+        else errors.push(`${product.Product || product.Title || product.cmsItemId} - ${result.error}`);
+      } catch (err) {
+        errors.push(`${product.Product || product.Title || product.cmsItemId} - ${err instanceof Error ? err.message : String(err)}`);
+      }
+      done++;
+      toast.loading(`Đang ghi đè... ${done}/${items.length}`, { id: toastId });
+    });
+
+    toast.dismiss(toastId);
+    setIsUploadingSpecs(false);
+
+    // Reflect the new stored value locally so filters/badges stay accurate.
+    setCmsProducts((prev) =>
+      prev?.map((p) => (succeeded.has(p.cmsItemId) ? { ...p, rawSpecs: succeeded.get(p.cmsItemId), format: target } : p)) ?? prev
+    );
+
+    if (items.length === 1) {
+      if (errors.length === 0) toast.success("Đã ghi đè Technical Specifications lên CMS!");
+      else toast.error(`Upload thất bại: ${errors[0]}`);
+      return;
+    }
+
+    setUploadReport({
+      successCount: succeeded.size,
+      failedCount: errors.length,
+      errors,
+      totalCount: items.length,
+    });
+    setErrorSearchQuery("");
+    setIsReportOpen(true);
+  };
 
   // Sample data for quick testing
   const loadSampleData = () => {
@@ -188,6 +441,7 @@ export function SpecsTranslationTool() {
     setJsonError(null);
     setFileState(null);
     setPreviewRows([]);
+    setSelectedId(null);
     toast.info("Cleared all fields");
   };
 
@@ -476,7 +730,137 @@ export function SpecsTranslationTool() {
       </div>
 
       {activeTab === "text" ? (
-        /* TAB 1: Copy-Paste Text Converter */
+        <div className="space-y-6">
+        {/* CMS product source */}
+        <Card className="border border-border/60 bg-card/60 backdrop-blur-md shadow-xl overflow-hidden rounded-2xl">
+          <CardHeader className="border-b border-border/40 pb-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                  <Database className="w-5 h-5 text-primary" />
+                  Sản phẩm trên Wix CMS
+                </CardTitle>
+                <CardDescription className="text-muted-foreground text-sm mt-0.5">
+                  {cmsProducts
+                    ? `${cmsProducts.length} sản phẩm · Text: ${formatCounts.text} · Array: ${formatCounts.array} · Trống: ${formatCounts.empty}`
+                    : "Tải Technical Specifications của các sản phẩm từ CMS để lọc, chuyển đổi và ghi đè lại."}
+                </CardDescription>
+              </div>
+              <Button size="sm" onClick={loadCmsProducts} disabled={isLoadingCms || isUploadingSpecs} className="text-xs h-8 px-3 gap-1.5 shrink-0">
+                {isLoadingCms ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudDownload className="w-3.5 h-3.5" />}
+                {cmsProducts ? "Tải lại từ CMS" : "Tải dữ liệu từ CMS"}
+              </Button>
+            </div>
+          </CardHeader>
+
+          {cmsProducts && (
+            <CardContent className="pt-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Select value={brandFilter} onValueChange={setBrandFilter}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Brand" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Tất cả brand</SelectItem>
+                    <SelectItem value={NO_BRAND}>(Chưa có brand)</SelectItem>
+                    {brands.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={formatFilter} onValueChange={setFormatFilter}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Loại dữ liệu" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Tất cả loại dữ liệu</SelectItem>
+                    <SelectItem value="text">Text (chưa chuyển đổi)</SelectItem>
+                    <SelectItem value="array">Array (đã chuyển đổi)</SelectItem>
+                    <SelectItem value="empty">Trống</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tìm theo model, tên, hãng..."
+                    value={cmsSearch}
+                    onChange={(e) => setCmsSearch(e.target.value)}
+                    className="pl-9 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Bulk actions */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <Checkbox checked={allInViewChecked} onCheckedChange={toggleAllInView} disabled={filteredProducts.length === 0} />
+                  <span>
+                    Hiển thị {filteredProducts.length} sản phẩm · Đã chọn <strong>{checkedInView.length}</strong>
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => requestBulkUpload("array")}
+                    disabled={checkedInView.length === 0 || isUploadingSpecs}
+                    className="text-xs h-8 gap-1.5"
+                  >
+                    <CloudUpload className="w-3.5 h-3.5" />
+                    Chuyển → Array & Upload
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => requestBulkUpload("text")}
+                    disabled={checkedInView.length === 0 || isUploadingSpecs}
+                    className="text-xs h-8 gap-1.5"
+                  >
+                    <CloudUpload className="w-3.5 h-3.5" />
+                    Chuyển → Text & Upload
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border rounded-xl bg-card overflow-hidden">
+                <div className="max-h-[320px] overflow-y-auto divide-y divide-border text-xs">
+                  {filteredProducts.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground italic">Không có sản phẩm nào khớp bộ lọc.</div>
+                  ) : (
+                    filteredProducts.map((p) => (
+                      <div
+                        key={p.cmsItemId}
+                        onClick={() => selectCmsProduct(p)}
+                        className={cn(
+                          "px-3 py-2 flex items-center gap-3 cursor-pointer transition-colors hover:bg-muted/30",
+                          selectedId === p.cmsItemId && "bg-primary/10 hover:bg-primary/15"
+                        )}
+                      >
+                        <span onClick={(e) => e.stopPropagation()} className="flex">
+                          <Checkbox checked={checkedIds.has(p.cmsItemId)} onCheckedChange={() => toggleChecked(p.cmsItemId)} />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold truncate">{p.Product || "(Không có model)"} {p.Title && <span className="font-normal text-muted-foreground">· {p.Title}</span>}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {p.Brand || "—"} · {p.Category || "(Chưa có category)"}
+                          </div>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "shrink-0 text-xs",
+                            p.format === "text" && "border-amber-500/40 text-amber-600 dark:text-amber-400",
+                            p.format === "array" && "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                          )}
+                        >
+                          {FORMAT_LABELS[p.format]}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* TAB 1: Copy-Paste Text Converter */}
         <Card className="border border-border/60 bg-card/60 backdrop-blur-md shadow-xl overflow-hidden rounded-2xl">
           <CardHeader className="border-b border-border/40 pb-5">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -530,7 +914,7 @@ export function SpecsTranslationTool() {
                   placeholder="Memory: 1 GB&#10;Flash: 8 GB&#10;Nguồn điện: 220V AC&#10;Protocol: TCP:8080"
                   className="flex-1 w-full min-h-[220px] max-h-[400px] p-4 text-sm font-mono bg-background/50 border border-border/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50 transition-all resize-y leading-relaxed"
                 />
-                <p className="text-muted-foreground text-[11px]">
+                <p className="text-muted-foreground text-xs">
                   Format: <code>Label: Value</code> (One per line. Any trailing colons in values are supported.)
                 </p>
               </div>
@@ -542,6 +926,8 @@ export function SpecsTranslationTool() {
                   size="icon"
                   onClick={handleConvertToJSON}
                   disabled={!plainText.trim()}
+                  aria-label="Chuyển văn bản sang JSON"
+                  title="Chuyển văn bản sang JSON"
                   className="w-10 h-10 rounded-full shadow-md hover:bg-primary hover:text-primary-foreground transition-all duration-300"
                 >
                   <ArrowLeftRight className="w-4 h-4 rotate-90 lg:rotate-0" />
@@ -551,6 +937,8 @@ export function SpecsTranslationTool() {
                   size="icon"
                   onClick={handleConvertToText}
                   disabled={!jsonText.trim() || !!jsonError}
+                  aria-label="Chuyển JSON sang văn bản"
+                  title="Chuyển JSON sang văn bản"
                   className="w-10 h-10 rounded-full shadow-md hover:bg-primary hover:text-primary-foreground transition-all duration-300"
                 >
                   <ArrowLeftRight className="w-4 h-4 -rotate-90 lg:rotate-180" />
@@ -610,20 +998,55 @@ export function SpecsTranslationTool() {
                   }`}
                 />
                 {jsonError ? (
-                  <div className="text-red-500 text-[11px] flex items-center gap-1 mt-1 font-medium">
+                  <div className="text-red-500 text-xs flex items-center gap-1 mt-1 font-medium">
                     <AlertCircle className="w-3 h-3 flex-shrink-0" />
                     <span>{jsonError}</span>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-[11px]">
+                  <p className="text-muted-foreground text-xs">
                     Valid array structure: <code>{"{ label: string, value: string }[]"}</code>
                   </p>
                 )}
               </div>
-              
+
             </div>
           </CardContent>
+
+          <CardFooter className="border-t border-border/40 pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="text-xs text-muted-foreground min-w-0">
+              {selectedProduct ? (
+                <span className="flex items-center gap-1.5 flex-wrap">
+                  Đang chỉnh: <strong className="text-foreground">{selectedProduct.Product || selectedProduct.Title || selectedProduct.cmsItemId}</strong>
+                  <Badge variant="outline" className="text-xs">CMS: {FORMAT_LABELS[selectedProduct.format]}</Badge>
+                </span>
+              ) : (
+                "Chọn một sản phẩm từ danh sách CMS ở trên để upload kết quả chuyển đổi."
+              )}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => requestSingleUpload("text")}
+                disabled={!selectedProduct || !plainText.trim() || isUploadingSpecs}
+                className="text-xs h-8 gap-1.5"
+              >
+                <CloudUpload className="w-3.5 h-3.5" />
+                Upload Text lên CMS
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => requestSingleUpload("array")}
+                disabled={!selectedProduct || !jsonText.trim() || !!jsonError || isUploadingSpecs}
+                className="text-xs h-8 gap-1.5 bg-primary hover:bg-primary/90"
+              >
+                {isUploadingSpecs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
+                Upload Array lên CMS
+              </Button>
+            </div>
+          </CardFooter>
         </Card>
+        </div>
       ) : (
         /* TAB 2: Drag-and-Drop File Converter */
         <Card className="border border-border/60 bg-card/60 backdrop-blur-md shadow-xl overflow-hidden rounded-2xl">
@@ -701,7 +1124,7 @@ export function SpecsTranslationTool() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-sm leading-tight">{fileState.name}</h4>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {(fileState.size / 1024).toFixed(1)} KB · {fileState.rows.length} rows loaded
                       </p>
                     </div>
@@ -733,7 +1156,7 @@ export function SpecsTranslationTool() {
                       size="sm"
                       onClick={handleUploadToWix}
                       disabled={isProcessing || isUploadingToWix}
-                      className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/25"
+                      className="text-xs gap-1.5 bg-primary hover:bg-primary/90 shadow-md shadow-primary/25"
                     >
                       {isUploadingToWix ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -765,7 +1188,7 @@ export function SpecsTranslationTool() {
                         return (
                           <div key={idx} className="p-3 hover:bg-muted/10 transition-colors grid grid-cols-3 gap-4">
                             <div className="font-semibold">{titleVal}</div>
-                            <div className="col-span-2 font-mono text-[10px] break-all max-h-[80px] overflow-y-auto whitespace-pre-line text-muted-foreground p-1.5 bg-background/30 rounded border border-border/40">
+                            <div className="col-span-2 font-mono text-xs break-all max-h-[80px] overflow-y-auto whitespace-pre-line text-muted-foreground p-1.5 bg-background/30 rounded border border-border/40">
                               {specsVal ? String(specsVal) : "(Empty)"}
                             </div>
                           </div>
@@ -788,11 +1211,65 @@ export function SpecsTranslationTool() {
               Bulk Processing Optimization
             </span>
           </div>
-          <div className="text-[11px] text-muted-foreground leading-relaxed max-w-xl">
+          <div className="text-xs text-muted-foreground leading-relaxed max-w-xl">
             Processes large CSV/Excel files completely client-side in less than <b>30ms for 1000+ rows</b>. File formatting remains 100% intact, and you download the converted file directly to your system.
           </div>
         </CardFooter>
       </Card>
+      {/* ── Overwrite Confirmation ─────────────────────────────────── */}
+      <AlertDialog open={!!pendingUpload} onOpenChange={(open) => !open && setPendingUpload(null)}>
+        <AlertDialogContent className="sm:max-w-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Xác nhận ghi đè dữ liệu CMS
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingUpload && (
+                <>
+                  Technical Specifications hiện có trên CMS của{" "}
+                  <strong>{pendingUpload.items.length} sản phẩm</strong> sẽ bị <strong>ghi đè</strong> bằng dữ liệu dạng{" "}
+                  <strong>{FORMAT_LABELS[pendingUpload.target]}</strong>. Thao tác này không thể hoàn tác.
+                  {pendingUpload.skipped > 0 && ` (${pendingUpload.skipped} sản phẩm đã đúng định dạng hoặc trống sẽ được bỏ qua.)`}
+                  <br />
+                  Bạn có chắc chắn muốn ghi đè không?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {pendingUpload?.items.length === 1 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="space-y-1 min-w-0">
+                <div className="font-bold uppercase tracking-wider text-muted-foreground">Hiện tại trên CMS</div>
+                <pre className="max-h-[180px] overflow-auto p-2 rounded border bg-muted/30 whitespace-pre-wrap break-all font-mono">
+                  {(() => {
+                    const raw = pendingUpload.items[0].product.rawSpecs;
+                    if (raw == null) return "(Trống)";
+                    return typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
+                  })()}
+                </pre>
+              </div>
+              <div className="space-y-1 min-w-0">
+                <div className="font-bold uppercase tracking-wider text-muted-foreground">Dữ liệu mới</div>
+                <pre className="max-h-[180px] overflow-auto p-2 rounded border border-primary/30 bg-primary/5 whitespace-pre-wrap break-all font-mono">
+                  {pendingUpload.target === "array"
+                    ? JSON.stringify(JSON.parse(pendingUpload.items[0].value), null, 2)
+                    : pendingUpload.items[0].value}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmUpload} className="bg-destructive text-white hover:bg-destructive/90">
+              Có, ghi đè
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Upload Report Dialog ──────────────────────────────────── */}
       <Dialog open={isReportOpen} onOpenChange={setIsReportOpen}>
         <DialogContent className="max-w-2xl bg-card/95 border-primary/10 backdrop-blur-xl max-h-[85vh] overflow-y-auto">

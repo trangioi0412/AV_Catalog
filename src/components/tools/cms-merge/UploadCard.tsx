@@ -107,7 +107,7 @@ export function UploadCard({
             <p className="text-xs font-semibold mb-1">
               {isLoading ? "Reading data file..." : "Drag & drop or click to upload CSV"}
             </p>
-            <p className="text-[10px] text-muted-foreground/80 max-w-[200px] leading-relaxed">
+            <p className="text-xs text-muted-foreground/80 max-w-[200px] leading-relaxed">
               {helpText}
             </p>
           </div>
@@ -122,7 +122,7 @@ export function UploadCard({
                   <p className="text-xs font-bold text-foreground truncate max-w-[160px]" title={file.name}>
                     {file.name}
                   </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                  <p className="text-xs text-muted-foreground mt-0.5 font-medium">
                     {formatSize(file.size)}
                   </p>
                 </div>
@@ -151,7 +151,7 @@ export function UploadCard({
         )}
 
         {error && (
-          <div className="mt-3 p-3 rounded-lg bg-destructive/5 border border-destructive/15 flex items-start gap-2.5 text-[11px] text-destructive font-semibold leading-normal">
+          <div className="mt-3 p-3 rounded-lg bg-destructive/5 border border-destructive/15 flex items-start gap-2.5 text-xs text-destructive font-semibold leading-normal">
             <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
