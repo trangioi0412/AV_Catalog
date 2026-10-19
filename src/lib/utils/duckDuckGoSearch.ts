@@ -7,7 +7,7 @@
  * discover real information without us having to fetch and parse the full
  * page. Used to give a self-hosted Ollama model real internet context it
  * has no way to fetch on its own (see categoryConsolidation.ts's
- * web-verified category clustering and ollamaProductDiscovery.ts).
+ * web-verified category clustering).
  *
  * Server-only: never import this from a Client Component.
  */

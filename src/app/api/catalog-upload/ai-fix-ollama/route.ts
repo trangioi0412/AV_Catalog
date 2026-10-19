@@ -30,7 +30,7 @@ export const runtime = "nodejs";
 // fixCatalogBatch can make up to 3 sequential Ollama calls on a malformed/
 // oversized batch (the original attempt plus a split-in-half retry) — same
 // reasoning as /api/catalog-upload/ai-review's maxDuration.
-export const maxDuration = 600;
+export const maxDuration = 300; // Vercel Hobby plan max (1–300s)
 
 const MAX_ITEMS = Math.max(CATALOG_AI_FIX_BATCH_SIZE * 2, 20);
 

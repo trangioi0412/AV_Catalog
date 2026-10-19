@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { runProductDiscovery, runProductDiscoveryForBrand, stopProductDiscovery } from "@/lib/services/discoveryEngine";
+import { runProductDiscovery, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
 import { getActiveBrands, getAllProducts, getActiveBrandsCached, getAllProductsCached, invalidateAdminCmsCache, insertProduct, WixBrand, WixProduct, isValidProductImageFormat, isProductImageAccessible, compareProductWithCms, CmsCompareResult, updateCmsProductFields } from "@/lib/services/wixCms";
 import { getProductDocumentEntries, hasProductDocument } from "@/lib/utils/documentFields";
@@ -73,42 +73,6 @@ export async function runDiscoveryAction(brandId?: string) {
       success: false,
       error: (err as Error).message,
       logs: [`[ERROR] Scan failed: ${(err as Error).message}`],
-    };
-  }
-}
-
-/**
- * Runs the ad-hoc "Tra cứu sản phẩm bằng AI" lookup for a single brand name
- * typed in by an admin — brandName does not need to already exist as a Wix
- * Brand (see runProductDiscoveryForBrand's doc comment). Results land in
- * the same Discovery Queue (/admin/discovery) as a scheduled scan.
- */
-export async function runBrandDiscoveryAction(
-  brandName: string,
-  keyword?: string,
-  provider: "gemini" | "ollama" = "gemini",
-  skipDedup = false
-) {
-  try {
-    const result = await runProductDiscoveryForBrand(brandName, keyword, provider, skipDedup);
-
-    revalidatePath("/admin/dashboard");
-    revalidatePath("/admin/discovery");
-    revalidatePath("/admin/scanner");
-
-    return {
-      success: true,
-      totalScanned: result.totalScanned,
-      totalNew: result.totalNew,
-      brandMatched: result.brandMatched,
-      logs: result.logs,
-    };
-  } catch (err) {
-    console.error("Brand discovery action failed:", err);
-    return {
-      success: false,
-      error: (err as Error).message,
-      logs: [`[ERROR] Lookup failed: ${(err as Error).message}`],
     };
   }
 }

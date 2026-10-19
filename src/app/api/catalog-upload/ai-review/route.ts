@@ -29,7 +29,7 @@ export const runtime = "nodejs";
 // reviewCatalogBatch can make up to 3 sequential Ollama calls on a malformed/
 // oversized batch (the original attempt plus a split-in-half retry) — give it
 // headroom beyond a single CATALOG_AI_REVIEW_TIMEOUT_MS (default 300s).
-export const maxDuration = 600;
+export const maxDuration = 300; // Vercel Hobby plan max (1–300s)
 
 // A little above CATALOG_AI_REVIEW_BATCH_SIZE so the client can't be blocked
 // by a hard cap that's tighter than the batch size the service itself expects.

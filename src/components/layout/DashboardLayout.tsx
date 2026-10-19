@@ -20,9 +20,7 @@ import {
   HardDrive,
   Layers,
   Bot,
-  Search,
   RefreshCw,
-  Lock,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
@@ -67,7 +65,6 @@ const navDiscovery = [
   { href: "/admin/dashboard",       icon: LayoutDashboard, label: "Tổng quan" },
   { href: "/admin/discovery",       icon: CheckSquare,     label: "Hàng đợi Discovery" },
   { href: "/admin/scanner",         icon: Activity,        label: "Quét thủ công" },
-  { href: "/admin/image-discovery", icon: Search,          label: "Tra Cứu Sản Phẩm AI", accent: true, locked: true },
   { href: "/admin/image-sync",      icon: ImageIcon,       label: "Đồng bộ hình ảnh" },
   { href: "/admin/specs-translator", icon: Languages,       label: "Dịch thông số" },
 ];
@@ -99,7 +96,6 @@ const breadcrumbMap: Record<string, { label: string; parent?: string }> = {
   "/admin/dashboard":           { label: "Tổng quan",         parent: "Khám phá & Đồng bộ" },
   "/admin/discovery":           { label: "Hàng đợi Discovery", parent: "Khám phá & Đồng bộ" },
   "/admin/scanner":             { label: "Quét thủ công",     parent: "Khám phá & Đồng bộ" },
-  "/admin/image-discovery":     { label: "Tra Cứu Sản Phẩm AI", parent: "Khám phá & Đồng bộ" },
   "/admin/image-sync":          { label: "Đồng bộ hình ảnh",  parent: "Khám phá & Đồng bộ" },
   "/admin/specs-translator":    { label: "Dịch thông số",     parent: "Khám phá & Đồng bộ" },
   "/admin/manufacturer-sync":   { label: "Đồng Bộ NSX (DataCrawler)", parent: "DataCrawler" },
@@ -148,7 +144,6 @@ function NavLink({
   label,
   active,
   accent,
-  locked,
   collapsed,
   onNavigate,
 }: {
@@ -157,39 +152,9 @@ function NavLink({
   label: string;
   active: boolean;
   accent?: boolean;
-  locked?: boolean;
   collapsed?: boolean;
   onNavigate: (dest: string) => void;
 }) {
-  if (locked) {
-    const inner = (
-      <div
-        title={collapsed ? label : "Tính năng đang tạm khóa"}
-        aria-disabled="true"
-        role="button"
-        tabIndex={-1}
-        className={cn(
-          "flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground/50 cursor-not-allowed select-none",
-          collapsed && "justify-center px-2"
-        )}
-      >
-        <Icon className="w-4 h-4 shrink-0 opacity-40" />
-        {!collapsed && <span className="truncate flex-1 line-through">{label}</span>}
-        {!collapsed && <Lock className="w-3.5 h-3.5 shrink-0 opacity-50" />}
-      </div>
-    );
-
-    if (collapsed) {
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>{inner}</TooltipTrigger>
-          <TooltipContent side="right">{label} (Tạm khóa)</TooltipContent>
-        </Tooltip>
-      );
-    }
-    return inner;
-  }
-
   const inner = (
     <Link
       href={href}
@@ -337,8 +302,6 @@ function SidebarContent({
               icon={item.icon}
               label={item.label}
               active={pathname === item.href}
-              accent={item.accent}
-              locked={item.locked}
               collapsed={collapsed}
               onNavigate={onNavigate}
             />
