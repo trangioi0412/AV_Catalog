@@ -32,13 +32,13 @@ describe("GET /api/admin/wix-translations/config", () => {
   });
 
   it("rejects unauthenticated requests", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(false);
+    vi.mocked(checkAdminSession).mockResolvedValue(false);
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);
   });
 
   it("degrades gracefully (still 200, with warnings) when Wix credentials are missing, instead of erroring", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(isWixConfigured).mockReturnValue(false);
     vi.mocked(isTranslationProviderConfigured).mockReturnValue(false);
 
@@ -52,7 +52,7 @@ describe("GET /api/admin/wix-translations/config", () => {
   });
 
   it("never returns an API key, access token, or site secret", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(isWixConfigured).mockReturnValue(false);
     vi.mocked(isTranslationProviderConfigured).mockReturnValue(false);
 
@@ -63,7 +63,7 @@ describe("GET /api/admin/wix-translations/config", () => {
   });
 
   it("includes the list of selectable AI providers for the model picker", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(isWixConfigured).mockReturnValue(false);
     vi.mocked(isTranslationProviderConfigured).mockReturnValue(false);
     vi.mocked(listAvailableTranslationProviders).mockReturnValue([
@@ -83,7 +83,7 @@ describe("GET /api/admin/wix-translations/config", () => {
   });
 
   it("does not bother listing Ollama models when Ollama isn't a configured provider", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(isWixConfigured).mockReturnValue(false);
     vi.mocked(isTranslationProviderConfigured).mockReturnValue(false);
     vi.mocked(listAvailableTranslationProviders).mockReturnValue([

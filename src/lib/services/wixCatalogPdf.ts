@@ -15,6 +15,7 @@
  *  - Guards against path traversal in segment names
  */
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,12 +70,10 @@ const folderIdCache = new Map<string, string | null>();
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Verify that incoming API request carries a valid administrator session cookie.
+ * Route-level auth + role check (src/lib/auth/guard.ts), re-exported here
+ * because the admin routes and their tests import it from this module.
  */
-export function checkAdminSession(req: import("next/server").NextRequest): boolean {
-  const sessionCookie = req.cookies.get("admin_session");
-  return Boolean(sessionCookie && sessionCookie.value === "true");
-}
+export { checkAdminSession } from "@/lib/auth/guard";
 
 function getWixHeaders(): Record<string, string> {
   const apiKey = process.env.WIX_API_KEY;

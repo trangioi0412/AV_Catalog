@@ -1,22 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasValidCronSecret } from "@/lib/auth/cron";
 import { runProductDiscovery } from "@/lib/services/discoveryEngine";
 
 export const dynamic = "force-dynamic";
 
+/** Called by the scheduler with `Authorization: Bearer <CRON_SECRET>` (src/lib/auth/cron.ts). */
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const secret = searchParams.get("secret");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && secret !== cronSecret) {
+  if (!hasValidCronSecret(request)) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized: Invalid secret" },
-      { status: 401 }
+      { success: false, error: "Unauthorized: invalid or missing cron credentials" },
+      { status: 401, headers: { "Cache-Control": "no-store" } }
     );
-  }
-
-  if (!cronSecret) {
-    console.warn("CRON_SECRET environment variable is not defined. Skipping authentication check.");
   }
 
   try {

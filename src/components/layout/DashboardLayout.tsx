@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 import type { SheetData } from "@/types";
 import { toast } from "sonner";
 import { useNavLoading } from "@/components/layout/NavigationLoadingProvider";
+import { useCatalogUser, roleLabel, initials } from "@/components/layout/useCatalogUser";
+import type { CatalogUser } from "@/lib/auth/session";
 import { logoutAction } from "@/app/actions/auth";
 import {
   AlertDialog,
@@ -226,7 +228,9 @@ function SidebarContent({
   onToggleDark,
   onSignOut,
   onToggleCollapse,
+  user,
 }: {
+  user: CatalogUser | null;
   collapsed: boolean;
   pathname: string;
   sheets: SheetData[];
@@ -420,12 +424,17 @@ function SidebarContent({
           <>
             {/* User row */}
             <div className="flex items-center gap-3 px-2 py-1.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-primary/60 flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0 shadow">
-                AA
+              <div
+                className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-primary/60 flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0 shadow"
+                aria-hidden="true"
+              >
+                {user ? initials(user.name) : ""}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium leading-none truncate">Quản trị viên</p>
-                <p className="text-xs text-muted-foreground mt-0.5">AVS-TEK</p>
+              <div className="flex-1 min-w-0" title={user?.email}>
+                <p className="text-sm font-medium leading-none truncate">{user?.name ?? "Đang tải…"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {user ? roleLabel(user) : "AVS-TEK"}
+                </p>
               </div>
               <Button
                 variant="ghost"
@@ -535,6 +544,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   );
   const [showSignOutDialog, setShowSignOutDialog] = React.useState(false);
   const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
+  const user = useCatalogUser();
 
   const toggleDarkMode = () => {
     const next = !isDarkMode;
@@ -555,6 +565,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     onNavigate: startLoading,
     onToggleDark: toggleDarkMode,
     onSignOut: () => setShowSignOutDialog(true),
+    user,
   };
 
   return (
@@ -710,9 +721,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Huỷ</AlertDialogCancel>
             <AlertDialogAction
-              onClick={async () => {
+              onClick={() => {
                 setShowSignOutDialog(false);
-                await logoutAction();
+                // Server Action clears the cookie, then redirects to the portal's /logout.
+                void logoutAction();
               }}
             >
               Đăng xuất

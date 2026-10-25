@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { previewManufacturerRequest, ManufacturerSyncApiError } from "@/lib/manufacturerSync/api";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await authorizeRequest(request, "editor");
+  if (denied) return denied;
+
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ detail: "Invalid request id" }, { status: 400 });

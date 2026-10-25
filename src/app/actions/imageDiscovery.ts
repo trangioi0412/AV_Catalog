@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
 import { 
   processMissingImages, 
@@ -17,6 +18,7 @@ export interface ImageDiscoveryStatus {
  * Starts the AI image discovery and sync process in the background.
  */
 export async function startImageDiscoveryAction() {
+  await requireUser("editor");
   if (isImageDiscoveryInProgress) {
     return { success: false, error: "AI Image Discovery is already in progress." };
   }
@@ -37,6 +39,7 @@ export async function startImageDiscoveryAction() {
  * Returns current progress status and logs.
  */
 export async function getImageDiscoveryStatusAction(): Promise<ImageDiscoveryStatus> {
+  await requireUser("viewer");
   return {
     inProgress: isImageDiscoveryInProgress,
     logs: [...activeImageDiscoveryLogs], // Return copy of logs
@@ -47,6 +50,7 @@ export async function getImageDiscoveryStatusAction(): Promise<ImageDiscoverySta
  * Resets the active status if it gets stuck.
  */
 export async function resetImageDiscoveryAction() {
+  await requireUser("editor");
   resetImageDiscoveryStatus();
   revalidatePath("/admin/image-discovery");
   return { success: true };
@@ -56,6 +60,7 @@ export async function resetImageDiscoveryAction() {
  * Stops the active image discovery process.
  */
 export async function stopImageDiscoveryAction() {
+  await requireUser("editor");
   try {
     resetImageDiscoveryStatus();
     revalidatePath("/admin/image-discovery");

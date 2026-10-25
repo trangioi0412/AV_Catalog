@@ -56,7 +56,7 @@ const SCHEMA = {
 describe("POST /api/admin/translations/save", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(findCollectionSchema).mockResolvedValue(SCHEMA);
     vi.mocked(isLocaleAvailable).mockResolvedValue(true);
     vi.mocked(bulkCreateContent).mockResolvedValue([]);
@@ -64,7 +64,7 @@ describe("POST /api/admin/translations/save", () => {
   });
 
   it("rejects unauthenticated requests without writing anything to Wix", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(false);
+    vi.mocked(checkAdminSession).mockResolvedValue(false);
 
     const res = await POST(makeRequest({ items: [{ entityId: "a", fields: { title: "Hi" } }] }));
 

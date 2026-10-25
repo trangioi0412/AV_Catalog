@@ -55,7 +55,7 @@ function errorResponse(err: unknown): NextResponse {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  if (!checkAdminSession(req)) {
+  if (!(await checkAdminSession(req, "viewer"))) {
     return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
   }
 
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function DELETE(req: NextRequest) {
-  if (!checkAdminSession(req)) {
+  if (!(await checkAdminSession(req, "admin"))) {
     return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
   }
 

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { downloadManufacturerImages, ManufacturerSyncApiError } from "@/lib/manufacturerSync/api";
 
 export async function POST(request: NextRequest) {
+  const denied = await authorizeRequest(request, "editor");
+  if (denied) return denied;
+
   const payload = await request.json().catch(() => null);
   const manufacturer = payload?.manufacturer;
 

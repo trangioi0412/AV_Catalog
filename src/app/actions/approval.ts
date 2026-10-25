@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
 import { insertProduct, WixProduct } from "@/lib/services/wixCms";
 import { readSheet, deleteRowByIndex, appendRows, addLog, updateSystemConfig, getSystemConfig, clearSheet } from "@/lib/services/googleSheets";
@@ -44,6 +45,7 @@ async function findCorrectRowIndex(product: PendingProduct, originalIndex: numbe
  * Approves a product: Syncs to Wix CMS, removes from Google Sheet queue, logs action.
  */
 export async function approveProductAction(product: PendingProduct, originalIndex: number) {
+  await requireUser("editor");
   try {
     // 1. Verify and find index of the row in the sheet
     const correctIndex = await findCorrectRowIndex(product, originalIndex);
@@ -94,6 +96,7 @@ export async function approveProductAction(product: PendingProduct, originalInde
  * Rejects a product: Moves to Product_Delete sheet, removes from queue, logs action.
  */
 export async function rejectProductAction(product: PendingProduct, originalIndex: number) {
+  await requireUser("editor");
   try {
     // 1. Verify and find index
     const correctIndex = await findCorrectRowIndex(product, originalIndex);
@@ -141,6 +144,7 @@ export async function rejectProductAction(product: PendingProduct, originalIndex
  * Deletes a product: Removes from queue and logs action (doesn't blacklist).
  */
 export async function deleteProductAction(product: PendingProduct, originalIndex: number) {
+  await requireUser("editor");
   try {
     // 1. Verify and find index
     const correctIndex = await findCorrectRowIndex(product, originalIndex);
@@ -166,6 +170,7 @@ export async function deleteProductAction(product: PendingProduct, originalIndex
  * Clears the entire blacklist (Product_Delete sheet)
  */
 export async function clearBlacklistAction() {
+  await requireUser("admin");
   try {
     await clearSheet("Product_Delete");
     await addLog("WARNING", "Cleared the entire product blacklist");
@@ -186,6 +191,7 @@ export async function clearBlacklistAction() {
  * Clears the entire pending queue (Product_New sheet)
  */
 export async function clearQueueAction() {
+  await requireUser("admin");
   try {
     await clearSheet("Product_New");
     await addLog("WARNING", "Cleared the entire pending products queue");

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { enrichProductDataWithGeminiAgent } from "@/lib/services/geminiEnricher";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const denied = await authorizeRequest(request, "admin");
+  if (denied) return denied;
+
   const { searchParams } = request.nextUrl;
   const brand = searchParams.get("brand");
   const product = searchParams.get("product");

@@ -126,7 +126,7 @@ function parseRelativePath(
 
 export async function POST(req: NextRequest) {
   try {
-    if (!checkAdminSession(req)) {
+    if (!(await checkAdminSession(req, "editor"))) {
       return NextResponse.json(
         { error: "Unauthorized: Administrator access required." },
         { status: 401 }

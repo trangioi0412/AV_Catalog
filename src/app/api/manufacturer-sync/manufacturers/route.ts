@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { listManufacturers, ManufacturerSyncApiError } from "@/lib/manufacturerSync/api";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const denied = await authorizeRequest(request, "viewer");
+  if (denied) return denied;
+
   try {
     const manufacturers = await listManufacturers();
     return NextResponse.json(manufacturers);

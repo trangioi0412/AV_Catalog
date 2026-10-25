@@ -16,6 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import {
   uploadToWixMedia,
   updateProductImages,
@@ -52,6 +53,9 @@ function mimeFromName(name: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await authorizeRequest(req, "editor");
+  if (denied) return denied;
+
   const startTime = Date.now();
 
   try {

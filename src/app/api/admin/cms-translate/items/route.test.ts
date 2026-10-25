@@ -20,21 +20,21 @@ describe("GET /api/admin/cms-translate/items", () => {
   });
 
   it("rejects unauthenticated requests", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(false);
+    vi.mocked(checkAdminSession).mockResolvedValue(false);
     const res = await GET(makeRequest("?collectionKey=products"));
     expect(res.status).toBe(401);
     expect(getWixCmsItems).not.toHaveBeenCalled();
   });
 
   it("rejects a collectionKey that isn't in the server allowlist", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const res = await GET(makeRequest("?collectionKey=not-allowed"));
     expect(res.status).toBe(422);
     expect(getWixCmsItems).not.toHaveBeenCalled();
   });
 
   it("marks translated:false for every item when no targetFields are given", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(getWixCmsItems).mockResolvedValue({
       items: [{ itemId: "a", data: { title_EN: "Neat Bar", title_VI: "Bàn Neat" } }],
       total: 1,
@@ -47,7 +47,7 @@ describe("GET /api/admin/cms-translate/items", () => {
   });
 
   it("marks translated:true only when every target field has non-empty content", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(getWixCmsItems).mockResolvedValue({
       items: [
         { itemId: "full", data: { title_VI: "Đầy đủ", description_VI: "Có nội dung" } },
@@ -67,7 +67,7 @@ describe("GET /api/admin/cms-translate/items", () => {
   });
 
   it("lists exactly which target fields are still missing per item", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(getWixCmsItems).mockResolvedValue({
       items: [
         { itemId: "full", data: { title_VI: "Đầy đủ", description_VI: "Có nội dung" } },
@@ -87,7 +87,7 @@ describe("GET /api/admin/cms-translate/items", () => {
   });
 
   it("resolves item name from title/name/product, falling back to itemId", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(getWixCmsItems).mockResolvedValue({
       items: [
         { itemId: "a", data: { title: "Has Title" } },
@@ -104,7 +104,7 @@ describe("GET /api/admin/cms-translate/items", () => {
   });
 
   it("never returns an API key, access token, or site secret", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(getWixCmsItems).mockResolvedValue({ items: [], total: 0 });
     const res = await GET(makeRequest("?collectionKey=products"));
     const text = JSON.stringify(await res.json());

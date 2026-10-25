@@ -1,41 +1,44 @@
 "use server";
 
+/**
+ * TODO(remove-password-login): legacy email/password login, disabled since
+ * Portal SSO (src/lib/auth/session.ts). Delete loginAction, login/legacy-password-login.tsx
+ * and the ADMIN_EMAIL / ADMIN_PASSWORD env vars once SSO is stable on production.
+ * The hard-coded fallback credentials that used to live here were removed on purpose.
+ */
+
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { SESSION_COOKIE, isAuthEnabled, portalUrl } from "@/lib/auth/session";
 
-const DEFAULT_EMAIL = "trangioi479@gmail.com";
-const DEFAULT_PASSWORD = "motdieunua123";
+type LoginState = { success: boolean; error?: string } | null;
 
-/**
- * Handles administrator login. Sets httpOnly cookie on successful validation.
- */
-export async function loginAction(prevState: any, formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-
-  const targetEmail = process.env.ADMIN_EMAIL || DEFAULT_EMAIL;
-  const targetPassword = process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD;
-
-  if (email === targetEmail && password === targetPassword) {
-    const cookieStore = await cookies();
-    cookieStore.set("admin_session", "true", {
-      path: "/",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      sameSite: "lax",
-    });
-    return { success: true };
-  }
-
-  return { success: false, error: "Email hoặc mật khẩu không chính xác." };
+export async function loginAction(): Promise<LoginState> {
+  return { success: false, error: "Đăng nhập bằng mật khẩu đã tắt. Vui lòng đăng nhập qua AVS Portal." };
 }
 
 /**
- * Logs out the administrator by clearing the session cookie and redirecting to /login.
+ * Clears this site's session, then ends the portal session too
+ * (${PORTAL_URL}/logout) so the next visit asks to sign in again.
+ *
+ * A Server Action rather than a GET route: Next rejects Server Action POSTs
+ * whose Origin does not match the host, so a third-party page cannot sign
+ * users out. The session JWT itself stays valid until it expires (8h) if it
+ * was copied before logout — there is no server-side revocation list.
  */
 export async function logoutAction() {
-  const cookieStore = await cookies();
-  cookieStore.delete("admin_session");
-  redirect("/login");
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+  // TODO(remove-password-login): drop once the legacy admin_session cookie is gone.
+  store.delete("admin_session");
+
+  let target = "/";
+  if (isAuthEnabled()) {
+    try {
+      target = `${portalUrl()}/logout`;
+    } catch {
+      // PORTAL_URL not configured: the local cookie is gone, go home.
+    }
+  }
+  redirect(target);
 }

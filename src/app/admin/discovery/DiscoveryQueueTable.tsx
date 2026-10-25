@@ -31,9 +31,16 @@ import {
   FileText, 
   ExternalLink, 
   ImageOff,
-  Loader2
+  Loader2,
+  AlertTriangle,
+  CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
+import { CONTENT_FIELDS, countFilledSpecs, getMissingContent, hasContent } from "@/lib/utils/productCompleteness";
+import { ContentFieldPicker } from "./ContentFieldPicker";
+import { useContentFieldSelection } from "./contentFieldSelection";
+
+const QUEUE_FIELD_KEYS = new Set(CONTENT_FIELDS.filter((f) => f.inQueue).map((f) => f.key));
 
 interface DiscoveryQueueTableProps {
   initialProducts: PendingProduct[];
@@ -48,6 +55,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
   }, [products]);
 
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [showIncompleteOnly, setShowIncompleteOnly] = React.useState(false);
   const [selectedProduct, setSelectedProduct] = React.useState<PendingProduct | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
   const [processingId, setProcessingId] = React.useState<string | null>(null);
@@ -83,9 +91,33 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
     }
   };
 
+  const getProductKey = (p: PendingProduct) => {
+    return `${p.Brand}-${p.Product}-${p.Title}`;
+  };
+
+  // Selected fields with no real content per product (array-aware, see productCompleteness.ts).
+  // Queued rows only carry some fields, so CMS-only selections are ignored here.
+  const { selected: selectedFieldKeys } = useContentFieldSelection();
+  const queueFieldKeys = React.useMemo(
+    () => selectedFieldKeys.filter((k) => QUEUE_FIELD_KEYS.has(k)),
+    [selectedFieldKeys]
+  );
+  const missingByKey = React.useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const p of products) map.set(getProductKey(p), getMissingContent(p, queueFieldKeys));
+    return map;
+  }, [products, queueFieldKeys]);
+
+  const incompleteCount = React.useMemo(
+    () => products.filter((p) => (missingByKey.get(getProductKey(p))?.length ?? 0) > 0).length,
+    [products, missingByKey]
+  );
+
   // Filters
   const filteredProducts = React.useMemo(() => {
     return products.filter((p) => {
+      if (showIncompleteOnly && (missingByKey.get(getProductKey(p))?.length ?? 0) === 0) return false;
+
       const brand = (p.brandName || p.Brand || "").toLowerCase();
       const product = (p.Product || "").toLowerCase();
       const category = (p.Category || "").toLowerCase();
@@ -94,11 +126,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
 
       return brand.includes(query) || product.includes(query) || category.includes(query) || title.includes(query);
     });
-  }, [products, searchQuery]);
-
-  const getProductKey = (p: PendingProduct) => {
-    return `${p.Brand}-${p.Product}-${p.Title}`;
-  };
+  }, [products, searchQuery, showIncompleteOnly, missingByKey]);
 
   const handleAction = async (
     product: PendingProduct, 
@@ -166,7 +194,20 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
           <div className="text-sm text-muted-foreground whitespace-nowrap">
             <span>Hiển thị <strong>{filteredProducts.length}</strong> / <strong>{products.length}</strong> sản phẩm chờ duyệt</span>
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <ContentFieldPicker queueOnly />
+            <Button
+              variant={showIncompleteOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowIncompleteOnly((v) => !v)}
+              aria-pressed={showIncompleteOnly}
+              disabled={incompleteCount === 0 && !showIncompleteOnly}
+              className="text-xs flex-1 sm:flex-none gap-1.5"
+              title="Chỉ hiện sản phẩm còn thiếu nội dung bắt buộc"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Thiếu nội dung ({incompleteCount})
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -198,6 +239,7 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
               <TableHead className="font-semibold text-xs uppercase tracking-wider">Product</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-wider">Title</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-wider">Series</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider">Nội dung</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-wider">Status</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Actions</TableHead>
             </TableRow>
@@ -205,13 +247,16 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
           <TableBody>
             {filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-40 text-center text-muted-foreground italic">
-                  Không có sản phẩm nào đang chờ duyệt.
+                <TableCell colSpan={8} className="h-40 text-center text-muted-foreground italic">
+                  {showIncompleteOnly
+                    ? "Không có sản phẩm nào thiếu nội dung."
+                    : "Không có sản phẩm nào đang chờ duyệt."}
                 </TableCell>
               </TableRow>
             ) : (
               filteredProducts.map((p) => {
                 const key = getProductKey(p);
+                const missing = missingByKey.get(key) ?? [];
                 return (
                   <TableRow key={key} className="hover:bg-muted/20 transition-all duration-200">
                     <TableCell className="font-bold text-primary/90">{p.brandName || p.Brand}</TableCell>
@@ -219,6 +264,31 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
                     <TableCell className="font-semibold">{p.Product}</TableCell>
                     <TableCell className="max-w-[200px] truncate" title={p.Title}>{p.Title}</TableCell>
                     <TableCell className="text-muted-foreground">{p.Series || "—"}</TableCell>
+                    <TableCell className="max-w-[220px]">
+                      {missing.length === 0 ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Đủ
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1" title={`Thiếu: ${missing.join(", ")}`}>
+                          {missing.slice(0, 3).map((label) => (
+                            <Badge
+                              key={label}
+                              variant="outline"
+                              className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-[11px] font-medium px-1.5 py-0"
+                            >
+                              {label}
+                            </Badge>
+                          ))}
+                          {missing.length > 3 && (
+                            <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-muted-foreground">
+                              +{missing.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs font-bold uppercase tracking-wider">
                         Product_New
@@ -317,6 +387,36 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
                 </DialogDescription>
               </DialogHeader>
 
+              {/* Missing-content summary */}
+              {(() => {
+                const missing =
+                  missingByKey.get(getProductKey(selectedProduct)) ?? getMissingContent(selectedProduct, queueFieldKeys);
+                return missing.length === 0 ? (
+                  <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-sm text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    Đủ nội dung bắt buộc.
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-sm">
+                    <p className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      Thiếu {missing.length} mục nội dung
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {missing.map((label) => (
+                        <Badge
+                          key={label}
+                          variant="outline"
+                          className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-xs"
+                        >
+                          {label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Main Dialog Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 border-t pt-4">
                 
@@ -393,8 +493,23 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
                   </div>
 
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between gap-2">
                       Technical Specifications
+                      {(() => {
+                        const { filled, total } = countFilledSpecs(selectedProduct.TechnicalSpecifications);
+                        if (total === 0) return null;
+                        return (
+                          <span
+                            className={
+                              filled === total
+                                ? "normal-case tracking-normal font-medium text-green-600 dark:text-green-400"
+                                : "normal-case tracking-normal font-medium text-amber-600 dark:text-amber-400"
+                            }
+                          >
+                            {filled}/{total} có giá trị
+                          </span>
+                        );
+                      })()}
                     </h3>
                     <div className="max-h-[220px] overflow-y-auto custom-scrollbar border rounded-lg bg-card text-xs">
                       {parseSpecs(selectedProduct.TechnicalSpecifications).length === 0 ? (
@@ -408,9 +523,13 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
                               <span className="font-semibold text-muted-foreground w-1/3 pr-2 truncate" title={spec.label}>
                                 {spec.label}
                               </span>
-                              <span className="text-foreground w-2/3 truncate" title={spec.value}>
-                                {spec.value}
-                              </span>
+                              {hasContent(typeof spec.value === "string" ? spec.value : JSON.stringify(spec.value)) ? (
+                                <span className="text-foreground w-2/3 truncate" title={String(spec.value)}>
+                                  {String(spec.value)}
+                                </span>
+                              ) : (
+                                <span className="w-2/3 italic text-amber-600 dark:text-amber-400">Thiếu giá trị</span>
+                              )}
                             </div>
                           ))}
                         </div>

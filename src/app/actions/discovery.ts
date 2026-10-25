@@ -1,12 +1,56 @@
 "use server";
 
+import { requireUser } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
 import { runProductDiscovery, stopProductDiscovery } from "@/lib/services/discoveryEngine";
 import { readSheet, getSystemConfig, updateSystemConfig } from "@/lib/services/googleSheets";
 import { getActiveBrands, getAllProducts, getActiveBrandsCached, getAllProductsCached, invalidateAdminCmsCache, insertProduct, WixBrand, WixProduct, isValidProductImageFormat, isProductImageAccessible, compareProductWithCms, CmsCompareResult, updateCmsProductFields } from "@/lib/services/wixCms";
 import { getProductDocumentEntries, hasProductDocument } from "@/lib/utils/documentFields";
 import { pullCmsCatalogAsSheets } from "@/lib/services/cmsCatalogPull";
+import { getFilledFieldKeys } from "@/lib/utils/productCompleteness";
 import type { SheetData } from "@/types";
+
+/** One live Wix CMS product, reduced to what the content audit needs. */
+export interface CmsContentAuditRow {
+  id: string;
+  product: string;
+  title: string;
+  brandName: string;
+  category: string;
+  slug: string;
+  /** CONTENT_FIELDS keys that have real content (see productCompleteness.ts). */
+  filled: string[];
+}
+
+/**
+ * Content audit of the live Wix CMS product collection (Import1): for every
+ * product, which content fields actually hold something. The client decides
+ * which fields count as required, so changing the selection needs no refetch.
+ * Read-only; served from the 60s admin read cache unless `fresh`.
+ */
+export async function getCmsContentAuditAction(
+  fresh = false
+): Promise<{ success: true; rows: CmsContentAuditRow[] } | { success: false; error: string }> {
+  await requireUser("viewer");
+  try {
+    if (fresh) invalidateAdminCmsCache();
+    const [products, brands] = await Promise.all([getAllProductsCached(), getActiveBrandsCached()]);
+    const brandMap = new Map(brands.map((b) => [b._id, b.name]));
+    const rows = products.map((p) => ({
+      id: p._id || "",
+      product: p.Product || "",
+      title: p.Title || "",
+      brandName: brandMap.get(p.Brand) || p.Brand || "",
+      category: p.Category || "",
+      slug: p.slug || "",
+      filled: getFilledFieldKeys(p),
+    }));
+    return { success: true, rows };
+  } catch (err) {
+    console.error("[getCmsContentAuditAction] Failed:", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 
 export interface DashboardStats {
   totalBrands: number;
@@ -53,6 +97,7 @@ export interface SyncLogEntry {
  * Runs the product discovery scan manually.
  */
 export async function runDiscoveryAction(brandId?: string) {
+  await requireUser("editor");
   try {
     const result = await runProductDiscovery(brandId);
     
@@ -88,6 +133,7 @@ export async function runDiscoveryAction(brandId?: string) {
 export async function getCmsPopupDataAction(
   fresh = false
 ): Promise<{ products: WixProduct[]; brands: WixBrand[] }> {
+  await requireUser("viewer");
   if (fresh) invalidateAdminCmsCache();
   const [products, brands] = await Promise.all([getAllProductsCached(), getActiveBrandsCached()]);
   return { products, brands };
@@ -95,11 +141,13 @@ export async function getCmsPopupDataAction(
 
 /** Clears the admin read cache so the next dashboard render is live. */
 export async function refreshDashboardStatsAction(): Promise<void> {
+  await requireUser("viewer");
   invalidateAdminCmsCache();
   revalidatePath("/admin/dashboard");
 }
 
 export async function getDashboardStatsAction(): Promise<DashboardStats> {
+  await requireUser("viewer");
   try {
     const [brands, products, sheetNew, sheetDelete, config] = await Promise.all([
       getActiveBrandsCached().catch((err) => {
@@ -175,6 +223,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
  * Fetches recent logs from the Sync_Logs sheet.
  */
 export async function getDiscoveryLogsAction(limit = 50): Promise<SyncLogEntry[]> {
+  await requireUser("viewer");
   try {
     const rows = await readSheet("Sync_Logs");
     if (rows.length <= 1) return [];
@@ -199,6 +248,7 @@ export async function getDiscoveryLogsAction(limit = 50): Promise<SyncLogEntry[]
  * Fetches all pending products in the Product_New sheet.
  */
 export async function getPendingProductsAction(): Promise<PendingProduct[]> {
+  await requireUser("viewer");
   try {
     const [rows, brands] = await Promise.all([
       readSheet("Product_New"),
@@ -238,6 +288,7 @@ export async function getPendingProductsAction(): Promise<PendingProduct[]> {
  * Fetches all active brands.
  */
 export async function getActiveBrandsAction() {
+  await requireUser("viewer");
   try {
     return await getActiveBrands();
   } catch (err) {
@@ -250,6 +301,7 @@ export async function getActiveBrandsAction() {
  * Updates the ImageSearchEnabled config key in System_Config.
  */
 export async function updateImageSearchConfigAction(enabled: boolean) {
+  await requireUser("admin");
   try {
     await updateSystemConfig("ImageSearchEnabled", String(enabled));
     revalidatePath("/admin/dashboard");
@@ -264,6 +316,7 @@ export async function updateImageSearchConfigAction(enabled: boolean) {
  * Uploads catalog product rows directly to Wix CMS collection Import2.
  */
 export async function uploadCatalogToWixAction(products: any[]) {
+  await requireUser("editor");
   try {
     const brands = await getActiveBrands();
     const brandMap = new Map(brands.map((b) => [b.name.toLowerCase().trim(), b._id]));
@@ -401,6 +454,7 @@ export async function compareProductWithCmsAction(local: {
   Brand?: string;
   productItem?: string;
 }): Promise<CmsCompareResult> {
+  await requireUser("viewer");
   try {
     return await compareProductWithCms(local);
   } catch (err) {
@@ -420,6 +474,7 @@ export async function updateCmsProductFieldsAction(
   modelName: string,
   fields: Partial<Record<"Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications", string>>
 ): Promise<{ found: boolean; success: boolean; error?: string }> {
+  await requireUser("editor");
   try {
     const result = await updateCmsProductFields(modelName, fields);
     return { found: result.found, success: result.success, error: result.error };
@@ -441,6 +496,7 @@ export async function updateCmsProductFieldsByIdAction(
   itemId: string,
   fields: Partial<Record<"Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications", string>>
 ): Promise<{ found: boolean; success: boolean; error?: string }> {
+  await requireUser("editor");
   if (!itemId.trim()) {
     return { found: false, success: false, error: "Không có cmsItemId để ghi lên CMS (thiếu ID gốc của sản phẩm)." };
   }
@@ -463,6 +519,7 @@ export async function updateCmsProductFieldsByIdAction(
 export async function pullCmsCatalogAction(): Promise<
   { success: true; sheets: SheetData[]; totalProducts: number } | { success: false; error: string }
 > {
+  await requireUser("viewer");
   try {
     const { sheets, totalProducts } = await pullCmsCatalogAsSheets();
     if (totalProducts === 0) {
@@ -479,6 +536,7 @@ export async function pullCmsCatalogAction(): Promise<
  * Stops the active product discovery scanner.
  */
 export async function stopDiscoveryAction() {
+  await requireUser("editor");
   try {
     stopProductDiscovery();
     return { success: true };
@@ -492,6 +550,7 @@ export async function stopDiscoveryAction() {
  * Checks if a product image URL is accessible and returns a valid image resource.
  */
 export async function checkProductImageAccessibilityAction(imageVal: string): Promise<boolean> {
+  await requireUser("viewer");
   try {
     return await isProductImageAccessible(imageVal);
   } catch (err) {

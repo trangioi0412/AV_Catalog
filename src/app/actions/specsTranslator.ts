@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth/guard";
 import { getActiveBrands, getAllProducts, updateCmsProductFields } from "@/lib/services/wixCms";
 
 /**
@@ -44,6 +45,7 @@ function detectFormat(raw: unknown): SpecsStorageFormat {
 export async function pullCmsSpecsAction(): Promise<
   { success: true; products: CmsSpecsProduct[] } | { success: false; error: string }
 > {
+  await requireUser("viewer");
   try {
     const [products, brands] = await Promise.all([getAllProducts(), getActiveBrands()]);
     if (products.length === 0) {
@@ -84,6 +86,7 @@ export async function uploadCmsSpecsAction(
   target: "array" | "text",
   value: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireUser("editor");
   if (!itemId.trim()) {
     return { success: false, error: "Thiếu cmsItemId của sản phẩm." };
   }

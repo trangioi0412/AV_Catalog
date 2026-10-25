@@ -30,7 +30,7 @@ function noStore(json: unknown, init?: ResponseInit) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!checkAdminSession(req)) {
+  if (!(await checkAdminSession(req, "viewer"))) {
     return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
   }
 

@@ -51,7 +51,7 @@ function noStore(json: unknown, init?: ResponseInit) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!checkAdminSession(req)) {
+  if (!(await checkAdminSession(req, "editor"))) {
     return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
   }
 

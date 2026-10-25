@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { startSyncAll, ManufacturerSyncApiError } from "@/lib/manufacturerSync/api";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const denied = await authorizeRequest(request, "admin");
+  if (denied) return denied;
+
   try {
     const result = await startSyncAll();
     return NextResponse.json(result, { status: 202 });

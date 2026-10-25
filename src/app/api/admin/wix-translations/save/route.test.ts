@@ -42,7 +42,7 @@ describe("POST /api/admin/wix-translations/save", () => {
   });
 
   it("rejects unauthenticated requests without ever calling the translation service", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(false);
+    vi.mocked(checkAdminSession).mockResolvedValue(false);
 
     const res = await POST(makeRequest(VALID_BODY));
 
@@ -51,7 +51,7 @@ describe("POST /api/admin/wix-translations/save", () => {
   });
 
   it("rejects a mode other than draft/publish", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
 
     const res = await POST(makeRequest({ ...VALID_BODY, mode: "preview" }));
 
@@ -60,7 +60,7 @@ describe("POST /api/admin/wix-translations/save", () => {
   });
 
   it("rejects a batch larger than the max batch size", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const items = Array.from({ length: 21 }, (_, i) => ({ itemId: `item-${i}`, fieldValues: { title: "x" } }));
 
     const res = await POST(makeRequest({ ...VALID_BODY, items }));
@@ -70,7 +70,7 @@ describe("POST /api/admin/wix-translations/save", () => {
   });
 
   it("passes mode through unchanged to the translation service (draft vs publish)", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateAndSyncWixCmsItems).mockResolvedValue({
       success: true, mode: "publish", sourceLocale: "vi", targetLocale: "en", total: 1, succeeded: 1, failed: 0, skipped: 0, items: [],
     });
@@ -81,7 +81,7 @@ describe("POST /api/admin/wix-translations/save", () => {
   });
 
   it("never leaks internal error details in the response", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateAndSyncWixCmsItems).mockRejectedValue(new Error("secret WIX_API_KEY=abc123 in stack trace"));
 
     const res = await POST(makeRequest(VALID_BODY));

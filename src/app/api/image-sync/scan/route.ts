@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { getAllProductsForImageSync, isValidProductImageFormat } from "@/lib/services/wixCms";
 import { buildScanPreview } from "@/lib/services/imageSyncService";
 
@@ -13,6 +14,9 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  const denied = await authorizeRequest(req, "editor");
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const fileNames: string[] = body.fileNames ?? [];

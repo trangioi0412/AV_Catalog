@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
 import {
   clearProductDocumentFields,
@@ -44,6 +45,7 @@ export async function clearCmsDocumentFieldsAction(
   fieldsToClear: string[],
   collectionId = "Import1"
 ): Promise<ClearDocumentResult> {
+  await requireUser("admin");
   if (!fieldsToClear || fieldsToClear.length === 0) {
     return { success: true, deletedMediaCount: 0, failedMediaCount: 0, mediaErrors: [] };
   }
@@ -143,6 +145,7 @@ export async function bulkClearCmsDocumentFieldsAction(
   totalFailed: number;
   results: Array<{ id: string; result: ClearDocumentResult }>;
 }> {
+  await requireUser("admin");
   const results: Array<{ id: string; result: ClearDocumentResult }> = [];
   let totalSuccess = 0;
   let totalFailed = 0;

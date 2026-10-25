@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { getSyncStatus, ManufacturerSyncApiError } from "@/lib/manufacturerSync/api";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ jobId: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
+  const denied = await authorizeRequest(request, "viewer");
+  if (denied) return denied;
+
   const { jobId } = await params;
 
   try {

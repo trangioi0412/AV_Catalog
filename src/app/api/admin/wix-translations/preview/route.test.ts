@@ -33,7 +33,7 @@ describe("POST /api/admin/wix-translations/preview", () => {
   });
 
   it("rejects unauthenticated requests without ever calling the translation service", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(false);
+    vi.mocked(checkAdminSession).mockResolvedValue(false);
 
     const res = await POST(makeRequest({ collectionKey: "products", itemIds: ["a"], sourceLocale: "vi", targetLocale: "en", fieldKeys: ["title"] }));
 
@@ -42,7 +42,7 @@ describe("POST /api/admin/wix-translations/preview", () => {
   });
 
   it("rejects a malformed body before calling the translation service", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
 
     const res = await POST(makeRequest({ collectionKey: "products" }));
 
@@ -51,7 +51,7 @@ describe("POST /api/admin/wix-translations/preview", () => {
   });
 
   it("always forces mode: 'preview' regardless of what else is in the body", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateAndSyncWixCmsItems).mockResolvedValue({
       success: true, mode: "preview", sourceLocale: "vi", targetLocale: "en", total: 1, succeeded: 1, failed: 0, skipped: 0, items: [],
     });
@@ -71,7 +71,7 @@ describe("POST /api/admin/wix-translations/preview", () => {
   });
 
   it("never leaks internal error details in the response", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateAndSyncWixCmsItems).mockRejectedValue(new Error("secret WIX_API_KEY=abc123 in stack trace"));
 
     const res = await POST(makeRequest({ collectionKey: "products", itemIds: ["a"], sourceLocale: "vi", targetLocale: "en", fieldKeys: ["title"] }));

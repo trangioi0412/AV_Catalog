@@ -5,11 +5,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 import { jobStore, pruneOldJobs } from "@/lib/services/imageSyncJobStore";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  const denied = await authorizeRequest(req, "viewer");
+  if (denied) return denied;
+
   pruneOldJobs();
 
   const jobId = req.nextUrl.searchParams.get("jobId");

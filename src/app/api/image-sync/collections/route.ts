@@ -5,11 +5,15 @@
  * Used by the UI to let the user pick the correct collection ID.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeRequest } from "@/lib/auth/guard";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = await authorizeRequest(req, "viewer");
+  if (denied) return denied;
+
   const apiKey = process.env.WIX_API_KEY;
   const siteId = process.env.WIX_SITE_ID;
 

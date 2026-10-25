@@ -59,7 +59,7 @@ describe("POST /api/admin/translations/generate", () => {
   });
 
   it("rejects unauthenticated requests without ever calling Wix or the translation provider", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(false);
+    vi.mocked(checkAdminSession).mockResolvedValue(false);
 
     const res = await POST(makeRequest({ itemIds: ["item-1"] }));
 
@@ -68,7 +68,7 @@ describe("POST /api/admin/translations/generate", () => {
   });
 
   it("rejects a batch larger than the max batch size before touching Wix", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const tooMany = Array.from({ length: 25 }, (_, i) => `item-${i}`);
 
     const res = await POST(makeRequest({ itemIds: tooMany }));
@@ -78,7 +78,7 @@ describe("POST /api/admin/translations/generate", () => {
   });
 
   it("reports a clear blocker when no translation schema exists for the collection", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(findCollectionSchema).mockResolvedValue(null);
 
     const res = await POST(makeRequest({ itemIds: ["item-1"] }));
@@ -89,7 +89,7 @@ describe("POST /api/admin/translations/generate", () => {
   });
 
   it("blocks generation when the English locale is not enabled/visible in Wix Multilingual", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(findCollectionSchema).mockResolvedValue(SCHEMA);
     vi.mocked(isLocaleAvailable).mockResolvedValue(false);
 
@@ -101,7 +101,7 @@ describe("POST /api/admin/translations/generate", () => {
   });
 
   it("translates only the fields the item doesn't already have a translation for, per item, isolating one item's failure from the rest", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(findCollectionSchema).mockResolvedValue(SCHEMA);
     vi.mocked(isLocaleAvailable).mockResolvedValue(true);
     vi.mocked(queryContentForEntity).mockResolvedValue(null);
@@ -134,7 +134,7 @@ describe("POST /api/admin/translations/generate", () => {
   });
 
   it("does not call the AI translator again for an item that already has a translation, unless forced", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(findCollectionSchema).mockResolvedValue(SCHEMA);
     vi.mocked(isLocaleAvailable).mockResolvedValue(true);
     vi.mocked(getRawCmsItem).mockResolvedValue({ title: "Neat Bar BYOD", productOverview: "Mo ta" });

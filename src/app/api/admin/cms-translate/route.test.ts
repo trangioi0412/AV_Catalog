@@ -41,21 +41,21 @@ describe("POST /api/admin/cms-translate", () => {
   });
 
   it("rejects unauthenticated requests without calling the service", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(false);
+    vi.mocked(checkAdminSession).mockResolvedValue(false);
     const res = await POST(makeRequest(PREVIEW_BODY));
     expect(res.status).toBe(401);
     expect(translateCmsEnglishToVietnamese).not.toHaveBeenCalled();
   });
 
   it("rejects a request with no fieldMappings", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const res = await POST(makeRequest({ ...PREVIEW_BODY, fieldMappings: [] }));
     expect(res.status).toBe(400);
     expect(translateCmsEnglishToVietnamese).not.toHaveBeenCalled();
   });
 
   it("rejects a field mapping that targets a Wix system field", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const res = await POST(
       makeRequest({ ...PREVIEW_BODY, fieldMappings: [{ sourceField: "title_EN", targetField: "_id", type: "text" }] })
     );
@@ -64,7 +64,7 @@ describe("POST /api/admin/cms-translate", () => {
   });
 
   it("rejects a field mapping whose name isn't a plain identifier", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const res = await POST(
       makeRequest({ ...PREVIEW_BODY, fieldMappings: [{ sourceField: "title-EN!", targetField: "title_VI", type: "text" }] })
     );
@@ -72,14 +72,14 @@ describe("POST /api/admin/cms-translate", () => {
   });
 
   it('rejects mode "preview" with no itemIds', async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const res = await POST(makeRequest({ ...PREVIEW_BODY, itemIds: undefined }));
     expect(res.status).toBe(400);
     expect(translateCmsEnglishToVietnamese).not.toHaveBeenCalled();
   });
 
   it("accepts an in-place field mapping (sourceField === targetField, for a field with no separate VI sibling)", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateCmsEnglishToVietnamese).mockResolvedValue({
       success: true,
       mode: "preview",
@@ -96,14 +96,14 @@ describe("POST /api/admin/cms-translate", () => {
   });
 
   it('rejects mode "write" with no items', async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     const res = await POST(makeRequest({ ...WRITE_BODY, items: undefined }));
     expect(res.status).toBe(400);
     expect(translateCmsEnglishToVietnamese).not.toHaveBeenCalled();
   });
 
   it('passes a valid "preview" request through to the service and returns its result', async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateCmsEnglishToVietnamese).mockResolvedValue({
       success: true,
       mode: "preview",
@@ -124,7 +124,7 @@ describe("POST /api/admin/cms-translate", () => {
   });
 
   it('passes a valid "write" request through to the service, including the approved fieldValues', async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateCmsEnglishToVietnamese).mockResolvedValue({
       success: true,
       mode: "write",
@@ -144,7 +144,7 @@ describe("POST /api/admin/cms-translate", () => {
   });
 
   it("never returns an API key, access token, or site secret", async () => {
-    vi.mocked(checkAdminSession).mockReturnValue(true);
+    vi.mocked(checkAdminSession).mockResolvedValue(true);
     vi.mocked(translateCmsEnglishToVietnamese).mockResolvedValue({
       success: true,
       mode: "preview",
