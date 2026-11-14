@@ -1,6 +1,8 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
-import { Search, ArrowLeft, Home, AlertCircle } from "lucide-react";
+import { ArrowLeft, Home, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function ProductNotFound() {
@@ -27,11 +29,10 @@ export default function ProductNotFound() {
             Go to Catalog Manager
           </Link>
         </Button>
-        <Button asChild variant="outline" className="gap-2 h-11 px-6">
-          <Link href="/admin/dashboard">
-            <Search className="w-4 h-4" />
-            Check Discovery Queue
-          </Link>
+        {/* Public page: customers have no staff session, so no admin links here. */}
+        <Button variant="outline" className="gap-2 h-11 px-6" onClick={() => window.history.back()}>
+          <ArrowLeft className="w-4 h-4" />
+          Go back
         </Button>
       </div>
 

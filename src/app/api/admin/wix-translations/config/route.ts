@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import { isWixConfigured } from "@/lib/wix/server-client";
 import { ALLOWED_COLLECTIONS, DEFAULT_COLLECTION_KEY, MAX_TRANSLATION_BATCH_SIZE } from "@/config/wix-translation.config";
 import { getWixCollectionSchema } from "@/services/wix-translation/wix-cms.service";
@@ -30,9 +30,8 @@ function noStore(json: unknown, init?: ResponseInit) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await checkAdminSession(req, "viewer"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "viewer");
+  if (denied) return denied;
 
   const warnings: string[] = [];
   const collections = Object.entries(ALLOWED_COLLECTIONS).map(([key, def]) => ({ key, label: def.label }));

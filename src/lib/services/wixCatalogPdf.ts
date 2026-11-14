@@ -73,7 +73,7 @@ const folderIdCache = new Map<string, string | null>();
  * Route-level auth + role check (src/lib/auth/guard.ts), re-exported here
  * because the admin routes and their tests import it from this module.
  */
-export { checkAdminSession } from "@/lib/auth/guard";
+export { authorizeRequest } from "@/lib/auth/guard";
 
 function getWixHeaders(): Record<string, string> {
   const apiKey = process.env.WIX_API_KEY;

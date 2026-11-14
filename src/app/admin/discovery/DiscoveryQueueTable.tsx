@@ -135,13 +135,18 @@ export function DiscoveryQueueTable({ initialProducts }: DiscoveryQueueTableProp
     const key = getProductKey(product);
     setProcessingId(`${key}-${action}`);
 
-    let res;
-    if (action === "approve") {
-      res = await approveProductAction(product, product.rowIndex);
-    } else if (action === "reject") {
-      res = await rejectProductAction(product, product.rowIndex);
-    } else {
-      res = await deleteProductAction(product, product.rowIndex);
+    let res: { success: boolean; error?: string };
+    try {
+      if (action === "approve") {
+        res = await approveProductAction(product, product.rowIndex);
+      } else if (action === "reject") {
+        res = await rejectProductAction(product, product.rowIndex);
+      } else {
+        res = await deleteProductAction(product, product.rowIndex);
+      }
+    } catch (err) {
+      // Network failure or an expired session: the action never answered.
+      res = { success: false, error: (err as Error).message || "Request failed." };
     }
 
     setProcessingId(null);

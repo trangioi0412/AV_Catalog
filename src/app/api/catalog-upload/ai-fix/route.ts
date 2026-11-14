@@ -19,7 +19,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import { enrichProductDataWithGeminiAgent } from "@/lib/services/geminiEnricher";
 
 export const runtime = "nodejs";
@@ -39,9 +39,8 @@ function noStore(json: unknown, init?: ResponseInit) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await checkAdminSession(req, "editor"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "editor");
+  if (denied) return denied;
 
   if (!process.env.GEMINI_API_KEY) {
     return noStore({ error: "AI fix is not configured (GEMINI_API_KEY is missing)." }, { status: 503 });

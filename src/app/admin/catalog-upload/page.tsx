@@ -39,6 +39,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BrandSheetManager } from "@/components/catalog-upload/BrandSheetManager";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type {
@@ -1318,6 +1320,17 @@ export default function CatalogUploadPage() {
           />
         </div>
 
+        <Tabs defaultValue="pdf" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="pdf">Catalog PDF</TabsTrigger>
+            <TabsTrigger value="brand-sheets">Dữ liệu hãng (Excel)</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="brand-sheets">
+            <BrandSheetManager />
+          </TabsContent>
+
+          <TabsContent value="pdf" className="space-y-6">
         {/* Step Indicator */}
         <Card className="border-border/60 bg-card shadow-sm p-4">
           <div className="flex items-center gap-2 overflow-x-auto">
@@ -1409,6 +1422,8 @@ export default function CatalogUploadPage() {
             isDownloading={isDownloadingCsv}
           />
         )}
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

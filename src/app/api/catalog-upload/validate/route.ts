@@ -24,7 +24,7 @@ import {
   searchCmsProduct,
   clearCmsProductListCache,
   MAX_PDF_SIZE_BYTES,
-  checkAdminSession,
+  authorizeRequest,
   CATALOG_UPLOAD_FOLDER_NAME,
 } from "@/lib/services/wixCatalogPdf";
 import type {
@@ -126,12 +126,8 @@ function parseRelativePath(
 
 export async function POST(req: NextRequest) {
   try {
-    if (!(await checkAdminSession(req, "editor"))) {
-      return NextResponse.json(
-        { error: "Unauthorized: Administrator access required." },
-        { status: 401 }
-      );
-    }
+    const denied = await authorizeRequest(req, "editor");
+    if (denied) return denied;
 
     const body = await req.json();
     const rawFiles: Array<{ relativePath: string; name: string; sizeBytes: number }> =

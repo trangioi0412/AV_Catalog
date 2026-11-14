@@ -45,8 +45,8 @@ async function findCorrectRowIndex(product: PendingProduct, originalIndex: numbe
  * Approves a product: Syncs to Wix CMS, removes from Google Sheet queue, logs action.
  */
 export async function approveProductAction(product: PendingProduct, originalIndex: number) {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     // 1. Verify and find index of the row in the sheet
     const correctIndex = await findCorrectRowIndex(product, originalIndex);
 
@@ -82,7 +82,7 @@ export async function approveProductAction(product: PendingProduct, originalInde
     await addLog("INFO", `Approved and synced product: ${product.Product} - ${product.Title}`, product.brandName);
 
     // Revalidate paths
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     revalidatePath("/admin/discovery");
 
     return { success: true };
@@ -96,8 +96,8 @@ export async function approveProductAction(product: PendingProduct, originalInde
  * Rejects a product: Moves to Product_Delete sheet, removes from queue, logs action.
  */
 export async function rejectProductAction(product: PendingProduct, originalIndex: number) {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     // 1. Verify and find index
     const correctIndex = await findCorrectRowIndex(product, originalIndex);
 
@@ -130,7 +130,7 @@ export async function rejectProductAction(product: PendingProduct, originalIndex
     await addLog("INFO", `Rejected and blacklisted product: ${product.Product} - ${product.Title}`, product.brandName);
 
     // Revalidate paths
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     revalidatePath("/admin/discovery");
 
     return { success: true };
@@ -144,8 +144,8 @@ export async function rejectProductAction(product: PendingProduct, originalIndex
  * Deletes a product: Removes from queue and logs action (doesn't blacklist).
  */
 export async function deleteProductAction(product: PendingProduct, originalIndex: number) {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     // 1. Verify and find index
     const correctIndex = await findCorrectRowIndex(product, originalIndex);
 
@@ -156,7 +156,7 @@ export async function deleteProductAction(product: PendingProduct, originalIndex
     await addLog("INFO", `Deleted product from queue: ${product.Product} - ${product.Title}`, product.brandName);
 
     // Revalidate paths
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     revalidatePath("/admin/discovery");
 
     return { success: true };
@@ -170,15 +170,15 @@ export async function deleteProductAction(product: PendingProduct, originalIndex
  * Clears the entire blacklist (Product_Delete sheet)
  */
 export async function clearBlacklistAction() {
-  await requireUser("admin");
   try {
+    await requireUser("admin");
     await clearSheet("Product_Delete");
     await addLog("WARNING", "Cleared the entire product blacklist");
     
     // Reset RejectedCount config
     await updateSystemConfig("RejectedCount", "0");
 
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     revalidatePath("/admin/discovery");
     return { success: true };
   } catch (err) {
@@ -191,12 +191,12 @@ export async function clearBlacklistAction() {
  * Clears the entire pending queue (Product_New sheet)
  */
 export async function clearQueueAction() {
-  await requireUser("admin");
   try {
+    await requireUser("admin");
     await clearSheet("Product_New");
     await addLog("WARNING", "Cleared the entire pending products queue");
 
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     revalidatePath("/admin/discovery");
     return { success: true };
   } catch (err) {

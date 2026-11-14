@@ -60,8 +60,8 @@ export async function resetImageDiscoveryAction() {
  * Stops the active image discovery process.
  */
 export async function stopImageDiscoveryAction() {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     resetImageDiscoveryStatus();
     revalidatePath("/admin/image-discovery");
     return { success: true, error: undefined };

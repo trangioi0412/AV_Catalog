@@ -1,0 +1,48 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - link "AVS-TEK Portal — trang chủ" [ref=f1e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f1e10]:
+          - generic [ref=f1e11]: AVS-TEK
+          - generic [ref=f1e12]: Portal
+      - generic [ref=f1e13]:
+        - heading "Cổng truy cập website nội bộ AVS-TEK" [level=2] [ref=f1e14]
+        - list [ref=f1e15]:
+          - listitem [ref=f1e16]:
+            - generic [ref=f1e21]:
+              - generic [ref=f1e22]: Một tài khoản
+              - generic [ref=f1e23]: Đăng nhập một lần, dùng cho mọi website nội bộ.
+          - listitem [ref=f1e24]:
+            - generic [ref=f1e29]:
+              - generic [ref=f1e30]: Đúng quyền
+              - generic [ref=f1e31]: Mỗi người chỉ thấy website được cấp theo role.
+          - listitem [ref=f1e32]:
+            - generic [ref=f1e39]:
+              - generic [ref=f1e40]: Mở rộng dễ dàng
+              - generic [ref=f1e41]: Thêm website mới mà không cần tạo tài khoản lại.
+      - paragraph [ref=f1e42]: © 2026 AVS-TEK
+    - main [ref=f1e43]:
+      - generic [ref=f1e44]:
+        - generic [ref=f1e45]:
+          - heading "Đăng nhập" [level=1] [ref=f1e46]
+          - paragraph [ref=f1e47]: Dùng email công ty để vào các website nội bộ.
+          - generic [ref=f1e51]:
+            - generic [ref=f1e52]:
+              - generic [ref=f1e53]: Email công ty
+              - textbox "Email công ty" [active] [ref=f1e54]:
+                - /placeholder: ten@avs-tek.vn
+            - generic [ref=f1e55]:
+              - generic [ref=f1e56]:
+                - generic [ref=f1e57]: Mật khẩu
+                - link "Quên mật khẩu?" [ref=f1e58] [cursor=pointer]:
+                  - /url: /forgot-password
+              - generic [ref=f1e59]:
+                - textbox "Mật khẩu" [ref=f1e60]
+                - button "Hiện mật khẩu" [ref=f1e61] [cursor=pointer]
+            - button "Đăng nhập" [ref=f1e65] [cursor=pointer]
+        - generic [ref=f1e66]:
+          - text: Chưa có tài khoản?
+          - link "Đăng ký" [ref=f1e67] [cursor=pointer]:
+            - /url: /register
+  - alert [ref=f1e68]

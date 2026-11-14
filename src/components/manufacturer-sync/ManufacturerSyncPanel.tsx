@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -49,6 +50,7 @@ interface BatchJob {
 export function ManufacturerSyncPanel() {
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [selected, setSelected] = useState<string>("");
+  const [categories, setCategories] = useState<string>("");
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -108,7 +110,11 @@ export function ManufacturerSyncPanel() {
       const res = await fetch("/api/manufacturer-sync/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manufacturer: selected, mode: "full" }),
+        body: JSON.stringify({
+          manufacturer: selected,
+          mode: "full",
+          categories: categories.split(/[\s,]+/).filter(Boolean),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -221,6 +227,19 @@ export function ManufacturerSyncPanel() {
             {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
             {isRunning ? "Đang sync..." : "Bắt đầu đồng bộ"}
           </Button>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="sync-categories" className="text-xs text-muted-foreground">
+            Category (tuỳ chọn) — đường dẫn hoặc URL trên website hãng, cách nhau bằng dấu phẩy. Để trống = toàn bộ sản phẩm.
+          </label>
+          <Input
+            id="sync-categories"
+            value={categories}
+            onChange={(e) => setCategories(e.target.value)}
+            placeholder="/products/cameras/, /products/speakers/"
+            disabled={isRunning}
+          />
         </div>
 
         {error && (

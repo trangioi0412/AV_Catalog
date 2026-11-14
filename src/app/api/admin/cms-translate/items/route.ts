@@ -21,7 +21,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import { resolveCollection } from "@/config/wix-translation.config";
 import { getWixCmsItems } from "@/services/wix-translation/wix-cms.service";
 import { WixServerClientError } from "@/lib/wix/server-client";
@@ -56,9 +56,8 @@ function resolveItemName(data: Record<string, unknown>, fallback: string): strin
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await checkAdminSession(req, "viewer"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "viewer");
+  if (denied) return denied;
 
   const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
   if (!parsed.success) {

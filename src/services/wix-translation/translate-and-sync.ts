@@ -226,7 +226,7 @@ export async function translateAndSyncWixCmsItems(
 
   if (input.mode === "publish" && succeeded > 0) {
     revalidatePath("/admin/wix-translations");
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
   }
 
   return {

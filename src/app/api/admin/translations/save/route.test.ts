@@ -7,7 +7,7 @@ vi.mock("next/cache", () => ({
 }));
 
 vi.mock("@/lib/services/wixCatalogPdf", () => ({
-  checkAdminSession: vi.fn(),
+  authorizeRequest: vi.fn(),
 }));
 
 vi.mock("@/lib/services/wixMultilingual", async () => {
@@ -24,7 +24,7 @@ vi.mock("@/lib/services/wixMultilingual", async () => {
   };
 });
 
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import {
   findCollectionSchema,
   isLocaleAvailable,
@@ -56,7 +56,7 @@ const SCHEMA = {
 describe("POST /api/admin/translations/save", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(checkAdminSession).mockResolvedValue(true);
+    vi.mocked(authorizeRequest).mockResolvedValue(null);
     vi.mocked(findCollectionSchema).mockResolvedValue(SCHEMA);
     vi.mocked(isLocaleAvailable).mockResolvedValue(true);
     vi.mocked(bulkCreateContent).mockResolvedValue([]);
@@ -64,7 +64,7 @@ describe("POST /api/admin/translations/save", () => {
   });
 
   it("rejects unauthenticated requests without writing anything to Wix", async () => {
-    vi.mocked(checkAdminSession).mockResolvedValue(false);
+    vi.mocked(authorizeRequest).mockResolvedValue(Response.json({ error: "Unauthorized" }, { status: 401 }) as never);
 
     const res = await POST(makeRequest({ items: [{ entityId: "a", fields: { title: "Hi" } }] }));
 

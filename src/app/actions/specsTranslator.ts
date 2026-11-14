@@ -45,8 +45,8 @@ function detectFormat(raw: unknown): SpecsStorageFormat {
 export async function pullCmsSpecsAction(): Promise<
   { success: true; products: CmsSpecsProduct[] } | { success: false; error: string }
 > {
-  await requireUser("viewer");
   try {
+    await requireUser("viewer");
     const [products, brands] = await Promise.all([getAllProducts(), getActiveBrands()]);
     if (products.length === 0) {
       return { success: false, error: "Không tìm thấy sản phẩm nào trên Wix CMS (kiểm tra lại cấu hình WIX_API_KEY / WIX_SITE_ID)." };

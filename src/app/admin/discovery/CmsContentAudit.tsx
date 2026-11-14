@@ -30,7 +30,13 @@ export function CmsContentAudit() {
 
   const load = React.useCallback(async (fresh: boolean) => {
     setLoading(true);
-    const res = await getCmsContentAuditAction(fresh);
+    let res: Awaited<ReturnType<typeof getCmsContentAuditAction>>;
+    try {
+      res = await getCmsContentAuditAction(fresh);
+    } catch (err) {
+      // Network failure or an expired session: the action never answered.
+      res = { success: false, error: (err as Error).message || "Không tải được dữ liệu từ Wix CMS." };
+    }
     setLoading(false);
     if (res.success) {
       setRows(res.rows);
@@ -43,12 +49,14 @@ export function CmsContentAudit() {
 
   React.useEffect(() => {
     let active = true;
-    getCmsContentAuditAction(false).then((res) => {
-      if (!active) return;
-      setLoading(false);
-      if (res.success) setRows(res.rows);
-      else setError(res.error);
-    });
+    getCmsContentAuditAction(false)
+      .catch((err: Error) => ({ success: false as const, error: err.message || "Không tải được dữ liệu từ Wix CMS." }))
+      .then((res) => {
+        if (!active) return;
+        setLoading(false);
+        if (res.success) setRows(res.rows);
+        else setError(res.error);
+      });
     return () => {
       active = false;
     };

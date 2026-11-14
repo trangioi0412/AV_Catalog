@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import { MAX_TRANSLATION_BATCH_SIZE } from "@/config/wix-translation.config";
 import { translateAndSyncWixCmsItems, TranslateAndSyncError } from "@/services/wix-translation/translate-and-sync";
 import { WixMultilingualError } from "@/services/wix-translation/wix-multilingual.service";
@@ -48,9 +48,8 @@ function errorResponse(err: unknown): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await checkAdminSession(req, "editor"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "editor");
+  if (denied) return denied;
 
   let body: unknown;
   try {

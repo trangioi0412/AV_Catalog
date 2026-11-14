@@ -119,7 +119,7 @@ export async function clearCmsDocumentFieldsAction(
   }
 
   // Step 5: Revalidate
-  revalidatePath("/admin/dashboard");
+  revalidatePath("/");
   revalidatePath("/admin/discovery");
 
   return {

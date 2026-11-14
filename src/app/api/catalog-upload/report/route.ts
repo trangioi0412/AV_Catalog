@@ -7,19 +7,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Papa from "papaparse";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import type { CatalogUploadReport } from "@/types/catalog-upload";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    if (!(await checkAdminSession(req, "editor"))) {
-      return NextResponse.json(
-        { error: "Unauthorized: Administrator access required." },
-        { status: 401 }
-      );
-    }
+    const denied = await authorizeRequest(req, "editor");
+    if (denied) return denied;
 
     const body = await req.json();
     const report: CatalogUploadReport = body?.report;

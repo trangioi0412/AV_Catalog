@@ -1,0 +1,55 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link "AVS-TEK Portal — trang chủ" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e10]:
+          - generic [ref=e11]: AVS-TEK
+          - generic [ref=e12]: Portal
+      - generic [ref=e13]:
+        - heading "Cổng truy cập website nội bộ AVS-TEK" [level=2] [ref=e14]
+        - list [ref=e15]:
+          - listitem [ref=e16]:
+            - generic [ref=e21]:
+              - generic [ref=e22]: Một tài khoản
+              - generic [ref=e23]: Đăng nhập một lần, dùng cho mọi website nội bộ.
+          - listitem [ref=e24]:
+            - generic [ref=e29]:
+              - generic [ref=e30]: Đúng quyền
+              - generic [ref=e31]: Mỗi người chỉ thấy website được cấp theo role.
+          - listitem [ref=e32]:
+            - generic [ref=e39]:
+              - generic [ref=e40]: Mở rộng dễ dàng
+              - generic [ref=e41]: Thêm website mới mà không cần tạo tài khoản lại.
+      - paragraph [ref=e42]: © 2026 AVS-TEK
+    - main [ref=e43]:
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - heading "Đăng ký tài khoản" [level=1] [ref=e46]
+          - paragraph [ref=e47]: Dành cho nhân viên có email @avs-tek.vn. Quyền vào từng website do quản trị viên cấp.
+          - generic [ref=e49]:
+            - generic [ref=e50]:
+              - generic [ref=e51]: Họ và tên
+              - textbox "Họ và tên" [active] [ref=e52]
+            - generic [ref=e53]:
+              - generic [ref=e54]: Email công ty
+              - textbox "Email công ty" [ref=e55]:
+                - /placeholder: ten@avs-tek.vn
+              - paragraph [ref=e56]: Chỉ chấp nhận email @avs-tek.vn. Link xác minh sẽ được gửi tới email này.
+            - generic [ref=e57]:
+              - generic [ref=e58]: Mật khẩu
+              - generic [ref=e59]:
+                - textbox "Mật khẩu" [ref=e60]
+                - button "Hiện mật khẩu" [ref=e61] [cursor=pointer]
+              - paragraph [ref=e65]: Tối thiểu 10 ký tự, gồm cả chữ và số.
+            - generic [ref=e66]:
+              - generic [ref=e67]: Nhập lại mật khẩu
+              - generic [ref=e68]:
+                - textbox "Nhập lại mật khẩu" [ref=e69]
+                - button "Hiện mật khẩu" [ref=e70] [cursor=pointer]
+            - button "Tạo tài khoản" [ref=e74] [cursor=pointer]
+        - generic [ref=e75]:
+          - text: Đã có tài khoản?
+          - link "Đăng nhập" [ref=e76] [cursor=pointer]:
+            - /url: /login
+  - alert [ref=e77]

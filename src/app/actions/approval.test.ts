@@ -25,19 +25,22 @@ describe("approval server actions enforce roles themselves", () => {
 
   it("clearQueueAction rejects an unauthenticated caller before touching the sheet", async () => {
     vi.mocked(getCatalogUser).mockResolvedValue(null);
-    await expect(clearQueueAction()).rejects.toMatchObject({ status: 401 });
+    // Returned, not thrown: the UI's { success: false } path shows the message.
+    await expect(clearQueueAction()).resolves.toMatchObject({ success: false, error: expect.stringContaining("Unauthorized") });
     expect(clearSheet).not.toHaveBeenCalled();
   });
 
   it("clearQueueAction is admin-only", async () => {
     vi.mocked(getCatalogUser).mockResolvedValue(user("editor"));
-    await expect(clearQueueAction()).rejects.toMatchObject({ status: 403 });
+    // Returned, not thrown: the UI's { success: false } path shows the message.
+    await expect(clearQueueAction()).resolves.toMatchObject({ success: false, error: expect.stringContaining("Forbidden") });
     expect(clearSheet).not.toHaveBeenCalled();
   });
 
   it("approveProductAction rejects a viewer before reading the queue", async () => {
     vi.mocked(getCatalogUser).mockResolvedValue(user("viewer"));
-    await expect(approveProductAction({} as PendingProduct, 0)).rejects.toMatchObject({ status: 403 });
+    // Returned, not thrown: the UI's { success: false } path shows the message.
+    await expect(approveProductAction({} as PendingProduct, 0)).resolves.toMatchObject({ success: false, error: expect.stringContaining("Forbidden") });
     expect(readSheet).not.toHaveBeenCalled();
   });
 });

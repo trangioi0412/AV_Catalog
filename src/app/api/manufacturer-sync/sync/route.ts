@@ -9,13 +9,16 @@ export async function POST(request: NextRequest) {
   const payload = await request.json().catch(() => null);
   const manufacturer = payload?.manufacturer;
   const mode = payload?.mode ?? "full";
+  const categories: string[] = Array.isArray(payload?.categories)
+    ? payload.categories.filter((c: unknown): c is string => typeof c === "string" && c.trim() !== "")
+    : [];
 
   if (!manufacturer || typeof manufacturer !== "string") {
     return NextResponse.json({ detail: "'manufacturer' is required" }, { status: 400 });
   }
 
   try {
-    const result = await startSync(manufacturer, mode);
+    const result = await startSync(manufacturer, mode, categories);
     return NextResponse.json(result, { status: 202 });
   } catch (error) {
     if (error instanceof ManufacturerSyncApiError) {

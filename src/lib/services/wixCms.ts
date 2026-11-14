@@ -66,7 +66,7 @@ export interface WixPatchResult {
   error?: string;
 }
 
-function getWixHeaders(): Record<string, string> | null {
+export function getWixHeaders(): Record<string, string> | null {
   const apiKey = process.env.WIX_API_KEY;
   const siteId = process.env.WIX_SITE_ID;
 
@@ -415,6 +415,9 @@ const ADMIN_CACHE_TTL_MS = 60_000;
 
 type AdminCacheEntry = { value?: unknown; expiresAt: number; inflight?: Promise<unknown> };
 const adminCache = new Map<string, AdminCacheEntry>();
+// Bumped on every invalidation: a read that started before a write must not
+// store its (pre-write) result after the cache was cleared.
+let adminCacheGeneration = 0;
 
 function readThroughAdminCache<T>(key: string, load: () => Promise<T>): Promise<T> {
   const entry = adminCache.get(key);
@@ -422,13 +425,16 @@ function readThroughAdminCache<T>(key: string, load: () => Promise<T>): Promise<
   if (entry && "value" in entry && entry.expiresAt > Date.now()) {
     return Promise.resolve(entry.value as T);
   }
+  const generation = adminCacheGeneration;
   const inflight = load().then(
     (value) => {
-      adminCache.set(key, { value, expiresAt: Date.now() + ADMIN_CACHE_TTL_MS });
+      if (generation === adminCacheGeneration) {
+        adminCache.set(key, { value, expiresAt: Date.now() + ADMIN_CACHE_TTL_MS });
+      }
       return value;
     },
     (err) => {
-      adminCache.delete(key);
+      if (generation === adminCacheGeneration) adminCache.delete(key);
       throw err;
     }
   );
@@ -438,6 +444,7 @@ function readThroughAdminCache<T>(key: string, load: () => Promise<T>): Promise<
 
 /** Drops cached admin reads so the next dashboard load fetches live data. */
 export function invalidateAdminCmsCache(): void {
+  adminCacheGeneration++;
   adminCache.clear();
 }
 
@@ -1161,52 +1168,71 @@ export function getImageDimensions(buffer: Buffer): { width: number; height: num
 
 let folderPromise: Promise<string | null> | null = null;
 
+/**
+ * Root-level Media Manager folder `folderName`, created when missing. Same
+ * lookup as getOrCreateFolderPath (direct children of media-root only), but
+ * returns null instead of throwing so callers can fall back to the root.
+ */
 export async function getOrCreateFolder(folderName = "product_image"): Promise<string | null> {
-  const headers = getWixHeaders();
-  if (!headers) {
+  if (!getWixHeaders()) {
     console.warn("Wix credentials not configured — skipping getOrCreateFolder");
     return null;
   }
-
   try {
-    const listRes = await fetch("https://www.wixapis.com/site-media/v1/folders", {
-      method: "GET",
-      headers,
-    });
-
-    if (listRes.ok) {
-      const data = await listRes.json();
-      const folders = data.folders || [];
-      const found = folders.find(
-        (f: any) =>
-          (f.displayName || f.name || "").toLowerCase().trim() === folderName.toLowerCase().trim()
-      );
-      if (found) {
-        return found.id;
-      }
-    }
-
-    const createRes = await fetch("https://www.wixapis.com/site-media/v1/folders", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        name: folderName,
-      }),
-    });
-
-    if (!createRes.ok) {
-      const text = await createRes.text();
-      console.error(`[Wix Media] Create folder failed: ${createRes.status} — ${text}`);
-      return null;
-    }
-
-    const createdData = await createRes.json();
-    const folder = createdData.folder || createdData;
-    return folder.id || null;
+    return await resolveFolderSegments([folderName.trim()]);
   } catch (err) {
     console.error("[Wix Media] getOrCreateFolder error:", err);
     return null;
   }
+}
+
+type WixFolder = { id: string; displayName?: string; name?: string; parentFolderId?: string };
+
+/** All direct child folders of `parentId`, following every page. */
+async function listChildFolders(headers: Record<string, string>, parentId: string): Promise<WixFolder[]> {
+  const all: WixFolder[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < 100; page++) {
+    const qs = new URLSearchParams({ parentFolderId: parentId, "paging.limit": "100" });
+    if (cursor) qs.set("paging.cursor", cursor);
+    const listRes = await fetch(`https://www.wixapis.com/site-media/v1/folders?${qs}`, { headers, cache: "no-store" });
+    if (!listRes.ok) throw new Error(`[Wix Media] List folders failed: ${listRes.status} ${await listRes.text()}`);
+    const json = await listRes.json();
+    all.push(...((json.folders as WixFolder[]) || []));
+    cursor = json.nextCursor?.cursors?.next || undefined;
+    if (!cursor || json.nextCursor?.hasNext === false) break;
+  }
+  return all;
+}
+
+/** Walks/creates `segments` under media-root; returns the last folder id. Throws on API failure. */
+async function resolveFolderSegments(segments: string[]): Promise<string> {
+  const headers = getWixHeaders();
+  if (!headers) throw new Error("Wix credentials (WIX_API_KEY, WIX_SITE_ID) are not configured");
+  if (segments.length === 0 || segments.some((s) => !s)) throw new Error("Đường dẫn folder rỗng");
+
+  let parentId = "media-root";
+  for (const segment of segments) {
+    const wanted = segment.toLowerCase();
+    const found = (await listChildFolders(headers, parentId)).find(
+      (f) =>
+        (f.parentFolderId ?? parentId) === parentId &&
+        (f.displayName || f.name || "").trim().toLowerCase() === wanted
+    );
+    if (found) {
+      parentId = found.id;
+      continue;
+    }
+    const createRes = await fetch("https://www.wixapis.com/site-media/v1/folders", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ displayName: segment, parentFolderId: parentId }),
+    });
+    if (!createRes.ok) throw new Error(`[Wix Media] Create folder "${segment}" failed: ${createRes.status} ${await createRes.text()}`);
+    const created = await createRes.json();
+    parentId = (created.folder || created).id;
+  }
+  return parentId;
 }
 
 const folderIdCache = new Map<string, string | null>();
@@ -1216,9 +1242,22 @@ export async function getProductImageFolderId(folderName = "product_image"): Pro
   if (folderIdCache.has(normalized)) {
     return folderIdCache.get(normalized)!;
   }
-  const folderId = await getOrCreateFolder(folderName);
-  folderIdCache.set(normalized, folderId);
+  // "Brand/Logo" = sub-folder "Logo" inside root folder "Brand".
+  const folderId = folderName.includes("/")
+    ? await getOrCreateFolderPath(folderName)
+    : await getOrCreateFolder(folderName);
+  if (folderId) folderIdCache.set(normalized, folderId);
   return folderId;
+}
+
+/**
+ * Resolves a nested Media Manager path ("Brand/Logo"), creating missing
+ * segments. Unlike getOrCreateFolder, a failed list/create THROWS: uploading
+ * into the media root instead of the requested folder would be a silent
+ * misplacement the admin only notices later.
+ */
+export async function getOrCreateFolderPath(path: string): Promise<string> {
+  return resolveFolderSegments(path.split("/").map((s) => s.trim()).filter(Boolean));
 }
 
 /**

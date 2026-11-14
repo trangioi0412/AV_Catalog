@@ -13,8 +13,12 @@ const VALID_KEYS = new Set(CONTENT_FIELDS.map((f) => f.key));
 const listeners = new Set<() => void>();
 let cachedRaw: string | null | undefined;
 let cachedKeys: string[] = DEFAULT_CONTENT_FIELD_KEYS;
+// Selection kept in memory when localStorage can't be written (private mode,
+// quota exceeded). Wins over whatever storage still returns.
+let memoryRaw: string | null = null;
 
 function readRaw(): string | null {
+  if (memoryRaw !== null) return memoryRaw;
   try {
     return localStorage.getItem(STORAGE_KEY);
   } catch {
@@ -52,12 +56,13 @@ function subscribe(listener: () => void) {
 }
 
 function write(keys: string[]) {
+  const raw = JSON.stringify(keys);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+    localStorage.setItem(STORAGE_KEY, raw);
+    memoryRaw = null;
   } catch {
-    // Storage unavailable (private mode) — selection simply won't persist.
-    cachedRaw = JSON.stringify(keys);
-    cachedKeys = keys;
+    // Storage unavailable (private mode) — selection works but won't persist.
+    memoryRaw = raw;
   }
   listeners.forEach((l) => l());
 }

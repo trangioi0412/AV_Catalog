@@ -20,6 +20,7 @@ interface ImageDownloadResult {
   skipped_existing: number;
   skipped_no_title: number;
   failed: string[];
+  under_min_images?: string[];
 }
 
 export function ImageDownloadPanel() {
@@ -74,8 +75,8 @@ export function ImageDownloadPanel() {
           Tải Ảnh Sản Phẩm Về
         </CardTitle>
         <CardDescription>
-          Tải toàn bộ ảnh trong cột &quot;image&quot; của sheet một hãng về thư mục Data/&lt;hãng&gt; trên backend
-          (av-crawler-api).
+          Tải ảnh trong cột &quot;image&quot; của sheet một hãng về thư mục Data/&lt;hãng&gt; trên backend
+          (av-crawler-api), tối đa 3 ảnh mỗi sản phẩm. Sản phẩm dưới 2 ảnh sẽ được liệt kê để bổ sung.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -124,6 +125,20 @@ export function ImageDownloadPanel() {
               <p className="text-xs text-amber-600">
                 Bỏ qua {result.skipped_no_title} ảnh vì sản phẩm không có Title để đặt tên file.
               </p>
+            )}
+            {(result.under_min_images?.length ?? 0) > 0 && (
+              <details className="text-xs text-amber-600">
+                <summary className="cursor-pointer">
+                  {result.under_min_images!.length} sản phẩm có dưới 2 ảnh
+                </summary>
+                <ul className="mt-1 space-y-1 max-h-40 overflow-auto">
+                  {result.under_min_images!.map((t, i) => (
+                    <li key={i} className="truncate">
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
             {result.failed.length > 0 && (
               <details className="text-xs text-muted-foreground">

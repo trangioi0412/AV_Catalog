@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import {
   bulkTrashMediaFiles,
   clampPageSize,
@@ -55,9 +55,8 @@ function errorResponse(err: unknown): NextResponse {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  if (!(await checkAdminSession(req, "viewer"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "viewer");
+  if (denied) return denied;
 
   if (!isWixMediaConfigured()) {
     return noStore(
@@ -135,9 +134,8 @@ export async function GET(req: NextRequest) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function DELETE(req: NextRequest) {
-  if (!(await checkAdminSession(req, "admin"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "admin");
+  if (denied) return denied;
 
   if (!isWixMediaConfigured()) {
     return noStore(

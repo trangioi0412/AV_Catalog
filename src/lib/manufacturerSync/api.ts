@@ -10,6 +10,8 @@
 
 const MANUFACTURER_SYNC_API_URL =
   process.env.MANUFACTURER_SYNC_API_URL ?? "http://localhost:8000";
+// Must equal the sync service's API_KEY; sent as X-API-Key. Server-only.
+const MANUFACTURER_SYNC_API_KEY = process.env.MANUFACTURER_SYNC_API_KEY;
 
 export class ManufacturerSyncApiError extends Error {
   status: number;
@@ -23,17 +25,46 @@ export class ManufacturerSyncApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${MANUFACTURER_SYNC_API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+  let text: string;
+  try {
+    response = await fetch(`${MANUFACTURER_SYNC_API_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(MANUFACTURER_SYNC_API_KEY ? { "X-API-Key": MANUFACTURER_SYNC_API_KEY } : {}),
+        ...init?.headers,
+      },
+      cache: "no-store",
+    });
+    text = await response.text();
+  } catch (error) {
+    // Routes turn this into a bare "unreachable" 502, so log the real cause
+    // (connection refused, timeout, ...) here.
+    console.error(`Manufacturer sync API request failed: ${MANUFACTURER_SYNC_API_URL}${path}`, error);
+    throw error;
+  }
 
-  const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: unknown;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch (error) {
+    console.error(`Manufacturer sync API returned non-JSON (${response.status}) for ${path}:`, text.slice(0, 500));
+    // Error statuses (e.g. a proxy's plain-text/HTML 401) still go through the
+    // status mapping below; only a non-JSON success body is a hard failure.
+    if (response.ok) throw error;
+    body = { detail: text.slice(0, 500) };
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    // The sync service rejected our X-API-Key -- a server misconfiguration,
+    // not the admin's session. Routes pass error.status straight through, so
+    // a 401 here would look like AV_Catalog's own "not logged in".
+    console.error("Manufacturer sync API rejected MANUFACTURER_SYNC_API_KEY", response.status, body);
+    throw new ManufacturerSyncApiError(502, {
+      detail: "Manufacturer sync API rejected this server's API key (check MANUFACTURER_SYNC_API_KEY).",
+    });
+  }
 
   if (!response.ok) {
     throw new ManufacturerSyncApiError(response.status, body);
@@ -77,10 +108,11 @@ export function listManufacturers(): Promise<Manufacturer[]> {
   return request<Manufacturer[]>("/api/manufacturers");
 }
 
-export function startSync(manufacturer: string, mode = "full"): Promise<SyncAcceptedResponse> {
+/** `categories`: category paths/URLs on the brand's site; empty = every product. */
+export function startSync(manufacturer: string, mode = "full", categories: string[] = []): Promise<SyncAcceptedResponse> {
   return request<SyncAcceptedResponse>("/api/sync/manufacturer", {
     method: "POST",
-    body: JSON.stringify({ manufacturer, mode }),
+    body: JSON.stringify({ manufacturer, mode, categories }),
   });
 }
 
@@ -185,6 +217,8 @@ export interface ImageDownloadResult {
   skipped_existing: number;
   skipped_no_title: number;
   failed: string[];
+  /** "<Title>: <n> ảnh" for products left with fewer than 2 images. */
+  under_min_images?: string[];
 }
 
 export function downloadManufacturerImages(manufacturer: string): Promise<ImageDownloadResult> {

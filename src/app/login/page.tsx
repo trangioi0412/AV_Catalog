@@ -10,5 +10,5 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   const user = await getCatalogUser();
-  redirect(user ? "/admin/dashboard" : portalSsoUrl("/admin/dashboard"));
+  redirect(user ? "/" : portalSsoUrl("/"));
 }

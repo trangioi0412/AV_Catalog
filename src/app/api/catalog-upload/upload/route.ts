@@ -30,7 +30,7 @@ import {
   updateProductDocument,
   categoryToCmsField,
   MAX_PDF_SIZE_BYTES,
-  checkAdminSession,
+  authorizeRequest,
   CATALOG_UPLOAD_FOLDER_NAME,
 } from "@/lib/services/wixCatalogPdf";
 import { withRetry } from "@/lib/services/imageSyncService";
@@ -49,12 +49,8 @@ function isValidCmsItemId(id: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!(await checkAdminSession(req, "editor"))) {
-      return NextResponse.json(
-        { error: "Unauthorized: Administrator access required." },
-        { status: 401 }
-      );
-    }
+    const denied = await authorizeRequest(req, "editor");
+    if (denied) return denied;
 
     const formData = await req.formData();
 

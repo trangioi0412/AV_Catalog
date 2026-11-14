@@ -43,10 +43,18 @@ describe("/api/auth/callback", () => {
     vi.mocked(verifySsoToken).mockResolvedValue({ id: "u1", email: "", name: "", role: "viewer", companyRole: "", superAdmin: false });
     const res = await route.POST(post({ token: "good", next: "//evil.example.com/x" }));
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("http://localhost/");
+    // Relative: the browser keeps the host it used (LAN address or localhost).
+    expect(res.headers.get("location")).toBe("/");
     const cookie = res.headers.get("set-cookie") ?? "";
     expect(cookie).toContain("catalog_session=session-jwt");
     expect(cookie.toLowerCase()).toContain("httponly");
     expect(cookie.toLowerCase()).toContain("samesite=lax");
+  });
+
+  it("redirects to the requested path relative to the current host", async () => {
+    vi.mocked(verifySsoToken).mockResolvedValue({ id: "u1", email: "", name: "", role: "viewer", companyRole: "", superAdmin: false });
+    const res = await route.POST(post({ token: "good", next: "/admin/discovery?tab=1" }));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/admin/discovery?tab=1");
   });
 });

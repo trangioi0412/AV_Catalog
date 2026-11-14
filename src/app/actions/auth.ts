@@ -1,21 +1,10 @@
 "use server";
 
-/**
- * TODO(remove-password-login): legacy email/password login, disabled since
- * Portal SSO (src/lib/auth/session.ts). Delete loginAction, login/legacy-password-login.tsx
- * and the ADMIN_EMAIL / ADMIN_PASSWORD env vars once SSO is stable on production.
- * The hard-coded fallback credentials that used to live here were removed on purpose.
- */
+/** Sign-in happens on AVS Portal (SSO, src/lib/auth/session.ts); only logout lives here. */
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { SESSION_COOKIE, isAuthEnabled, portalUrl } from "@/lib/auth/session";
-
-type LoginState = { success: boolean; error?: string } | null;
-
-export async function loginAction(): Promise<LoginState> {
-  return { success: false, error: "Đăng nhập bằng mật khẩu đã tắt. Vui lòng đăng nhập qua AVS Portal." };
-}
+import { SESSION_COOKIE, isAuthEnabled, portalPublicUrl } from "@/lib/auth/session";
 
 /**
  * Clears this site's session, then ends the portal session too
@@ -35,7 +24,8 @@ export async function logoutAction() {
   let target = "/";
   if (isAuthEnabled()) {
     try {
-      target = `${portalUrl()}/logout`;
+      // Signed in through a LAN address: log out of the portal on that address.
+      target = `${portalPublicUrl((await headers()).get("host"))}/logout`;
     } catch {
       // PORTAL_URL not configured: the local cookie is gone, go home.
     }

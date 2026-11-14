@@ -6,11 +6,14 @@ import { Zap } from "lucide-react";
 
 // ─── Route labels ─────────────────────────────────────────────────────────────
 const routeLabels: Record<string, string> = {
-  "/":                       "Catalog Upload",
-  "/admin/dashboard":        "Discovery Dashboard",
-  "/admin/discovery":        "Discovery Queue",
-  "/admin/scanner":          "Manual Scanner",
-  "/admin/image-sync":       "Image Sync",
+  "/":                       "Tổng quan",
+  "/admin/excel-upload":     "Tải lên Catalog Excel",
+  "/admin/catalog-upload":   "Catalog PDF",
+  "/admin/manufacturer-sync": "Đồng bộ NSX",
+  "/admin/discovery":        "Upload sản phẩm mới lên CMS",
+  "/admin/new-brands":       "Brand mới",
+  "/admin/scanner":          "Quét thủ công",
+  "/admin/image-sync":       "Đồng bộ hình ảnh",
   "/admin/tools/wix-translation-sync": "Wix Translation Sync",
 };
 

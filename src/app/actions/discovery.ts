@@ -31,8 +31,8 @@ export interface CmsContentAuditRow {
 export async function getCmsContentAuditAction(
   fresh = false
 ): Promise<{ success: true; rows: CmsContentAuditRow[] } | { success: false; error: string }> {
-  await requireUser("viewer");
   try {
+    await requireUser("viewer");
     if (fresh) invalidateAdminCmsCache();
     const [products, brands] = await Promise.all([getAllProductsCached(), getActiveBrandsCached()]);
     const brandMap = new Map(brands.map((b) => [b._id, b.name]));
@@ -97,12 +97,12 @@ export interface SyncLogEntry {
  * Runs the product discovery scan manually.
  */
 export async function runDiscoveryAction(brandId?: string) {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     const result = await runProductDiscovery(brandId);
     
     // Clear route cache so dashboard and queues update
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     revalidatePath("/admin/discovery");
     revalidatePath("/admin/scanner");
 
@@ -143,7 +143,7 @@ export async function getCmsPopupDataAction(
 export async function refreshDashboardStatsAction(): Promise<void> {
   await requireUser("viewer");
   invalidateAdminCmsCache();
-  revalidatePath("/admin/dashboard");
+  revalidatePath("/");
 }
 
 export async function getDashboardStatsAction(): Promise<DashboardStats> {
@@ -301,10 +301,10 @@ export async function getActiveBrandsAction() {
  * Updates the ImageSearchEnabled config key in System_Config.
  */
 export async function updateImageSearchConfigAction(enabled: boolean) {
-  await requireUser("admin");
   try {
+    await requireUser("admin");
     await updateSystemConfig("ImageSearchEnabled", String(enabled));
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     return { success: true };
   } catch (err) {
     console.error("Failed to update ImageSearchEnabled config:", err);
@@ -316,8 +316,8 @@ export async function updateImageSearchConfigAction(enabled: boolean) {
  * Uploads catalog product rows directly to Wix CMS collection Import2.
  */
 export async function uploadCatalogToWixAction(products: any[]) {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     const brands = await getActiveBrands();
     const brandMap = new Map(brands.map((b) => [b.name.toLowerCase().trim(), b._id]));
     const brandIdMap = new Set(brands.map((b) => b._id));
@@ -420,7 +420,7 @@ export async function uploadCatalogToWixAction(products: any[]) {
       }
     }
 
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
     revalidatePath("/admin/discovery");
 
     return {
@@ -474,8 +474,8 @@ export async function updateCmsProductFieldsAction(
   modelName: string,
   fields: Partial<Record<"Category" | "Title" | "Series" | "MainFeature" | "ProductOverview" | "TechnicalSpecifications", string>>
 ): Promise<{ found: boolean; success: boolean; error?: string }> {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     const result = await updateCmsProductFields(modelName, fields);
     return { found: result.found, success: result.success, error: result.error };
   } catch (err) {
@@ -519,8 +519,8 @@ export async function updateCmsProductFieldsByIdAction(
 export async function pullCmsCatalogAction(): Promise<
   { success: true; sheets: SheetData[]; totalProducts: number } | { success: false; error: string }
 > {
-  await requireUser("viewer");
   try {
+    await requireUser("viewer");
     const { sheets, totalProducts } = await pullCmsCatalogAsSheets();
     if (totalProducts === 0) {
       return { success: false, error: "Không tìm thấy sản phẩm nào trên Wix CMS (kiểm tra lại cấu hình WIX_API_KEY / WIX_SITE_ID)." };
@@ -536,8 +536,8 @@ export async function pullCmsCatalogAction(): Promise<
  * Stops the active product discovery scanner.
  */
 export async function stopDiscoveryAction() {
-  await requireUser("editor");
   try {
+    await requireUser("editor");
     stopProductDiscovery();
     return { success: true };
   } catch (err) {

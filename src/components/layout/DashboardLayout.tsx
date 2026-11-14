@@ -9,7 +9,8 @@ import {
   Sun,
   Database,
   ChevronRight,
-  CheckSquare,
+  GitCompare,
+  Sparkles,
   Activity,
   Upload,
   ImageIcon,
@@ -58,56 +59,79 @@ import {
 } from "@/components/ui/tooltip";
 
 // ─── Nav item definitions ──────────────────────────────────────────────────
-const navMain = [
-  { href: "/", icon: Upload, label: "Tải lên Catalog" },
-  { href: "/admin/catalog-upload", icon: FileText, label: "Catalog PDF" },
+interface NavItem {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  accent?: boolean;
+}
+
+/** Sidebar sections, top to bottom. Breadcrumbs are derived from this list. */
+const navSections: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Chính",
+    items: [{ href: "/", icon: LayoutDashboard, label: "Tổng quan" }],
+  },
+  {
+    label: "Catalog",
+    items: [
+      { href: "/admin/excel-upload", icon: Upload, label: "Tải lên Catalog Excel" },
+      { href: "/admin/catalog-upload", icon: FileText, label: "Catalog PDF" },
+    ],
+  },
+  {
+    label: "DataCrawler",
+    items: [
+      { href: "/admin/manufacturer-sync", icon: RefreshCw, label: "Đồng bộ NSX", accent: true },
+      { href: "/admin/discovery", icon: GitCompare, label: "Upload SP mới lên CMS", accent: true },
+      { href: "/admin/new-brands", icon: Sparkles, label: "Brand mới", accent: true },
+    ],
+  },
+  {
+    label: "Khám phá & Hình ảnh",
+    items: [
+      { href: "/admin/scanner", icon: Activity, label: "Quét thủ công" },
+      { href: "/admin/image-sync", icon: ImageIcon, label: "Đồng bộ hình ảnh" },
+    ],
+  },
+  {
+    label: "Dịch thuật",
+    items: [
+      { href: "/admin/specs-translator", icon: Languages, label: "Dịch thông số" },
+      { href: "/admin/wix-translations", icon: Languages, label: "Dịch đa ngôn ngữ", accent: true },
+      { href: "/admin/tools/cms-translate", icon: Languages, label: "Dịch CMS Anh → Việt" },
+      { href: "/admin/tools/wix-translation-sync", icon: Languages, label: "Wix Translation Sync" },
+    ],
+  },
+  {
+    label: "Quản lý CMS",
+    items: [
+      { href: "/admin/tools/cms-merge", icon: Database, label: "Gộp CMS" },
+      { href: "/admin/tools/cms-ai-review", icon: Bot, label: "AI Kiểm Tra CMS", accent: true },
+      { href: "/admin/media", icon: HardDrive, label: "Quản lý Media" },
+    ],
+  },
 ];
 
-const navDiscovery = [
-  { href: "/admin/dashboard",       icon: LayoutDashboard, label: "Tổng quan" },
-  { href: "/admin/discovery",       icon: CheckSquare,     label: "Hàng đợi Discovery" },
-  { href: "/admin/scanner",         icon: Activity,        label: "Quét thủ công" },
-  { href: "/admin/image-sync",      icon: ImageIcon,       label: "Đồng bộ hình ảnh" },
-  { href: "/admin/specs-translator", icon: Languages,       label: "Dịch thông số" },
+const navMobile: NavItem[] = [
+  { href: "/",                        icon: LayoutDashboard, label: "Tổng quan" },
+  { href: "/admin/excel-upload",      icon: Upload,          label: "Tải Excel" },
+  { href: "/admin/discovery",         icon: GitCompare,      label: "Upload SP" },
+  { href: "/admin/manufacturer-sync", icon: RefreshCw,       label: "Đồng bộ" },
 ];
 
-const navDataCrawler = [
-  { href: "/admin/manufacturer-sync", icon: RefreshCw, label: "Đồng Bộ NSX (DataCrawler)", accent: true },
-];
-
-const navTools = [
-  { href: "/admin/wix-translations", icon: Languages, label: "Dịch đa ngôn ngữ", accent: true },
-  { href: "/admin/tools/cms-translate", icon: Languages, label: "Dịch CMS Anh → Việt" },
-  { href: "/admin/tools/wix-translation-sync", icon: Languages, label: "Wix Translation Sync" },
-  { href: "/admin/tools/cms-merge", icon: Database, label: "Gộp CMS" },
-  { href: "/admin/tools/cms-ai-review", icon: Bot, label: "AI Kiểm Tra CMS", accent: true },
-  { href: "/admin/media", icon: HardDrive, label: "Quản lý Media" },
-];
-
-const navMobile = [
-  { href: "/",                      icon: Upload,          label: "Tải lên" },
-  { href: "/admin/dashboard",       icon: LayoutDashboard, label: "Tổng quan" },
-  { href: "/admin/discovery",       icon: CheckSquare,     label: "Hàng đợi" },
-  { href: "/admin/manufacturer-sync", icon: RefreshCw,     label: "Đồng bộ" },
-];
+/** The sheet/brand list in the sidebar belongs to the Excel upload workspace. */
+const EXCEL_WORKSPACE_PATH = "/admin/excel-upload";
 
 // ─── Breadcrumb map ────────────────────────────────────────────────────────
-const breadcrumbMap: Record<string, { label: string; parent?: string }> = {
-  "/":                          { label: "Tải lên Catalog" },
-  "/admin/catalog-upload":      { label: "Catalog PDF",       parent: "Chính" },
-  "/admin/dashboard":           { label: "Tổng quan",         parent: "Khám phá & Đồng bộ" },
-  "/admin/discovery":           { label: "Hàng đợi Discovery", parent: "Khám phá & Đồng bộ" },
-  "/admin/scanner":             { label: "Quét thủ công",     parent: "Khám phá & Đồng bộ" },
-  "/admin/image-sync":          { label: "Đồng bộ hình ảnh",  parent: "Khám phá & Đồng bộ" },
-  "/admin/specs-translator":    { label: "Dịch thông số",     parent: "Khám phá & Đồng bộ" },
-  "/admin/manufacturer-sync":   { label: "Đồng Bộ NSX (DataCrawler)", parent: "DataCrawler" },
-  "/admin/wix-translations":    { label: "Dịch đa ngôn ngữ",  parent: "Công cụ" },
-  "/admin/tools/cms-translate": { label: "Dịch CMS Anh → Việt", parent: "Công cụ" },
-  "/admin/tools/wix-translation-sync": { label: "Wix Translation Sync", parent: "Công cụ" },
-  "/admin/tools/cms-merge":     { label: "Gộp CMS",          parent: "Công cụ" },
-  "/admin/tools/cms-ai-review": { label: "AI Kiểm Tra CMS",  parent: "Công cụ" },
-  "/admin/media":               { label: "Quản lý Media",    parent: "Công cụ" },
-};
+const breadcrumbMap: Record<string, { label: string; parent?: string }> = Object.fromEntries(
+  navSections.flatMap((section) =>
+    section.items.map((item) => [
+      item.href,
+      { label: item.label, parent: item.href === "/" ? undefined : section.label },
+    ])
+  )
+);
 
 function Breadcrumb({ pathname }: { pathname: string }) {
   const entry = breadcrumbMap[pathname];
@@ -280,77 +304,29 @@ function SidebarContent({
       {/* Nav scroll area */}
       <div className={cn("flex-1 overflow-y-auto py-4 space-y-5", collapsed ? "px-2" : "px-3")}>
 
-        {/* Main */}
-        <NavSection label="Chính" collapsed={collapsed}>
-          {navMain.map(item => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              active={pathname === item.href}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </NavSection>
+        {navSections.map((section, i) => (
+          <React.Fragment key={section.label}>
+            {i > 0 && !collapsed && <Separator className="opacity-50" />}
+            <NavSection label={section.label} collapsed={collapsed}>
+              {section.items.map(item => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={pathname === item.href}
+                  accent={item.accent}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </NavSection>
+          </React.Fragment>
+        ))}
 
-        {!collapsed && <Separator className="opacity-50" />}
-
-        {/* Discovery & Sync */}
-        <NavSection label="Khám phá & Đồng bộ" collapsed={collapsed}>
-          {navDiscovery.map(item => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              active={pathname === item.href}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </NavSection>
-
-        {!collapsed && <Separator className="opacity-50" />}
-
-        {/* DataCrawler */}
-        <NavSection label="DataCrawler" collapsed={collapsed}>
-          {navDataCrawler.map(item => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              active={pathname === item.href}
-              accent={item.accent}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </NavSection>
-
-        {!collapsed && <Separator className="opacity-50" />}
-
-        {/* Tools */}
-        <NavSection label="Công cụ" collapsed={collapsed}>
-          {navTools.map(item => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              active={pathname === item.href}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </NavSection>
-
-        {!collapsed && <Separator className="opacity-50" />}
-
-        {/* Sheets / Brands */}
-        {!collapsed && sheets.length > 0 && (
+        {/* Sheets / Brands of the loaded Excel file (Excel upload workspace only) */}
+        {!collapsed && pathname === EXCEL_WORKSPACE_PATH && <Separator className="opacity-50" />}
+        {!collapsed && pathname === EXCEL_WORKSPACE_PATH && sheets.length > 0 && (
           <div>
             <p className="px-3 mb-1.5 text-xs font-bold tracking-widest text-muted-foreground uppercase">
               Sheets / Brands
@@ -411,7 +387,7 @@ function SidebarContent({
           </div>
         )}
 
-        {!collapsed && sheets.length === 0 && (
+        {!collapsed && pathname === EXCEL_WORKSPACE_PATH && sheets.length === 0 && (
           <div className="px-3 py-2 text-xs text-muted-foreground italic">
             Chưa tải file nào
           </div>
@@ -643,7 +619,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           {/* Right section */}
           <div className="flex items-center gap-3">
-            {fileName && (
+            {fileName && pathname === EXCEL_WORKSPACE_PATH && (
               <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground bg-primary/5 border border-primary/15 px-3 py-1.5 rounded-lg">
                 <Database className="w-3 h-3 text-primary" />
                 <span className="font-medium truncate max-w-[180px]">{fileName}</span>
@@ -653,11 +629,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             {/* Avatar */}
             <div
               className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-primary/60 flex items-center justify-center text-xs font-bold text-primary-foreground shadow"
-              title="Quản trị viên"
+              title={user ? `${user.name} · ${roleLabel(user)}` : undefined}
               role="img"
-              aria-label="Quản trị viên"
+              aria-label={user ? user.name : "Người dùng"}
             >
-              AA
+              {user ? initials(user.name) : ""}
             </div>
           </div>
         </header>
@@ -724,7 +700,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               onClick={() => {
                 setShowSignOutDialog(false);
                 // Server Action clears the cookie, then redirects to the portal's /logout.
-                void logoutAction();
+                logoutAction().catch((err: Error) => {
+                  console.error("[logout] failed:", err);
+                  toast.error("Đăng xuất không thành công. Đang tải lại trang...");
+                  // A reload re-runs the proxy: an expired session goes to the portal sign-in.
+                  window.location.assign("/");
+                });
               }}
             >
               Đăng xuất

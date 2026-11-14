@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import { resolveCollection } from "@/config/wix-translation.config";
 import { getWixCmsItems, getWixCollectionSchema } from "@/services/wix-translation/wix-cms.service";
 import { getTranslatableFields, queryContentForEntity, WixMultilingualError } from "@/services/wix-translation/wix-multilingual.service";
@@ -64,9 +64,8 @@ async function translationInfoFor(
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await checkAdminSession(req, "viewer"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "viewer");
+  if (denied) return denied;
 
   const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
   if (!parsed.success) {

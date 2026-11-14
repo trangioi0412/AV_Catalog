@@ -1,0 +1,164 @@
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - link "AV Survey 3D" [ref=e6] [cursor=pointer]:
+        - /url: /dashboard
+      - navigation [ref=e12]:
+        - link "Dashboard" [ref=e13] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Dự án" [ref=e21] [cursor=pointer]:
+          - /url: /projects
+        - link "Khảo sát" [disabled] [ref=e25]:
+          - /url: "#"
+        - link "Phòng" [disabled] [ref=e31]:
+          - /url: "#"
+        - link "3D Editor" [disabled] [ref=e35]:
+          - /url: "#"
+        - link "Thiết bị" [ref=e40] [cursor=pointer]:
+          - /url: /equipment
+        - link "Thư viện" [ref=e45] [cursor=pointer]:
+          - /url: /library
+        - link "Báo cáo" [ref=e49] [cursor=pointer]:
+          - /url: /reports
+        - link "Cài đặt" [ref=e54] [cursor=pointer]:
+          - /url: /settings
+    - button "Toggle Sidebar" [ref=e60] [cursor=pointer]:
+      - generic [ref=e63]: Thu gọn
+  - generic [ref=e64]:
+    - banner [ref=e65]:
+      - navigation [ref=e71]:
+        - link "Trang chủ" [ref=e72] [cursor=pointer]:
+          - /url: /dashboard
+        - generic [ref=e75]: Dashboard
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e79]: ABC Building
+          - generic [ref=e80]: Meeting Room 501
+        - button "Tạo dự án mới" [ref=e81] [cursor=pointer]
+        - button "Kỹ Sư AV Admin" [ref=e85] [cursor=pointer]:
+          - generic [ref=e90]:
+            - generic [ref=e91]: Kỹ Sư AV
+            - generic [ref=e92]: Admin
+    - main [ref=e93]:
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - generic [ref=e98]: AVS Site Survey & 3D Planner System
+            - heading "Bảng Khảo Sát & Lập Kế Hoạch AV 3D" [level=1] [ref=e103]
+            - paragraph [ref=e104]: Hệ thống khảo sát công trình kỹ thuật, dựng sơ đồ 3D phòng họp và lập danh mục thiết bị cho Kỹ sư AV Planner.
+          - generic [ref=e105]:
+            - button "Tạo Dự Án Mới" [ref=e106] [cursor=pointer]
+            - link "Mở 3D Editor" [ref=e109] [cursor=pointer]:
+              - /url: /projects/project-abc-building/rooms/meeting-room-501/editor
+        - generic [ref=e114]:
+          - generic [ref=e115]:
+            - generic [ref=e116]: Tổng Dự Án
+            - generic [ref=e121]:
+              - generic [ref=e122]: "4"
+              - generic [ref=e123]: công trình
+          - generic [ref=e124]:
+            - generic [ref=e125]: Tổng Phòng Khảo Sát
+            - generic [ref=e130]:
+              - generic [ref=e131]: "8"
+              - generic [ref=e132]: phòng 3D
+          - generic [ref=e133]:
+            - generic [ref=e134]: Đang Khảo Sát
+            - generic [ref=e141]:
+              - generic [ref=e142]: "2"
+              - generic [ref=e143]: đang triển khai
+          - generic [ref=e144]:
+            - generic [ref=e145]: Đã Duyệt Phương Án
+            - generic [ref=e151]:
+              - generic [ref=e152]: "1"
+              - generic [ref=e153]: hoàn thành
+        - generic [ref=e154]:
+          - generic [ref=e155]:
+            - generic [ref=e156]:
+              - heading "Dự Án Khảo Sát Gần Đây" [level=2] [ref=e162]
+              - link "Xem tất cả (4)" [ref=e163] [cursor=pointer]:
+                - /url: /projects
+            - generic [ref=e167]:
+              - generic [ref=e168]:
+                - generic [ref=e169]:
+                  - generic [ref=e170]:
+                    - generic [ref=e171]: ABC Building
+                    - generic [ref=e172]: Đang mở
+                  - generic [ref=e173]:
+                    - generic [ref=e174]: ABC Corporation
+                    - generic [ref=e175]: •
+                    - generic [ref=e176]: TP. Hồ Chí Minh
+                    - generic [ref=e180]: •
+                    - generic [ref=e181]: 3 phòng
+                - generic [ref=e182]:
+                  - link "Chi tiết" [ref=e183] [cursor=pointer]:
+                    - /url: /projects/project-abc-building
+                  - link "3D Editor" [ref=e184] [cursor=pointer]:
+                    - /url: /projects/project-abc-building/rooms/meeting-room-501/editor
+              - generic [ref=e189]:
+                - generic [ref=e190]:
+                  - generic [ref=e191]: Keangnam Landmark 72
+                  - generic [ref=e193]:
+                    - generic [ref=e194]: Keangnam Vina
+                    - generic [ref=e195]: •
+                    - generic [ref=e196]: Hà Nội
+                    - generic [ref=e200]: •
+                    - generic [ref=e201]: 2 phòng
+                - generic [ref=e202]:
+                  - link "Chi tiết" [ref=e203] [cursor=pointer]:
+                    - /url: /projects/project-keangnam-72
+                  - link "3D Editor" [ref=e204] [cursor=pointer]:
+                    - /url: /projects/project-keangnam-72/rooms/auditorium-hall-a/editor
+              - generic [ref=e209]:
+                - generic [ref=e210]:
+                  - generic [ref=e211]: Bitexco Financial Tower
+                  - generic [ref=e213]:
+                    - generic [ref=e214]: Bitexco Group
+                    - generic [ref=e215]: •
+                    - generic [ref=e216]: TP. Hồ Chí Minh
+                    - generic [ref=e220]: •
+                    - generic [ref=e221]: 2 phòng
+                - generic [ref=e222]:
+                  - link "Chi tiết" [ref=e223] [cursor=pointer]:
+                    - /url: /projects/project-bitexco
+                  - link "3D Editor" [ref=e224] [cursor=pointer]:
+                    - /url: /projects/project-bitexco/rooms/townhall-main/editor
+              - generic [ref=e229]:
+                - generic [ref=e230]:
+                  - generic [ref=e231]: Vietcombank Tower HQ
+                  - generic [ref=e233]:
+                    - generic [ref=e234]: Vietcombank
+                    - generic [ref=e235]: •
+                    - generic [ref=e236]: TP. Hồ Chí Minh
+                    - generic [ref=e240]: •
+                    - generic [ref=e241]: 1 phòng
+                - generic [ref=e242]:
+                  - link "Chi tiết" [ref=e243] [cursor=pointer]:
+                    - /url: /projects/project-vietcombank
+                  - link "3D Editor" [ref=e244] [cursor=pointer]:
+                    - /url: /projects/project-vietcombank/rooms/vip-lounge-room/editor
+          - generic [ref=e249]:
+            - generic [ref=e250]:
+              - generic [ref=e251]:
+                - generic [ref=e252]: Phòng Hiện Tại
+                - generic [ref=e255]: 8m x 12m
+              - generic [ref=e256]:
+                - heading "Meeting Room 501" [level=3] [ref=e257]
+                - paragraph [ref=e258]: ABC Building
+                - generic [ref=e259]:
+                  - generic [ref=e260]: "Diện tích:"
+                  - generic [ref=e261]: 96 m²
+              - generic [ref=e262]:
+                - link "Khảo sát" [ref=e263] [cursor=pointer]:
+                  - /url: /projects/project-abc-building/survey
+                - link "Mở Editor" [ref=e269] [cursor=pointer]:
+                  - /url: /projects/project-abc-building/rooms/meeting-room-501/editor
+            - generic [ref=e274]:
+              - heading "Truy Cập Nhanh" [level=3] [ref=e275]
+              - generic [ref=e276]:
+                - link "Danh mục thiết bị AV" [ref=e277] [cursor=pointer]:
+                  - /url: /equipment
+                - link "Xuất báo cáo BOM & 3D JSON" [ref=e285] [cursor=pointer]:
+                  - /url: /reports
+                - link "Cài đặt đơn vị đo & Grid 3D" [ref=e295] [cursor=pointer]:
+                  - /url: /settings

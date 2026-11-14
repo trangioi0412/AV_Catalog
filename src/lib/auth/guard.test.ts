@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 vi.mock("./session", () => ({ getCatalogUser: vi.fn(), getRequestUser: vi.fn() }));
 
 import { getCatalogUser, getRequestUser, type CatalogUser } from "./session";
-import { AuthError, authorizeRequest, checkAdminSession, hasRole, requireUser } from "./guard";
+import { AuthError, authorizeRequest, hasRole, requireUser } from "./guard";
 
 function userWith(role: string, superAdmin = false): CatalogUser {
   return { id: "u1", email: "a@example.com", name: "A", role, companyRole: "", superAdmin };
@@ -78,13 +78,5 @@ describe("authorizeRequest (route handlers)", () => {
   it("returns null when allowed", async () => {
     vi.mocked(getRequestUser).mockResolvedValue(userWith("editor"));
     expect(await authorizeRequest(req, "editor")).toBeNull();
-  });
-});
-
-describe("checkAdminSession", () => {
-  it("requires the given role, not just a session", async () => {
-    vi.mocked(getRequestUser).mockResolvedValue(userWith("viewer"));
-    expect(await checkAdminSession(req, "viewer")).toBe(true);
-    expect(await checkAdminSession(req, "editor")).toBe(false);
   });
 });

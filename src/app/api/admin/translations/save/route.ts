@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import {
   bulkCreateContent,
   bulkUpdateContentByKey,
@@ -67,9 +67,8 @@ function errorResponse(err: unknown): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await checkAdminSession(req, "editor"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "editor");
+  if (denied) return denied;
 
   let body: unknown;
   try {
@@ -210,7 +209,7 @@ export async function POST(req: NextRequest) {
     ];
 
     // Only the admin dashboard's live CMS product list depends on this data today.
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
 
     const response: SaveTranslationsResponse = {
       schemaId: schema.id,

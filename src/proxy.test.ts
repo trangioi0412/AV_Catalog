@@ -32,6 +32,16 @@ describe("proxy", () => {
     expect(res.headers.get("location")).toContain("next=%2Fadmin%2Fdashboard%3Ftab%3D1");
   });
 
+  it.each<Record<string, string>>([{ "next-action": "abc123" }, { rsc: "1" }])(
+    "answers 401, not a cross-origin redirect, for a Server Action or RSC fetch without a session (%o)",
+    async (headers) => {
+      vi.mocked(getRequestUser).mockResolvedValue(null);
+      const res = await proxy(request("/admin/discovery", headers));
+      expect(res.status).toBe(401);
+      expect(res.headers.get("location")).toBeNull();
+    }
+  );
+
   it("answers 503, not a 500 or the page, when PORTAL_URL is missing", async () => {
     vi.mocked(getRequestUser).mockResolvedValue(null);
     vi.mocked(portalSsoUrl).mockImplementation(() => {
@@ -92,14 +102,24 @@ describe("proxy matcher", () => {
     "/admin/dashboard",
     "/api/admin/wix-media",
     "/api/manufacturer-sync/sync/status/abc.png", // used to skip the proxy
-    "/products/some-slug.png",
-    "/product_image/QSYS/core-610.png",
     "/api/cron/discovery",
+    "/file.svg",
   ])("guards %s", (path) => {
     expect(matcher.test(path)).toBe(true);
   });
 
-  it.each(["/api/auth/callback", "/api/auth/me", "/_next/static/chunks/a.js", "/_next/image", "/favicon.ico"])(
+  it.each([
+    "/api/auth/callback",
+    "/api/auth/me",
+    "/_next/static/chunks/a.js",
+    "/_next/image",
+    "/favicon.ico",
+    // Public catalog: customers, search engines and the Wix site.
+    "/products/qsys-core-610",
+    "/products/some-slug.png",
+    "/product_image/QSYS/core-610.png",
+    "/downloads/datasheet.pdf",
+  ])(
     "skips %s",
     (path) => {
       expect(matcher.test(path)).toBe(false);

@@ -17,6 +17,7 @@
 import { SignJWT, importSPKI, jwtVerify, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
+import { forRequestHost } from "./networkUrl";
 
 export const SESSION_COOKIE = "catalog_session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 8;
@@ -69,9 +70,18 @@ export function portalUrl(): string {
   return requiredEnv("PORTAL_URL").replace(/\/$/, "");
 }
 
+/**
+ * Portal base URL for links and redirects. Opened through a LAN address
+ * (requestHost = this request's Host), a localhost PORTAL_URL becomes the
+ * same LAN host -- see networkUrl.ts. Never use it as the token issuer.
+ */
+export function portalPublicUrl(requestHost?: string | null): string {
+  return forRequestHost(portalUrl(), requestHost);
+}
+
 /** Where to send a visitor to sign in; the portal brings them back to `next`. */
-export function portalSsoUrl(next: string): string {
-  const url = new URL(`${portalUrl()}/sso/${SSO_AUDIENCE}`);
+export function portalSsoUrl(next: string, requestHost?: string | null): string {
+  const url = new URL(`${portalPublicUrl(requestHost)}/sso/${SSO_AUDIENCE}`);
   url.searchParams.set("next", safeNextPath(next));
   return url.toString();
 }

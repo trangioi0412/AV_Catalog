@@ -21,7 +21,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { checkAdminSession } from "@/lib/services/wixCatalogPdf";
+import { authorizeRequest } from "@/lib/services/wixCatalogPdf";
 import { isTranslationProviderConfigured, getTranslationProviderKind, getSafeConcurrency } from "@/lib/services/translationProvider";
 import { mapWithConcurrency } from "@/lib/utils/concurrencyLimit";
 import { computeNaturalLanguageDiffs, type CmsSyncDiff } from "@/lib/services/cmsSyncCompare";
@@ -66,9 +66,8 @@ function noStore(json: unknown, init?: ResponseInit) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await checkAdminSession(req, "editor"))) {
-    return noStore({ error: "Unauthorized: Administrator access required." }, { status: 401 });
-  }
+  const denied = await authorizeRequest(req, "editor");
+  if (denied) return denied;
 
   let body: unknown;
   try {

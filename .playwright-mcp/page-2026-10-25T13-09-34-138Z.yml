@@ -1,0 +1,38 @@
+- generic [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - complementary [ref=f2e3]:
+      - link "AVS-TEK Portal — trang chủ" [ref=f2e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f2e10]:
+          - generic [ref=f2e11]: AVS-TEK
+          - generic [ref=f2e12]: Portal
+      - generic [ref=f2e13]:
+        - heading "Cổng truy cập website nội bộ AVS-TEK" [level=2] [ref=f2e14]
+        - list [ref=f2e15]:
+          - listitem [ref=f2e16]:
+            - generic [ref=f2e21]:
+              - generic [ref=f2e22]: Một tài khoản
+              - generic [ref=f2e23]: Đăng nhập một lần, dùng cho mọi website nội bộ.
+          - listitem [ref=f2e24]:
+            - generic [ref=f2e29]:
+              - generic [ref=f2e30]: Đúng quyền
+              - generic [ref=f2e31]: Mỗi người chỉ thấy website được cấp theo role.
+          - listitem [ref=f2e32]:
+            - generic [ref=f2e39]:
+              - generic [ref=f2e40]: Mở rộng dễ dàng
+              - generic [ref=f2e41]: Thêm website mới mà không cần tạo tài khoản lại.
+      - paragraph [ref=f2e42]: © 2026 AVS-TEK
+    - main [ref=f2e43]:
+      - generic [ref=f2e44]:
+        - generic [ref=f2e45]:
+          - heading "Quên mật khẩu" [level=1] [ref=f2e46]
+          - paragraph [ref=f2e47]: Nhập email công ty, chúng tôi sẽ gửi link đặt lại mật khẩu.
+          - generic [ref=f2e49]:
+            - generic [ref=f2e50]:
+              - generic [ref=f2e51]: Email công ty
+              - textbox "Email công ty" [active] [ref=f2e52]:
+                - /placeholder: ten@avs-tek.vn
+            - button "Gửi link đặt lại mật khẩu" [ref=f2e53] [cursor=pointer]
+        - link "Quay lại đăng nhập" [ref=f2e55] [cursor=pointer]:
+          - /url: /login
+  - alert [ref=f2e56]

@@ -1,0 +1,161 @@
+- generic [ref=f3e2]:
+  - region "Notifications alt+T"
+  - complementary [ref=f3e3]:
+    - generic [ref=f3e4]:
+      - link "AV Survey 3D" [ref=f3e6] [cursor=pointer]:
+        - /url: /dashboard
+      - navigation [ref=f3e12]:
+        - link "Dashboard" [ref=f3e13] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Dự án" [ref=f3e20] [cursor=pointer]:
+          - /url: /projects
+        - link "Khảo sát" [disabled] [ref=f3e25]:
+          - /url: "#"
+        - link "Phòng" [disabled] [ref=f3e31]:
+          - /url: "#"
+        - link "3D Editor" [disabled] [ref=f3e35]:
+          - /url: "#"
+        - link "Thiết bị" [ref=f3e40] [cursor=pointer]:
+          - /url: /equipment
+        - link "Thư viện" [ref=f3e45] [cursor=pointer]:
+          - /url: /library
+        - link "Báo cáo" [ref=f3e49] [cursor=pointer]:
+          - /url: /reports
+        - link "Cài đặt" [ref=f3e54] [cursor=pointer]:
+          - /url: /settings
+    - button "Toggle Sidebar" [ref=f3e60] [cursor=pointer]:
+      - generic [ref=f3e63]: Thu gọn
+  - generic [ref=f3e64]:
+    - banner [ref=f3e65]:
+      - navigation [ref=f3e71]:
+        - link "Trang chủ" [ref=f3e72] [cursor=pointer]:
+          - /url: /dashboard
+        - generic [ref=f3e75]: Danh sách dự án
+      - generic [ref=f3e76]:
+        - generic [ref=f3e77]:
+          - generic [ref=f3e79]: ABC Building
+          - generic [ref=f3e80]: Meeting Room 501
+        - button "Tạo dự án mới" [ref=f3e81] [cursor=pointer]
+        - button "Kỹ Sư AV Admin" [ref=f3e85] [cursor=pointer]:
+          - generic [ref=f3e90]:
+            - generic [ref=f3e91]: Kỹ Sư AV
+            - generic [ref=f3e92]: Admin
+    - main [ref=f3e93]:
+      - generic [ref=f3e95]:
+        - generic [ref=f3e96]:
+          - generic [ref=f3e97]:
+            - generic [ref=f3e98]: Quản Lý Dự Án Khảo Sát
+            - heading "Danh Sách Công Trình AV" [level=1] [ref=f3e102]
+          - button "Tạo Dự Án Mới" [ref=f3e103] [cursor=pointer]
+        - generic [ref=f3e106]:
+          - textbox "Tìm kiếm dự án, khách hàng, địa điểm..." [ref=f3e111]
+          - generic [ref=f3e112]:
+            - generic [ref=f3e113]: "Trạng thái:"
+            - combobox [ref=f3e114]:
+              - option "Tất cả (4)" [selected]
+              - option "Khảo sát"
+              - option "Đang lập bản vẽ"
+              - option "Chờ duyệt"
+              - option "Đã duyệt"
+              - option "Hoàn thành"
+        - generic [ref=f3e115]:
+          - generic [ref=f3e116]:
+            - generic [ref=f3e117]:
+              - generic [ref=f3e118]:
+                - generic [ref=f3e119]:
+                  - link "ABC Building" [ref=f3e120] [cursor=pointer]:
+                    - /url: /projects/project-abc-building
+                  - generic [ref=f3e121]: ABC Corporation
+                - combobox "Thay đổi trạng thái dự án" [ref=f3e123] [cursor=pointer]:
+                  - option "Khảo sát" [selected]
+                  - option "Đang lập bản vẽ"
+                  - option "Chờ duyệt"
+                  - option "Đã duyệt"
+                  - option "Hoàn thành"
+              - generic [ref=f3e124]:
+                - generic [ref=f3e125]: TP. Hồ Chí Minh
+                - link "3 phòng khảo sát" [ref=f3e133] [cursor=pointer]:
+                  - /url: /projects/project-abc-building/rooms
+                - generic [ref=f3e134]: "Cập nhật: 10:30 AM"
+            - generic [ref=f3e139]:
+              - button "Delete project" [ref=f3e140] [cursor=pointer]
+              - generic [ref=f3e144]:
+                - link "Chi tiết" [ref=f3e145] [cursor=pointer]:
+                  - /url: /projects/project-abc-building
+                - link "3D Editor" [ref=f3e146] [cursor=pointer]:
+                  - /url: /projects/project-abc-building/rooms/meeting-room-501/editor
+          - generic [ref=f3e151]:
+            - generic [ref=f3e152]:
+              - generic [ref=f3e153]:
+                - generic [ref=f3e154]:
+                  - link "Keangnam Landmark 72" [ref=f3e155] [cursor=pointer]:
+                    - /url: /projects/project-keangnam-72
+                  - generic [ref=f3e156]: Keangnam Vina
+                - combobox "Thay đổi trạng thái dự án" [ref=f3e158] [cursor=pointer]:
+                  - option "Khảo sát"
+                  - option "Đang lập bản vẽ" [selected]
+                  - option "Chờ duyệt"
+                  - option "Đã duyệt"
+                  - option "Hoàn thành"
+              - generic [ref=f3e159]:
+                - generic [ref=f3e160]: Hà Nội
+                - link "2 phòng khảo sát" [ref=f3e168] [cursor=pointer]:
+                  - /url: /projects/project-keangnam-72/rooms
+                - generic [ref=f3e169]: "Cập nhật: 09:15 AM"
+            - generic [ref=f3e174]:
+              - button "Delete project" [ref=f3e175] [cursor=pointer]
+              - generic [ref=f3e179]:
+                - link "Chi tiết" [ref=f3e180] [cursor=pointer]:
+                  - /url: /projects/project-keangnam-72
+                - link "3D Editor" [ref=f3e181] [cursor=pointer]:
+                  - /url: /projects/project-keangnam-72/rooms/auditorium-hall-a/editor
+          - generic [ref=f3e186]:
+            - generic [ref=f3e187]:
+              - generic [ref=f3e188]:
+                - generic [ref=f3e189]:
+                  - link "Bitexco Financial Tower" [ref=f3e190] [cursor=pointer]:
+                    - /url: /projects/project-bitexco
+                  - generic [ref=f3e191]: Bitexco Group
+                - combobox "Thay đổi trạng thái dự án" [ref=f3e193] [cursor=pointer]:
+                  - option "Khảo sát"
+                  - option "Đang lập bản vẽ"
+                  - option "Chờ duyệt"
+                  - option "Đã duyệt" [selected]
+                  - option "Hoàn thành"
+              - generic [ref=f3e194]:
+                - generic [ref=f3e195]: TP. Hồ Chí Minh
+                - link "2 phòng khảo sát" [ref=f3e203] [cursor=pointer]:
+                  - /url: /projects/project-bitexco/rooms
+                - generic [ref=f3e204]: "Cập nhật: Hôm qua"
+            - generic [ref=f3e209]:
+              - button "Delete project" [ref=f3e210] [cursor=pointer]
+              - generic [ref=f3e214]:
+                - link "Chi tiết" [ref=f3e215] [cursor=pointer]:
+                  - /url: /projects/project-bitexco
+                - link "3D Editor" [ref=f3e216] [cursor=pointer]:
+                  - /url: /projects/project-bitexco/rooms/townhall-main/editor
+          - generic [ref=f3e221]:
+            - generic [ref=f3e222]:
+              - generic [ref=f3e223]:
+                - generic [ref=f3e224]:
+                  - link "Vietcombank Tower HQ" [ref=f3e225] [cursor=pointer]:
+                    - /url: /projects/project-vietcombank
+                  - generic [ref=f3e226]: Vietcombank
+                - combobox "Thay đổi trạng thái dự án" [ref=f3e228] [cursor=pointer]:
+                  - option "Khảo sát" [selected]
+                  - option "Đang lập bản vẽ"
+                  - option "Chờ duyệt"
+                  - option "Đã duyệt"
+                  - option "Hoàn thành"
+              - generic [ref=f3e229]:
+                - generic [ref=f3e230]: TP. Hồ Chí Minh
+                - link "1 phòng khảo sát" [ref=f3e238] [cursor=pointer]:
+                  - /url: /projects/project-vietcombank/rooms
+                - generic [ref=f3e239]: "Cập nhật: 08:45 AM"
+            - generic [ref=f3e244]:
+              - button "Delete project" [ref=f3e245] [cursor=pointer]
+              - generic [ref=f3e249]:
+                - link "Chi tiết" [ref=f3e250] [cursor=pointer]:
+                  - /url: /projects/project-vietcombank
+                - link "3D Editor" [ref=f3e251] [cursor=pointer]:
+                  - /url: /projects/project-vietcombank/rooms/vip-lounge-room/editor

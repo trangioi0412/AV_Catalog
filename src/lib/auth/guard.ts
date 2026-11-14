@@ -51,8 +51,3 @@ export async function authorizeRequest(req: NextRequest, minRole: SiteRole): Pro
   const err = new AuthError(user ? 403 : 401);
   return NextResponse.json({ error: err.message }, { status: err.status, headers: { "Cache-Control": "no-store" } });
 }
-
-/** Boolean form used by the older admin routes (they answer 401 themselves). */
-export async function checkAdminSession(req: NextRequest, minRole: SiteRole): Promise<boolean> {
-  return hasRole(await getRequestUser(req), minRole);
-}

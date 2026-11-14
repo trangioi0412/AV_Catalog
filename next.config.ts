@@ -1,8 +1,21 @@
 import type { NextConfig } from "next";
+import { networkInterfaces } from "node:os";
+
+/**
+ * `next dev` blocks its dev assets for origins other than localhost. Allow
+ * this machine's own LAN IPv4 addresses (whatever network it is on now) so
+ * the app also works through the "Network" link, plus known team machines.
+ */
+const lanAddresses = Object.values(networkInterfaces())
+  .flat()
+  .filter((n) => n && n.family === "IPv4" && !n.internal)
+  .map((n) => n!.address);
 
 const nextConfig: NextConfig = {
   /* config options here */
-  allowedDevOrigins: ["192.168.1.101", "10.150.105.188", "192.168.1.109, 172.16.13.121"],
+  allowedDevOrigins: [
+    ...new Set([...lanAddresses, "192.168.1.101", "10.150.105.188", "192.168.1.109", "172.16.13.121", "*.local"]),
+  ],
   serverExternalPackages: ["xlsx"],
   // Next 16 forwards browser console output to the terminal in dev over an
   // internal WebSocket with a fixed max payload — an oversized browser-side
